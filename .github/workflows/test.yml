@@ -1,11 +1,8 @@
 # Uji berjalan pada setiap PR dan setiap push ke main.
 #
-# KENAPA: AGENTS.md meminta keempat uji dijalankan sebelum menutup pekerjaan,
-# tapi permintaan bukan penjaga. Rilis ditentukan otomatis dari pesan commit,
-# jadi kode yang rusak bisa masuk main dan langsung menjadi kandidat rilis.
-#
-# Semua uji hermetis: masing-masing menyalakan gateway tiruannya sendiri dan
-# bekerja di HOME sekali pakai, jadi tidak ada yang perlu dijangkau dari runner.
+# KENAPA: AGENTS.md meminta uji dijalankan sebelum menutup pekerjaan, tapi
+# permintaan bukan penjaga. Rilis ditentukan otomatis dari pesan commit, jadi
+# kode yang rusak bisa masuk main dan langsung menjadi kandidat rilis.
 name: test
 
 on:
@@ -18,32 +15,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: bash + shellcheck syntax
+
+      - name: Periksa sintaks bash
         run: |
           for f in setup.sh scripts/setup-dev.sh scripts/lib/*.sh test/*.sh; do
             bash -n "$f" || exit 1
           done
+
       # Ketiga uji ini memakai mode manual (pilihan 4) atau tidak memanggil
       # setup.sh sama sekali, jadi tidak ada agent pihak ketiga yang diunduh.
-      - run: bash test/test-contract-from-gateway.sh
-      - run: bash test/test-cli-output.sh
-      - run: bash test/test-setup-preserves-dev-config.sh
+      # Masing-masing menyalakan gateway tiruannya sendiri dan bekerja di HOME
+      # sekali pakai, jadi tidak ada yang perlu dijangkau dari runner.
+      - name: Kontrak diambil dari gateway
+        run: bash test/test-contract-from-gateway.sh
+
+      - name: Keluaran terbaca di berkas dan konsol non-UTF-8
+        run: bash test/test-cli-output.sh
+
+      - name: Setup tidak menyentuh milik dev
+        run: bash test/test-setup-preserves-dev-config.sh
 
       # test-setup-dev.sh SENGAJA TIDAK dijalankan di sini.
       #
-      # Ia memilih agent 2 (omp), sehingga setup.sh mencoba memasangnya lewat
-      # Fetching latest release...
-Using version: v18.1.2
-Downloading omp-linux-x64...
-
-✓ Installed omp to /home/gspe-ai1/.local/bin/omp
-Run 'omp' to get started!. Mengunduh dan menjalankan biner
-      # pihak ketiga di CI itu lambat, mudah goyah, dan bukan yang sedang diuji.
+      # Ia memilih agent omp, sehingga setup.sh mencoba memasangnya dengan
+      # mengunduh biner dari internet. Itu lambat, mudah goyah, dan bukan yang
+      # sedang diuji.
       #
       # PERBAIKANNYA, bila ada yang mengerjakannya: beri setup.sh penjaga
-      # lingkungan (mis. COOPERAGENT_NO_INSTALL=1) yang melewati pemasangan agent
-      # dan hanya menulis config. Itu juga berguna di luar CI -- dev yang cuma
-      # ingin memperbarui parameter tidak perlu dipaksa memasang apa pun.
-      # Setelah itu, tambahkan barisnya di sini.
+      # lingkungan COOPERAGENT_NO_INSTALL=1 yang melewati pemasangan agent dan
+      # hanya menulis config. Itu juga berguna di luar CI -- dev yang cuma ingin
+      # memperbarui parameter tidak perlu dipaksa memasang apa pun.
+      # Setelah itu, tambahkan langkahnya di sini.
       #
-      # Sampai saat itu ia dijalankan dengan tangan:  bash test/test-setup-dev.sh
+      # Sampai saat itu ia dijalankan dengan tangan:
+      #     bash test/test-setup-dev.sh

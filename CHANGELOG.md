@@ -12,6 +12,14 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ## [Unreleased]
 
+### Perbaikan
+
+* **ci:** `test.yml` tidak dapat diurai GitHub sehingga tidak ada job yang
+  berjalan. Berkasnya ditulis lewat heredoc tanpa kutip, sehingga bash
+  mengeksekusi perintah di dalam sebuah komentar dan menyisipkan keluarannya ke
+  tengah YAML. Ditulis ulang dan divalidasi dengan parser YAML sebelum
+  di-commit.
+
 ## 1.0.0 (2026-09-02)
 
 Rilis pertama sebagai repo tersendiri. Dipisahkan dari `CooperAgent-server`, yang
