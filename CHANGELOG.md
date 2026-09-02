@@ -10,6 +10,18 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [1.1.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.0.0...v1.1.0) (2026-09-02)
+
+
+### Fitur
+
+* pemasang harness CooperAgent untuk developer ([9b4560e](https://github.com/LyKhan77/CooperAgent-cli/commit/9b4560ea9581e7baa7130590d6f17232aa614e70))
+
+
+### Perbaikan
+
+* **ci:** test.yml tidak dapat diurai sehingga tidak ada job yang berjalan ([d13c38e](https://github.com/LyKhan77/CooperAgent-cli/commit/d13c38e26a5fdb942729cacda193a22e7f29c3bb))
+
 ## [Unreleased]
 
 ### Perbaikan
