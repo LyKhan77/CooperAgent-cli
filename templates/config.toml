@@ -1,0 +1,102 @@
+# Kunci config.toml yang DIKELOLA template CooperAgent.
+#
+# Skrip setup menggabungkan (merge) berkas ini ke ~/.grok/config.toml:
+# kunci di bawah ditimpa, kunci lain di mesin dev dibiarkan utuh.
+# Karena itu `api_key` TIDAK ada di sini — identitas tiap dev tetap miliknya,
+# dan tidak ada kredensial yang masuk ke git (Zero-Secret).
+#
+# Sunting berkas ini, commit, lalu jalankan ulang skrip setup.
+#
+# PLACEHOLDER (nama yang diapit dua garis bawah) DIISI SAAT RENDER, tidak
+# dipatok di sini. Nilai
+# context_window, max_tokens, ambang compaction, dan nama model DIAMBIL dari
+# `/v1/models` gateway saat skrip berjalan (lihat scripts/lib/contract.sh).
+# Sampai 1 September 2026 keempatnya ditulis tangan di berkas ini, dan karena
+# itu tidak pernah tahu ketika --ctx-size server berubah.
+#
+# Berkas ini TIDAK boleh di-merge mentah-mentah: skrip yang memakainya wajib
+# merender lebih dulu dan menolak bila masih ada `__` yang tersisa.
+
+[session]
+# Compaction dipicu di __COMPACT_PCT__% dari context_window di bawah
+# = __COMPACT_TOKENS__ token.
+#
+#   __COMPACT_TOKENS__ (picu) + __MAX_TOKENS_FMT__ (jatah jawaban) = __PEAK__ puncak
+#   __CONTEXT_WINDOW_FMT__ (plafon slot) - __PEAK__ = __SLACK__ sisa
+#
+# Bentuk lama menyisihkan jatah keluaran di dalam `context_window` (118.784)
+# lalu memakai 90%. Hasilnya setara tetapi sisanya lebih sempit (11.879), dan
+# aritmetikanya tersembunyi di dua tempat sekaligus. Sekarang `context_window`
+# menyebut ukuran slot yang sebenarnya, dan seluruh bantalan ada di satu angka
+# yang bisa dijelaskan tanpa hitungan tambahan.
+#
+# Bantalan itu bukan kemewahan. Terukur 29 Agustus 2026: satu slot berjalan di
+# 121.111 token, melewati ambang lama maupun baru — entah karena perkiraan
+# token klien meleset dari tokenizer server, entah karena pemeriksaan hanya
+# terjadi di antara giliran. Apa pun sebabnya, sisa __SLACK__ token yang menyerap.
+auto_compact_threshold_percent = __COMPACT_PCT__
+load_envrc = true
+
+[memory]
+enabled = true
+
+[models]
+default = "internal-qwen"
+stream_tool_calls = true
+max_tokens = __MAX_TOKENS__
+max_completion_tokens = __MAX_TOKENS__
+max_output_tokens = __MAX_TOKENS__
+
+[model.internal-qwen]
+model = "__MODEL_ID__"
+# @keep-existing
+# Alamat gateway berbeda per jaringan. Penanda di atas membuat baris ini HANYA
+# ditulis bila belum ada — alamat yang sudah bekerja di mesin dev tidak pernah
+# diubah.
+#
+# Alamatnya TIDAK ditulis di sini. Sampai 2 September 2026 baris ini memuat IP
+# LAN kantor, dan itu yang menghalangi berkas ini pindah ke repo pemasang yang
+# publik. `__GATEWAY__` diisi skrip setup dari alamat yang sedang dipakai dev.
+base_url = "__GATEWAY__/api/v1"
+api_backend = "chat_completions"
+# Plafon SATU slot llama-server: --ctx-size dibagi --parallel, sama di kedua
+# server. Ditanyakan ke gateway saat render, bukan dipatok: nilainya berubah
+# setiap kali --parallel dinaikkan. Bantalannya diatur oleh
+# auto_compact_threshold_percent = __COMPACT_PCT__ di [session].
+context_window = __CONTEXT_WINDOW__
+max_tokens = __MAX_TOKENS__
+max_completion_tokens = __MAX_TOKENS__
+max_output_tokens = __MAX_TOKENS__
+
+# Varian untuk dev yang bekerja langsung di host GPU (gateway di localhost).
+# Kunci di bawah dikelola sama seperti internal-qwen; api_key tetap milik dev.
+[model.internal-qwen-localhost]
+model = "__MODEL_ID__"
+base_url = "http://127.0.0.1:8987/api/v1"
+api_backend = "chat_completions"
+context_window = __CONTEXT_WINDOW__
+max_tokens = __MAX_TOKENS__
+max_completion_tokens = __MAX_TOKENS__
+max_output_tokens = __MAX_TOKENS__
+
+# Menembus routing gateway, langsung ke server 2.
+#
+# ALAT VERIFIKASI, bukan cara kerja sehari-hari. Sesi yang memakai entri ini
+# kehilangan failover otomatis: kalau server 2 mati, request-nya gagal alih-alih
+# berpindah. Gunanya uji handoff H1-H2 dan membandingkan kualitas jawaban antara
+# Q8_0 (server 1) dan UD-Q4_K_XL (server 2) pada prompt yang sama.
+#
+# Sehari-hari tetap `internal-qwen`: satu endpoint, gateway yang memilih server.
+[model.internal-qwen-s2]
+model = "__MODEL_ID__"
+# @keep-existing
+# Sama seperti internal-qwen: alamat gateway berbeda per jaringan. Tanpa penanda
+# ini, dev yang sedang di VPN akan mendapati entri s2-nya dikembalikan ke alamat
+# LAN dan berhenti bekerja. Yang tahu jaringan dev adalah setup.sh/setup.ps1 —
+# skrip ini tidak.
+base_url = "__GATEWAY__/api/v1/upstream/s2"
+api_backend = "chat_completions"
+context_window = __CONTEXT_WINDOW__
+max_tokens = __MAX_TOKENS__
+max_completion_tokens = __MAX_TOKENS__
+max_output_tokens = __MAX_TOKENS__

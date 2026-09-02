@@ -1,0 +1,60 @@
+# Provider CooperAgent untuk Oh My Pi.
+#
+# Cerminan langsung dari templates/config.toml milik Grok: tiga entri yang sama,
+# tujuan yang sama. Sebelum 30 Agustus 2026 dev omp hanya mendapat satu, dan
+# `/model` hanya menampilkan satu pilihan sementara dev Grok punya tiga.
+#
+# Berkas ini DIRENDER oleh skrip setup. `__GATEWAY__` dan `__API_KEY__` diganti
+# dengan alamat serta identitas dev; `__MODEL_ID__`, `__CONTEXT_WINDOW__`, dan
+# `__MAX_TOKENS__` DIAMBIL dari `/v1/models` gateway saat render.
+#
+# Sampai 1 September 2026 ketiganya ditulis tangan di sini — dan `id:` masih
+# berbunyi `qwen35` berbulan-bulan setelah alias mesin berganti menjadi
+# `intercon-agent`. Itu tidak memutus apa pun hanya karena llama-server
+# mengabaikan field `model` sepenuhnya; ia tetap contoh persis dari penyimpangan
+# yang `/v1/models` ada untuk mencegah.
+#
+# Sesudah terpasang berkas ini TIDAK pernah ditimpa ulang — pembaru hanya
+# memeriksa dan melapor bila menyimpang, karena dev boleh menambahkan provider
+# sendiri di sini.
+providers:
+  # Sehari-hari. Gateway yang memilih server; failover otomatis.
+  cooperagent:
+    name: CooperAgent (routing otomatis)
+    baseUrl: __GATEWAY__/v1
+    apiKey: __API_KEY__
+    api: openai-completions
+    models:
+      - id: __MODEL_ID__
+        name: CooperAgent Qwen3.8-27B
+        contextWindow: __CONTEXT_WINDOW__
+        maxTokens: __MAX_TOKENS__
+
+  # Untuk dev yang bekerja langsung di host GPU. Alamatnya memang statis.
+  cooperagent-localhost:
+    name: CooperAgent (localhost)
+    baseUrl: http://127.0.0.1:8987/v1
+    apiKey: __API_KEY__
+    api: openai-completions
+    models:
+      - id: __MODEL_ID__
+        name: CooperAgent Qwen3.8-27B @ localhost
+        contextWindow: __CONTEXT_WINDOW__
+        maxTokens: __MAX_TOKENS__
+
+  # ALAT PEMBANDING, bukan jalur harian. Menembus routing langsung ke server 2
+  # (UD-Q4_K_XL). Sesi yang memakainya KEHILANGAN failover: bila server 2 penuh
+  # ia mengantre, bila mati request-nya gagal — tidak berpindah.
+  #
+  # Gunanya membandingkan kualitas jawaban Q8_0 (server 1) versus UD-Q4_K_XL
+  # (server 2) pada prompt yang sama.
+  cooperagent-s2:
+    name: CooperAgent server 2 (UD-Q4_K_XL)
+    baseUrl: __GATEWAY__/v1/upstream/s2
+    apiKey: __API_KEY__
+    api: openai-completions
+    models:
+      - id: __MODEL_ID__
+        name: CooperAgent Qwen3.8-27B @ s2
+        contextWindow: __CONTEXT_WINDOW__
+        maxTokens: __MAX_TOKENS__

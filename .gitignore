@@ -1,0 +1,25 @@
+# Repo ini TIDAK memuat rahasia dan tidak memuat alamat internal.
+#
+# Alamat gateway datang dari blok serah-terima admin atau dari kontrak
+# `/v1/models`; token datang dari `cooper issue`. Keduanya tinggal di mesin dev,
+# bukan di sini. Pola di bawah menjaga agar keduanya tidak pernah tidak sengaja
+# ikut ter-commit.
+.env
+.env.*
+!.env.example
+*.token
+*.key
+*.pem
+
+# Jejak lokal dev
+.cooper/
+temp/
+*.log
+*.bak
+*.bak.*
+
+# Sampah OS dan editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
