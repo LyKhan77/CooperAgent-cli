@@ -10,6 +10,8 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [Unreleased]
+
 ## [1.1.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.0.0...v1.1.0) (2026-09-02)
 
 
@@ -22,22 +24,19 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 * **ci:** test.yml tidak dapat diurai sehingga tidak ada job yang berjalan ([d13c38e](https://github.com/LyKhan77/CooperAgent-cli/commit/d13c38e26a5fdb942729cacda193a22e7f29c3bb))
 
-## [Unreleased]
+## Sebelum v1.1.0 — pemisahan repo (2026-09-02)
 
-### Perbaikan
+**Tidak ada tag `v1.0.0`.** Angka itu ditulis sebagai garis dasar di
+`.release-please-manifest.json` — artinya "1.0.0 dianggap sudah terbit" — jadi
+commit `feat:` pertama menaikkannya ke **1.1.0**. Untuk membuat rilis pertama
+benar-benar bernomor 1.0.0, garis dasarnya seharusnya `0.0.0`.
 
-* **ci:** `test.yml` tidak dapat diurai GitHub sehingga tidak ada job yang
-  berjalan. Berkasnya ditulis lewat heredoc tanpa kutip, sehingga bash
-  mengeksekusi perintah di dalam sebuah komentar dan menyisipkan keluarannya ke
-  tengah YAML. Ditulis ulang dan divalidasi dengan parser YAML sebelum
-  di-commit.
+Dibiarkan apa adanya: v1.1.0 sudah terbit, dan menarik ulang sebuah rilis yang
+sudah ditandai lebih berisiko daripada satu nomor yang dilewati. Tautan
+perbandingan pada entri 1.1.0 di atas menunjuk `v1.0.0` yang tidak ada — itu
+konsekuensi yang sama, dan sengaja tidak ditambal dengan tag palsu.
 
-## 1.0.0 (2026-09-02)
-
-Rilis pertama sebagai repo tersendiri. Dipisahkan dari `CooperAgent-server`, yang
-kini privat karena memuat control plane.
-
-### Fitur
+Isi pemisahan repo itu:
 
 * pemasang harness CooperAgent untuk developer — `setup.sh`, `setup.ps1`,
   `templates/`, `scripts/setup-dev.*`

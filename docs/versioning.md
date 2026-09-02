@@ -8,11 +8,19 @@ memang berjalan pada laju berbeda: server berubah saat mesin atau gateway
 berubah, pemasang berubah saat cara memasang berubah. Yang mengikat keduanya
 bukan nomor versi, melainkan **kontrak** — lihat bagian terakhir.
 
-> **Kenapa mulai dari 1.0.0 padahal server sudah 2.2.0?**
+> **Kenapa mulai dari 1.x padahal server sudah 2.x?**
 > Karena ini artefak baru dengan permukaan kompatibilitas sendiri. Nomor di sini
 > menjawab "apakah pemasang saya mutakhir", bukan "versi server berapa". Dev yang
-> melihat `cooperagent-cli 1.0.0` setelah `CooperAgent 2.2.0` **tidak** sedang
+> melihat `cooperagent-cli 1.1.0` setelah `CooperAgent 2.3.0` **tidak** sedang
 > mundur — keduanya menghitung hal yang berbeda.
+
+> **Kenapa rilis pertama bernomor 1.1.0, bukan 1.0.0?**
+> `.release-please-manifest.json` diisi `1.0.0` sejak awal, yang berarti "1.0.0
+> dianggap sudah terbit" — bukan "mulailah dari 1.0.0". Commit `feat:` pertama
+> karena itu menaikkannya ke 1.1.0, dan tag `v1.0.0` tidak pernah ada.
+>
+> Untuk repo berikutnya: isi garis dasarnya `0.0.0`, atau pakai footer
+> `Release-As: 1.0.0` pada commit pertama.
 
 ---
 
@@ -141,4 +149,5 @@ menaikkannya di sisi server dan mengira klien akan menyadarinya.
 
 | Versi | Isi |
 | :-- | :-- |
-| **1.0.0** | Pemasang dipisahkan dari repo server. Kontrak diambil dari gateway; tidak ada alamat internal di repo ini. |
+| **1.1.0** | Rilis pertama yang bertag. Pemasang dipisahkan dari repo server; kontrak diambil dari gateway; tidak ada alamat internal di repo ini. |
+| ~~1.0.0~~ | Tidak pernah ada — hanya garis dasar manifest. Lihat catatan di atas. |
