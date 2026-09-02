@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "cooperagent-cli",
+      "changelog-path": "CHANGELOG.md",
+      "include-component-in-tag": false,
+      "bump-minor-pre-major": false,
+      "draft": false,
+      "prerelease": false,
+      "changelog-sections": [
+        {
+          "type": "feat",
+          "section": "Fitur"
+        },
+        {
+          "type": "fix",
+          "section": "Perbaikan"
+        },
+        {
+          "type": "perf",
+          "section": "Kinerja"
+        },
+        {
+          "type": "refactor",
+          "section": "Penataan ulang"
+        },
+        {
+          "type": "docs",
+          "section": "Dokumentasi"
+        },
+        {
+          "type": "chore",
+          "section": "Pemeliharaan",
+          "hidden": true
+        },
+        {
+          "type": "test",
+          "section": "Pengujian",
+          "hidden": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,28 @@
+# Rilis otomatis dari Conventional Commits.
+#
+# Setiap push ke main, release-please membuka (atau memperbarui) satu PR rilis
+# berisi CHANGELOG dan kenaikan versi. Merge PR itu = menerbitkan rilis dan tag.
+#
+# GITHUB_TOKEN disediakan otomatis oleh GitHub, jadi tidak ada rahasia yang perlu
+# disimpan -- sejalan dengan aturan repo ini bahwa tidak ada rahasia di sini.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  # release-please menyentuh issue saat menautkan PR rilis ke commit; tanpa ini
+  # sebagian jalurnya gagal meski contents/pull-requests sudah write.
+  issues: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

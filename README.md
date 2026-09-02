@@ -135,6 +135,10 @@ pemasangan — bukan dipatok.
 Itu disengaja: nilai yang dipatok di klien tidak pernah tahu saat server
 berubah, dan riwayat git tidak bisa dilupakan.
 
+Aturan lengkap untuk yang mengembangkan repo ini ada di
+[`AGENTS.md`](AGENTS.md); aturan versi dan rilis di
+[`docs/versioning.md`](docs/versioning.md).
+
 Uji yang menjaganya:
 
 ```bash
