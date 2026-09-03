@@ -177,6 +177,14 @@ bukan skrip yang bertanya, Anda baru mengetahuinya lewat 401 di tengah kerja:
     Token DITOLAK gateway (401): kredensial telah DICABUT.
 ```
 
+Saat itu terjadi, tanda `[disarankan]` **berpindah ke pilihan 3** — menyarankan
+"perbarui parameter" kepada dev yang kredensialnya baru ditolak berarti
+menyarankan satu-satunya pilihan yang tidak memperbaiki apa pun.
+
+Semua pilihan bekerja untuk dev yang memasang **omp saja**. Alamat gateway dan
+kredensialnya dibaca dari `models.yml`, dan diteruskan ke pembaru parameter —
+`~/.grok/config.toml` yang tidak pernah ia punya bukan lagi syarat.
+
 Pilihan **2** dan **3** memverifikasi lebih dulu dan **tidak menulis apa pun**
 bila verifikasinya gagal — berpindah ke alamat yang tidak menjawab berarti
 kehilangan gateway yang tadinya bekerja. Keduanya menyentuh **semua harness yang

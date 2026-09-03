@@ -654,10 +654,21 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
 
     echo ""
     echo -e "${YELLOW}Apa yang ingin Anda lakukan?${NC}"
-    echo -e "  ${GREEN}1) Perbarui parameter dari kontrak gateway [disarankan]${NC}"
+    # Rekomendasi mengikuti KEADAAN, bukan kebiasaan. Menyarankan "perbarui
+    # parameter" kepada dev yang kredensialnya ditolak berarti menyarankan
+    # satu-satunya pilihan yang tidak memperbaiki apa pun.
+    if [ "$CRED_OK" = 1 ]; then
+        echo -e "  ${GREEN}1) Perbarui parameter dari kontrak gateway [disarankan]${NC}"
+    else
+        echo -e "  1) Perbarui parameter dari kontrak gateway"
+    fi
     echo -e "     aturan agent, skill, ambang compaction, context_window"
     echo -e "  2) Ganti alamat gateway (pindah LAN <-> VPN)"
-    echo -e "  3) Pasang / ganti token kredensial"
+    if [ "$CRED_OK" = 1 ]; then
+        echo -e "  3) Pasang / ganti token kredensial"
+    else
+        echo -e "  ${GREEN}3) Pasang / ganti token kredensial [disarankan — inilah yang memperbaiki 401]${NC}"
+    fi
     echo -e "  4) Pasang harness tambahan (Grok / omp yang belum ada)"
     echo -e "  5) Keluar"
     read -rp "Pilihan [1/2/3/4/5, default: 1]: " HOME_CHOICE || HOME_CHOICE=""
@@ -742,11 +753,17 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
                 echo -e "${YELLOW}  permintaan ke gateway akan tetap dijawab 401 sampai pilihan 3 dijalankan.${NC}"
             fi
             echo ""
-            if [ -x "$SCRIPT_DIR/scripts/setup-dev.sh" ] || [ -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
+            if [ -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
+                # Alamat DITERUSKAN. setup-dev membacanya dari config Grok, dan
+                # dev yang memilih omp saja tidak punya berkas itu -- tanpa ini
+                # ia berhenti dengan "tidak ada alamat gateway" pada pilihan
+                # yang justru default.
                 if [ -n "$CUR_TOKEN" ]; then
-                    bash "$SCRIPT_DIR/scripts/setup-dev.sh" --token "$CUR_TOKEN"
+                    COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" \
+                        bash "$SCRIPT_DIR/scripts/setup-dev.sh" --token "$CUR_TOKEN"
                 else
-                    bash "$SCRIPT_DIR/scripts/setup-dev.sh"
+                    COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" \
+                        bash "$SCRIPT_DIR/scripts/setup-dev.sh"
                 fi
             else
                 echo -e "${RED}${S_NO} scripts/setup-dev.sh tidak ditemukan.${NC}"

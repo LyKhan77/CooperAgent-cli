@@ -583,10 +583,21 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
 
     Write-Host ""
     Write-Host "Apa yang ingin Anda lakukan?" -ForegroundColor Yellow
-    Write-Host "  1) Perbarui parameter dari kontrak gateway [disarankan]" -ForegroundColor Green
+    # Rekomendasi mengikuti KEADAAN, bukan kebiasaan. Menyarankan "perbarui
+    # parameter" kepada dev yang kredensialnya ditolak berarti menyarankan
+    # satu-satunya pilihan yang tidak memperbaiki apa pun.
+    if ($CRED_OK) {
+        Write-Host "  1) Perbarui parameter dari kontrak gateway [disarankan]" -ForegroundColor Green
+    } else {
+        Write-Host "  1) Perbarui parameter dari kontrak gateway"
+    }
     Write-Host "     aturan agent, skill, ambang compaction, context_window"
     Write-Host "  2) Ganti alamat gateway (pindah LAN <-> VPN)"
-    Write-Host "  3) Pasang / ganti token kredensial"
+    if ($CRED_OK) {
+        Write-Host "  3) Pasang / ganti token kredensial"
+    } else {
+        Write-Host "  3) Pasang / ganti token kredensial [disarankan - inilah yang memperbaiki 401]" -ForegroundColor Green
+    }
     Write-Host "  4) Pasang harness tambahan (Grok / omp yang belum ada)"
     Write-Host "  5) Keluar"
     $HOME_CHOICE = Read-Host "Pilihan [1/2/3/4/5, default: 1]"
@@ -686,6 +697,13 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
             Write-Host ""
             $sd = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
             if (Test-Path $sd) {
+                # Alamat DITERUSKAN lewat env. setup-dev membacanya dari config
+                # Grok, dan dev yang memilih omp saja tidak punya berkas itu --
+                # tanpa ini ia berhenti dengan "tidak ada alamat gateway" pada
+                # pilihan yang justru default.
+                if ($CUR_GATEWAY -and -not $env:COOPERAGENT_GATEWAY) {
+                    $env:COOPERAGENT_GATEWAY = $CUR_GATEWAY
+                }
                 if ($CUR_TOKEN) { & $sd -Token $CUR_TOKEN } else { & $sd }
             } else {
                 Write-Host "[x] scripts\setup-dev.ps1 tidak ditemukan." -ForegroundColor Red

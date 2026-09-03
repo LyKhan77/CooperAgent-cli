@@ -178,6 +178,34 @@ grep -q 'Ganti alamat gateway' <<<"$OUT4" && grep -q 'Pasang / ganti token' <<<"
   && ok "menu ubah parameter/gateway/token ditawarkan" \
   || bad "menu tidak muncul"
 
+# Rekomendasi harus menunjuk pilihan yang benar-benar memperbaiki keadaan.
+grep -q '3) Pasang / ganti token kredensial \[disarankan' <<<"$OUT4" \
+  && ok "pilihan 3 disarankan saat kredensial ditolak" \
+  || bad "masih menyarankan 'perbarui parameter' padahal itu tidak memperbaiki 401"
+
+# ── 4b. dev omp-saja dengan kunci lama, memilih pilihan default ───────────────
+#
+# Keadaan PERSIS yang dilaporkan klien: models.yml memakai `dev-nama@device`,
+# tidak ada ~/.grok/config.toml sama sekali. setup-dev membaca alamat gateway
+# dari config Grok, jadi tanpa alamat yang diteruskan ia berhenti dengan
+# "Tidak ada alamat gateway" -- pada pilihan yang justru default.
+echo
+echo $'\033[1mdev omp-saja, kunci lama, pilihan default:\033[0m'
+H5="$T/home5"; mkdir -p "$H5/.omp/agent"
+cat > "$H5/.omp/agent/models.yml" <<YML
+providers:
+  cooperagent:
+    baseUrl: http://127.0.0.1:$PORT/v1
+    apiKey: dev-lee@laptop-uji
+YML
+OUT5="$(printf '1\n' | HOME="$H5" timeout 60 bash "$REPO/setup.sh" 2>&1)"
+grep -qi 'Tidak ada alamat gateway' <<<"$OUT5" \
+  && bad "buntu: alamat gateway tidak diteruskan ke setup-dev" \
+  || ok "alamat diteruskan — pilihan default tidak buntu"
+grep -qi 'tidak ada token di config' <<<"$OUT5" \
+  && ok "kunci lama dikatakan bukan kredensial, bukan didiamkan" \
+  || bad "kunci `dev-nama@device` diterima seolah token"
+
 # ── 5. sisi Windows tidak boleh tertinggal ────────────────────────────────────
 #
 # Diperiksa pada TEKS, bukan dengan menjalankannya: runner ini Linux, dan
