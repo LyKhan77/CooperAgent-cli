@@ -10,6 +10,18 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [1.2.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.1.1...v1.2.0) (2026-09-03)
+
+
+### Fitur
+
+* gerbang kredensial dan mode "sudah terpasang" pada pemasang ([19052bf](https://github.com/LyKhan77/CooperAgent-cli/commit/19052bf659ace3b15c4077482936dd274bd9b656))
+
+
+### Perbaikan
+
+* pilihan default tidak buntu bagi dev omp-saja, dan rekomendasi mengikuti keadaan ([14980b3](https://github.com/LyKhan77/CooperAgent-cli/commit/14980b3e8f7af97d360e934a4b5bfe995e093c92))
+
 ## [1.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.1.0...v1.1.1) (2026-09-02)
 
 
