@@ -547,6 +547,20 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
     if (Test-CooperOmpInstalled)  { $hl += 'Oh My Pi (omp)' }
     Write-Host "  harness   : $($hl -join ', ')"
 
+    # Aturan agent OPSIONAL sejak 3 September 2026, jadi keadaannya harus
+    # terlihat: dev yang menolaknya perlu tahu ia memang belum terpasang, bukan
+    # menduga pemasangannya gagal.
+    $RULES_ON = $false
+    foreach ($r in @((Join-Path $env:USERPROFILE '.grok\AGENTS.md'),
+                     (Join-Path $env:USERPROFILE '.omp\agent\AGENTS.md'))) {
+        if (Test-Path $r) { $RULES_ON = $true }
+    }
+    if ($RULES_ON) {
+        Write-Host "  aturan    : terpasang (CooperxHarness AGENTS.md)"
+    } else {
+        Write-Host "  aturan    : tidak dipasang - Anda memakai aturan sendiri" -ForegroundColor Yellow
+    }
+
     # Kredensial: SELALU ditanyakan ke gateway, tidak pernah disimpulkan dari
     # berkas. Berkas hanya tahu apa yang pernah benar.
     $CRED_OK = $false
@@ -599,8 +613,13 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
         Write-Host "  3) Pasang / ganti token kredensial [disarankan - inilah yang memperbaiki 401]" -ForegroundColor Green
     }
     Write-Host "  4) Pasang harness tambahan (Grok / omp yang belum ada)"
-    Write-Host "  5) Keluar"
-    $HOME_CHOICE = Read-Host "Pilihan [1/2/3/4/5, default: 1]"
+    if ($RULES_ON) {
+        Write-Host "  5) Lepas aturan agent CooperxHarness (skill tetap terpasang)"
+    } else {
+        Write-Host "  5) Pasang aturan agent CooperxHarness"
+    }
+    Write-Host "  6) Keluar"
+    $HOME_CHOICE = Read-Host "Pilihan [1/2/3/4/5/6, default: 1]"
     if ([string]::IsNullOrWhiteSpace($HOME_CHOICE)) { $HOME_CHOICE = '1' }
 
     switch ($HOME_CHOICE) {
@@ -683,6 +702,27 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
             if ($CUR_GATEWAY -and -not $COOPERAGENT_GATEWAY) { $COOPERAGENT_GATEWAY = $CUR_GATEWAY }
         }
         '5' {
+            # Aturan agent adalah PENDAPAT tentang cara bekerja; skill adalah
+            # perkakas. Melepas yang pertama tidak boleh ikut membawa yang
+            # kedua -- dev yang menolak aturan kami tetap berhak atas
+            # /cooper-handoff dan /cooper-structure.
+            $sd5 = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
+            if (-not (Test-Path $sd5)) {
+                Write-Host "[x] scripts\setup-dev.ps1 tidak ditemukan." -ForegroundColor Red
+                exit 1
+            }
+            Write-Host ""
+            if ($RULES_ON) {
+                & $sd5 -RemoveRules
+            } else {
+                if ($CUR_GATEWAY -and -not $env:COOPERAGENT_GATEWAY) {
+                    $env:COOPERAGENT_GATEWAY = $CUR_GATEWAY
+                }
+                if ($CUR_TOKEN) { & $sd5 -Rules -Token $CUR_TOKEN } else { & $sd5 -Rules }
+            }
+            exit 0
+        }
+        '6' {
             Write-Host "Tidak ada yang diubah." -ForegroundColor Green
             exit 0
         }
@@ -1228,7 +1268,7 @@ Write-Host "=================================================================" -
 Write-Host "[+] Setup Selesai! Selamat datang di CooperAgent (Windows)!" -ForegroundColor Green
 Write-Host "  - Menjalankan Grok:      Ketik 'grok' di PowerShell folder project Anda."
 Write-Host "  - Menjalankan Oh My Pi:  Ketik 'omp' -- BUKA TERMINAL BARU dulu bila baru dipasang."
-Write-Host "  - Checkpoint sesi:       .cooper/context/ di proyek Anda; /handoff saat context penuh."
+Write-Host "  - Checkpoint sesi:       .cooper/context/ di proyek Anda; /cooper-handoff saat context penuh."
 Write-Host "  - Pantau Dashboard:      Buka $($SERVER_URL -replace '/api/v1$','')/"
 Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host ""

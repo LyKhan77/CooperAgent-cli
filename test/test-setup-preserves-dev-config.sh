@@ -103,7 +103,9 @@ cp "$T/.grok/config.toml" "$T2/.grok/config.toml"
 # keadaan, dan `5` keluar tanpa mengubah apa pun. Yang dijanjikan
 # docs/onboarding.md dan diuji di sini: token yang sudah ada TIDAK diminta
 # ditempel ulang.
-OUT="$(printf '5\n' | HOME="$T2" timeout 40 bash "$REPO/setup.sh" 2>&1 || true)"
+# `6` = Keluar. Menu bertambah satu pilihan (pasang/lepas aturan agent) pada
+# 3 September 2026, sehingga keluar bergeser dari 5 ke 6.
+OUT="$(printf '6\n' | HOME="$T2" timeout 40 bash "$REPO/setup.sh" 2>&1 || true)"
 rm -rf "$T2"
 grep -q "sudah terpasang" <<<"$OUT" \
   && ok "mesin terpasang dikenali, bukan diseret ke onboarding" \

@@ -58,13 +58,28 @@ fi
 
 DRY_RUN=0
 TOKEN=""
+# Aturan agent (`AGENTS.md`) OPSIONAL sejak 3 September 2026.
+#
+# Sebagian dev membangun aturan harness sendiri, dan sebagian lagi memang ingin
+# agent mentah tanpa aturan apa pun. Memasangnya tanpa bertanya berarti menulis
+# 6 KB pendapat ke direktori global mereka atas nama "pemasangan".
+#
+# Kosong = tanyakan (hanya bila interaktif DAN belum pernah ada); `yes`/`no`
+# datang dari bendera. SKILL TIDAK IKUT: ia perkakas, bukan pendapat, dan tetap
+# dipasang pada ketiga jalur.
+RULES_MODE=""
+REMOVE_RULES=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
         --token)   TOKEN="${2:-}"; shift 2 ;;
         --token=*) TOKEN="${1#--token=}"; shift ;;
+        --rules)        RULES_MODE="yes"; shift ;;
+        --no-rules)     RULES_MODE="no";  shift ;;
+        --remove-rules) REMOVE_RULES=1;   shift ;;
         *) echo "opsi tidak dikenal: $1" >&2
            echo "penggunaan: setup-dev.sh [--dry-run] [--token ca_...]" >&2
+           echo "            [--rules|--no-rules|--remove-rules]" >&2
            exit 2 ;;
     esac
 done
@@ -96,6 +111,83 @@ command -v awk >/dev/null || { echo "${RED}${S_NO} awk tidak tersedia${NC}" >&2;
 echo "${BOLD}Template CooperAgent -> $GROK_HOME${NC}"
 [ "$DRY_RUN" = 1 ] && echo "${YELLOW}Mode dry-run: tidak ada berkas yang ditulis.${NC}"
 echo
+
+# Dua tujuan, satu sumber: Grok membaca ~/.grok/AGENTS.md, omp membaca
+# ~/.omp/agent/AGENTS.md.
+RULES_PATHS="$GROK_HOME/AGENTS.md $HOME/.omp/agent/AGENTS.md"
+# Baris pertama template. Dipakai untuk mengenali berkas MILIK KAMI yang sudah
+# tertinggal versi -- `cmp` terhadap template saat ini akan menyebut aturan kami
+# sendiri dari rilis lalu sebagai "milik dev", lalu menolak melepasnya.
+RULES_MARK="$(head -1 "$TPL_DIR/agent-rules.md")"
+
+rules_are_ours() { # $1 = berkas
+    [ -f "$1" ] || return 1
+    cmp -s "$TPL_DIR/agent-rules.md" "$1" && return 0
+    [ "$(head -1 "$1")" = "$RULES_MARK" ]
+}
+
+# ── melepas aturan: --remove-rules ────────────────────────────────────────────
+#
+# Hanya berkas yang BISA DIBUKTIKAN milik CooperAgent yang dilepas. Aturan
+# tulisan dev sendiri tidak pernah disentuh -- itu aturan repo #3, dan di sini
+# taruhannya berkas yang tidak bisa ia ambil kembali.
+#
+# Cadangan tetap dibuat meski berkasnya milik kami: dev bisa saja menambahkan
+# beberapa baris sendiri di bawahnya, dan penanda baris pertama tidak
+# mengetahuinya.
+if [ "$REMOVE_RULES" = 1 ]; then
+    echo "${BOLD}Melepas aturan agent CooperAgent${NC}"
+    FOUND=0; GONE=0
+    for dst in $RULES_PATHS; do
+        [ -f "$dst" ] || continue
+        FOUND=$((FOUND + 1))
+        if rules_are_ours "$dst"; then
+            if [ "$DRY_RUN" = 0 ]; then
+                cp "$dst" "$dst.bak.$STAMP"
+                rm -f "$dst"
+            fi
+            echo "  ${GREEN}${S_OK}${NC} dilepas: $dst"
+            echo "     cadangan: $(basename "$dst").bak.$STAMP"
+            GONE=$((GONE + 1))
+        else
+            echo "  ${YELLOW}${S_WARN}${NC} BUKAN aturan CooperAgent: $dst"
+            echo "     Isinya aturan Anda sendiri — tidak disentuh. Hapus manual bila memang mau."
+        fi
+    done
+    [ "$FOUND" = 0 ] && echo "  ${YELLOW}${S_WARN}${NC} Tidak ada aturan agent yang terpasang."
+    echo
+    echo "  ${GREEN}${S_OK}${NC} Skill TIDAK ikut dilepas — ia perkakas, bukan pendapat."
+    echo "     Pasang kembali kapan saja: ./scripts/setup-dev.sh --rules"
+    exit 0
+fi
+
+# Apakah aturan diinginkan? Bendera menang; selain itu keadaan yang menjawab.
+rules_wanted() {
+    case "$RULES_MODE" in
+        yes) return 0 ;;
+        no)  return 1 ;;
+    esac
+    # Sudah ada = pilihan sudah pernah dibuat. Menanyakannya setiap kali skrip
+    # pembaru berjalan adalah pertanyaan yang jawabannya sudah kita tahu.
+    for dst in $RULES_PATHS; do
+        [ -f "$dst" ] && return 0
+    done
+    # Belum pernah ada. Tanpa terminal, perilaku lama dipertahankan: pemanggilan
+    # terskrip tidak boleh berubah diam-diam hanya karena promptnya ditambahkan.
+    [ -t 0 ] || return 0
+
+    echo "${CYAN}--- Aturan kerja agent (CooperxHarness) ---${NC}"
+    echo "  Aturan global: checkpoint, surgical changes, goal-driven execution."
+    echo "  Ukuran: $(wc -c < "$TPL_DIR/agent-rules.md") karakter, dipasang ke ~/.grok/ dan ~/.omp/agent/."
+    echo "  ${YELLOW}Opsional.${NC} Anda boleh memakai aturan sendiri, atau tanpa aturan sama sekali."
+    echo "  Skill CooperAgent tetap dipasang apa pun jawabannya."
+    printf "Pasang aturan CooperAgent? [Y/n]: "
+    read -r ans || ans=""
+    case "$ans" in
+        [Nn]*) return 1 ;;
+        *)     return 0 ;;
+    esac
+}
 
 mkdir -p "$GROK_HOME/skills"
 
@@ -231,10 +323,15 @@ install_rules() {
     fi
 }
 
-install_rules "$GROK_HOME/AGENTS.md" "Aturan agent (Grok)"
-# Dipasang tanpa syarat: dev bisa memasang omp kapan saja setelah ini, dan
-# berkas 5 KB di direktori yang belum dipakai tidak merugikan siapa pun.
-install_rules "$HOME/.omp/agent/AGENTS.md" "Aturan agent (Oh My Pi)"
+if rules_wanted; then
+    install_rules "$GROK_HOME/AGENTS.md" "Aturan agent (Grok)"
+    # Dipasang tanpa syarat: dev bisa memasang omp kapan saja setelah ini, dan
+    # berkas 5 KB di direktori yang belum dipakai tidak merugikan siapa pun.
+    install_rules "$HOME/.omp/agent/AGENTS.md" "Aturan agent (Oh My Pi)"
+else
+    echo "${YELLOW}${S_WARN}${NC} Aturan agent DILEWATI — Anda memakai aturan sendiri."
+    echo "   Pasang kapan saja: ./scripts/setup-dev.sh --rules"
+fi
 
 echo
 
@@ -255,8 +352,8 @@ done
 # omp TIDAK membaca ~/.grok/skills -- terverifikasi 30 Agustus 2026 lewat
 # `omp config list`: skills.customDirectories kosong secara bawaan, dan lokasi
 # yang dibacanya adalah milik Claude/Codex/Pi, bukan Grok. Tanpa langkah ini
-# `/handoff` hanya ada di Grok, padahal seluruh gunanya justru bekerja di
-# keduanya.
+# `/cooper-handoff` hanya ada di Grok, padahal seluruh gunanya justru bekerja
+# di keduanya.
 #
 # Direktori TERPISAH, bukan menunjuk omp ke ~/.grok/skills: direktori itu memuat
 # skill pihak ketiga milik dev, dan menyeretnya ke omp adalah efek samping yang
@@ -280,12 +377,22 @@ echo "  ${GREEN}${S_OK}${NC} skill juga dipasang untuk omp di ~/.cooper/skills"
 # aturan global yang baru saja dipasang.
 #
 # Hanya nama-nama di bawah yang dihapus. Skill lain tidak disentuh.
-RETIRED="standardization init-changelog checkpoint"
+# `handoff` diganti nama menjadi `cooper-handoff` pada 3 September 2026 supaya
+# seluruh skill kami hidup di satu awalan dan tidak bertabrakan dengan skill
+# milik dev. Tanpa baris ini dev melihat KEDUANYA sesudah memperbarui.
+RETIRED="standardization init-changelog checkpoint handoff"
+#
+# KEDUA lokasi disapu. Skill dipasang ke ~/.grok/skills DAN ~/.cooper/skills
+# (yang dibaca omp), jadi menyapu satu saja meninggalkan yang lain hidup di
+# harness sebelah -- persis kelas kegagalan yang membuat `omp` dan `grok`
+# berperilaku berbeda tanpa sebab yang terlihat.
 for name in $RETIRED; do
-    old="$GROK_HOME/skills/$name"
-    [ -d "$old" ] || continue
-    [ "$DRY_RUN" = 0 ] && rm -rf "$old"
-    echo "  ${YELLOW}−${NC} $name dihapus (dipensiunkan 2026-08-29)"
+    for base in "$GROK_HOME/skills" "$HOME/.cooper/skills"; do
+        old="$base/$name"
+        [ -d "$old" ] || continue
+        [ "$DRY_RUN" = 0 ] && rm -rf "$old"
+        echo "  ${YELLOW}−${NC} $name dihapus dari $base (dipensiunkan)"
+    done
 done
 
 # Dihitung dengan loop, bukan pipeline: `grep` tanpa kecocokan mengembalikan 1,
@@ -318,7 +425,7 @@ if [ -z "${SKIP_OMP:-}" ]; then
 
     if [ -n "$OMP_BIN" ]; then
         if [ "$DRY_RUN" = 0 ]; then
-            # Tanpa ini omp tidak menemukan /handoff sama sekali.
+            # Tanpa ini omp tidak menemukan /cooper-handoff sama sekali.
             "$OMP_BIN" config set skills.customDirectories '["~/.cooper/skills"]' >/dev/null 2>&1 \
                 && echo "  ${GREEN}${S_OK}${NC} direktori skill terdaftar (~/.cooper/skills)" \
                 || echo "  ${YELLOW}!${NC} gagal mendaftarkan direktori skill"

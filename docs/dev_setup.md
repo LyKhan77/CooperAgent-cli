@@ -10,7 +10,7 @@ mesin berbeda. Akibatnya pada 27 Agustus 2026 terukur langsung:
 - Satu dev tidak punya `auto_compact_threshold_percent`. Sesinya tumbuh sampai
   **130.914 token** dari plafon 131.072, menabrak dinding, dan mulai dari nol —
   seluruh percakapan hilang.
-- `/handoff` menulis checkpoint ke `.cooper/context/` proyek — tidak bergantung pada `[memory]` harness mana pun.
+- `/cooper-handoff` menulis checkpoint ke `.cooper/context/` proyek — tidak bergantung pada `[memory]` harness mana pun.
 - Skill CooperAgent tidak terlihat di luar repo ini karena tersimpan di
   `<repo>/.grok/skills/`, bukan `~/.grok/skills/`.
 
@@ -41,7 +41,7 @@ terpengaruh, jadi aman dijalankan kapan saja.
 | :--- | :--- |
 | `~/.grok/AGENTS.md` | Aturan kerja agent. Dibaca otomatis di folder mana pun, termasuk folder kosong yang belum jadi repo |
 | `~/.grok/config.toml` | Di-**merge**: hanya kunci terkelola yang diubah |
-| `~/.grok/skills/` | `handoff`. Skill lain di mesin dev tidak disentuh |
+| `~/.grok/skills/` | `cooper-handoff`, `cooper-structure`. Skill lain di mesin dev tidak disentuh |
 | `~/.omp/agent/AGENTS.md` | Aturan yang sama untuk Oh My Pi |
 | `~/.omp/agent/models.yml` | Dibuat bila belum ada; bila sudah ada **tidak ditimpa**, hanya diperiksa terhadap config Grok |
 | omp `compaction.thresholdPercent` | Disetel 80%, sama dengan Grok |
