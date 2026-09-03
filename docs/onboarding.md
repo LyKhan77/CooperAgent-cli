@@ -75,6 +75,43 @@ dashboard tanpa penjelasan.
 
 Prompt manual hanya muncul bila token **tidak diberikan sama sekali**.
 
+### Aturan agent bersifat opsional
+
+Sebelum aturan ditulis, skrip **bertanya** — dengan default "ya":
+
+```
+--- Aturan kerja agent (CooperxHarness) ---
+  Aturan global: checkpoint, surgical changes, goal-driven execution.
+  Ukuran: 5980 karakter, dipasang ke ~/.grok/ dan ~/.omp/agent/.
+  Opsional. Anda boleh memakai aturan sendiri, atau tanpa aturan sama sekali.
+  Skill CooperAgent tetap dipasang apa pun jawabannya.
+Pasang aturan CooperAgent? [Y/n]:
+```
+
+Menekan Enter memberi hasil yang sama seperti sebelumnya. Menjawab `n` berguna
+bila Anda sudah punya aturan harness sendiri, atau memang ingin agent mentah.
+
+Pertanyaan ini **hanya muncul sekali**: bila `AGENTS.md` sudah ada, skrip
+menganggap pilihannya sudah dibuat dan langsung memperbaruinya. Untuk memaksa,
+pakai `--rules` / `--no-rules` / `--remove-rules` (`-Rules` / `-NoRules` /
+`-RemoveRules` di PowerShell).
+
+### Skill yang dipasang
+
+Dua, keduanya ke Grok **dan** omp, dan keduanya terpasang apa pun jawaban Anda
+soal aturan di atas:
+
+| Skill | Untuk apa |
+| :-- | :-- |
+| `/cooper-handoff` | menyerahkan sesi saat context hampir penuh — menulis checkpoint, tidak meringkas percakapan |
+| `/cooper-structure` | menyarankan struktur project: membaca codebase, menawarkan **beberapa kandidat** kombinasi pola, Anda memilih dan menyesuaikan, lalu ia menulis rencana migrasi ke `.cooper/structure/rencana.md` |
+
+`/cooper-structure` **tidak pernah memindahkan berkas.** Ia menulis rencana;
+mengeksekusinya keputusan Anda.
+
+Sampai 3 September 2026 skill handoff bernama `/handoff`. Nama lama dihapus
+otomatis saat Anda memperbarui, supaya tidak ada dua skill kembar.
+
 ### Gerbang kredensial
 
 Sebelum satu berkas pun ditulis, skrip menanyakan token Anda ke
@@ -130,7 +167,7 @@ menjalankan ulang setup untuk memperbarui parameter tidak menuntut token
 ditempel ulang.
 
 Lalu skrip memasang agent bila diminta, menulis config, menyalin aturan kerja
-dan skill `/handoff`, dan menyetel ambang compaction.
+dan skill (`/cooper-handoff`, `/cooper-structure`), dan menyetel ambang compaction.
 
 **Mulai sesi baru setelah selesai** — agent membaca config saat start.
 
@@ -164,8 +201,18 @@ Apa yang ingin Anda lakukan?
   2) Ganti alamat gateway (pindah LAN <-> VPN)
   3) Pasang / ganti token kredensial
   4) Pasang harness tambahan (Grok / omp yang belum ada)
-  5) Keluar
+  5) Lepas aturan agent CooperxHarness (skill tetap terpasang)
+  6) Keluar
 ```
+
+Pilihan 5 berganti sendiri mengikuti keadaan: **Lepas** bila aturan terpasang,
+**Pasang** bila tidak. Melepasnya **tidak menyentuh skill** — aturan adalah
+pendapat tentang cara bekerja, skill adalah perkakas, dan dev yang menolak
+pendapat kami tetap berhak atas perkakasnya.
+
+Yang dilepas hanya berkas yang bisa dibuktikan milik CooperAgent. Bila
+`AGENTS.md` Anda ternyata tulisan sendiri, skrip menolak menyentuhnya dan
+mengatakannya. Cadangan tetap dibuat pada setiap pelepasan.
 
 **Kredensial diperiksa setiap kali**, bahkan ketika Anda hanya ingin memperbarui
 parameter. Pencabutan terjadi di sisi server tanpa memberi tahu klien — kalau
@@ -235,7 +282,7 @@ Isikan ke alat apa pun yang bisa bicara ke OpenAI. Pilih penyedia
 
 Cetak ulang kapan saja: `./setup.sh --info`
 
-**Yang tidak Anda dapat tanpa harness:** ambang compaction otomatis, `/handoff`,
+**Yang tidak Anda dapat tanpa harness:** ambang compaction otomatis, `/cooper-handoff`,
 dan aturan agent. Pemakaian tetap tercatat — itu melekat pada token.
 
 Selengkapnya: [`docs/api_langsung.md`](api_langsung.md), termasuk jebakan

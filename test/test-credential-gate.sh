@@ -166,7 +166,8 @@ providers:
     baseUrl: http://127.0.0.1:$PORT/v1
     apiKey: $REVOKED
 YML
-OUT4="$(printf '5\n' | HOME="$H4" timeout 60 bash "$REPO/setup.sh" 2>&1)"
+# `6` = Keluar (menu bertambah satu pilihan pada 3 September 2026).
+OUT4="$(printf '6\n' | HOME="$H4" timeout 60 bash "$REPO/setup.sh" 2>&1)"
 grep -qi 'sudah terpasang' <<<"$OUT4" \
   && ok "dev omp-saja dikenali sebagai sudah terpasang" \
   || bad "pemasangan omp-saja tidak terlihat -- diseret ke onboarding penuh"
@@ -235,6 +236,34 @@ if grep -Pzoq '(?s)whoami.{0,600}?catch \{\s*\}' "$REPO/setup.ps1" 2>/dev/null; 
 else
     ok "tidak ada catch{} kosong yang menelan kegagalan whoami"
 fi
+
+# Aturan opsional + skill: paritas Windows. Perbaikan di repo ini pernah
+# dipasang di satu platform saja, lalu ditemukan berbulan kemudian oleh dev di
+# platform yang lain.
+grep -q 'RemoveRules' "$REPO/scripts/setup-dev.ps1" \
+  && grep -q 'NoRules' "$REPO/scripts/setup-dev.ps1" \
+  && ok "aturan opsional + pelepasan ada di Windows" \
+  || bad "setup-dev.ps1 masih memasang AGENTS.md tanpa bertanya"
+grep -q "'handoff'" "$REPO/scripts/setup-dev.ps1" \
+  && ok "skill lama dipensiunkan juga di Windows" \
+  || bad "setup-dev.ps1 meninggalkan skill handoff lama"
+grep -q 'CooperSkills' "$REPO/scripts/setup-dev.ps1" \
+  && ok "pensiun menyapu KEDUA lokasi skill di Windows" \
+  || bad "setup-dev.ps1 hanya menyapu ~/.grok/skills"
+grep -q 'RULES_ON' "$REPO/setup.ps1" \
+  && grep -q '6) Keluar' "$REPO/setup.ps1" \
+  && ok "menu pasang/lepas aturan ada di Windows" \
+  || bad "menu Windows belum punya pilihan aturan"
+
+# Skill harus ada sebagai template untuk KEDUA platform -- keduanya menyalin
+# direktori yang sama, jadi yang hilang di sini hilang di mana-mana.
+for sk in cooper-handoff cooper-structure; do
+    [ -f "$REPO/templates/skills/$sk/SKILL.md" ] \
+      && ok "template skill $sk ada" || bad "template skill $sk HILANG"
+done
+[ -d "$REPO/templates/skills/handoff" ] \
+  && bad "template skill lama masih ada — dev akan melihat dua skill kembar" \
+  || ok "template skill lama sudah dilepas"
 
 # Kurung tidak seimbang adalah satu-satunya kerusakan PowerShell yang bisa
 # ditangkap tanpa PowerShell. Ia tidak membuktikan skripnya benar; ia menangkap

@@ -158,7 +158,7 @@ pemakaian sehari-hari.
 | | dengan harness | API langsung |
 | :-- | :-- | :-- |
 | ambang compaction | otomatis 80% | Anda kelola sendiri |
-| `/handoff` dan skill | ada | tidak |
+| skill `/cooper-handoff`, `/cooper-structure` | ada | tidak |
 | aturan agent | dipasang | tidak |
 | identitas di telemetri | otomatis | ikut, dari token |
 

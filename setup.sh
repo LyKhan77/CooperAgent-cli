@@ -625,6 +625,19 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
     installed_omp  && HARNESS_LIST="${HARNESS_LIST:+$HARNESS_LIST, }Oh My Pi (omp)"
     echo -e "  harness   : ${HARNESS_LIST}"
 
+    # Aturan agent OPSIONAL sejak 3 September 2026, jadi keadaannya harus
+    # terlihat: dev yang menolaknya perlu tahu ia memang belum terpasang, bukan
+    # menduga pemasangannya gagal.
+    RULES_ON=0
+    for r in "$HOME/.grok/AGENTS.md" "$HOME/.omp/agent/AGENTS.md"; do
+        [ -f "$r" ] && RULES_ON=1
+    done
+    if [ "$RULES_ON" = 1 ]; then
+        echo -e "  aturan    : terpasang (CooperxHarness AGENTS.md)"
+    else
+        echo -e "  aturan    : ${YELLOW}tidak dipasang${NC} — Anda memakai aturan sendiri"
+    fi
+
     # Kredensial: SELALU ditanyakan ke gateway, tidak pernah disimpulkan dari
     # berkas. Berkas hanya tahu apa yang pernah benar.
     CRED_OK=0
@@ -670,8 +683,13 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
         echo -e "  ${GREEN}3) Pasang / ganti token kredensial [disarankan — inilah yang memperbaiki 401]${NC}"
     fi
     echo -e "  4) Pasang harness tambahan (Grok / omp yang belum ada)"
-    echo -e "  5) Keluar"
-    read -rp "Pilihan [1/2/3/4/5, default: 1]: " HOME_CHOICE || HOME_CHOICE=""
+    if [ "$RULES_ON" = 1 ]; then
+        echo -e "  5) Lepas aturan agent CooperxHarness (skill tetap terpasang)"
+    else
+        echo -e "  5) Pasang aturan agent CooperxHarness"
+    fi
+    echo -e "  6) Keluar"
+    read -rp "Pilihan [1/2/3/4/5/6, default: 1]: " HOME_CHOICE || HOME_CHOICE=""
     HOME_CHOICE="${HOME_CHOICE:-1}"
 
     case "$HOME_CHOICE" in
@@ -743,6 +761,24 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
             [ -n "$CUR_GATEWAY" ] && COOPERAGENT_GATEWAY="${COOPERAGENT_GATEWAY:-$CUR_GATEWAY}"
             ;;
         5)
+            # Aturan agent adalah PENDAPAT tentang cara bekerja; skill adalah
+            # perkakas. Melepas yang pertama tidak boleh ikut membawa yang
+            # kedua -- dev yang menolak aturan kami tetap berhak atas
+            # /cooper-handoff dan /cooper-structure.
+            if [ ! -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
+                echo -e "${RED}${S_NO} scripts/setup-dev.sh tidak ditemukan.${NC}"
+                exit 1
+            fi
+            echo ""
+            if [ "$RULES_ON" = 1 ]; then
+                bash "$SCRIPT_DIR/scripts/setup-dev.sh" --remove-rules
+            else
+                COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" \
+                    bash "$SCRIPT_DIR/scripts/setup-dev.sh" --rules \
+                    ${CUR_TOKEN:+--token "$CUR_TOKEN"}
+            fi
+            exit 0 ;;
+        6)
             echo -e "${GREEN}Tidak ada yang diubah.${NC}"
             exit 0 ;;
         *)
@@ -1266,7 +1302,7 @@ echo -e "\n${CYAN}==============================================================
 echo -e "${GREEN}${S_PARTY} Setup Selesai! Selamat datang di CooperAgent!${NC}"
 echo -e "  - Menjalankan Grok Build: Ketik ${CYAN}grok${NC} di folder project Anda."
 echo -e "  - Menjalankan Oh My Pi:   Ketik ${CYAN}omp${NC} — buka terminal baru dulu bila baru dipasang."
-echo -e "  - Handoff saat context penuh: ${YELLOW}/handoff${NC}"
-echo -e "  - Checkpoint sesi:       ${CYAN}.cooper/context/${NC} di proyek Anda; ${YELLOW}/handoff${NC} saat context penuh."
+echo -e "  - Handoff saat context penuh: ${YELLOW}/cooper-handoff${NC}"
+echo -e "  - Checkpoint sesi:       ${CYAN}.cooper/context/${NC} di proyek Anda; ${YELLOW}/cooper-handoff${NC} saat context penuh."
 echo -e "  - Pantau Dashboard:      Buka ${CYAN}${SERVER_URL%/api/v1}/${NC}"
 echo -e "${CYAN}================================================================${NC}\n"

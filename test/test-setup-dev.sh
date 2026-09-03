@@ -214,14 +214,55 @@ t "gateway dipindahkan"     "$(grep -c "baseUrl: http://127.0.0.1:$GWPORT/v1" "$
 t "provider dev tak tersentuh" "$(grep -c 'api.anthropic.com' "$SB/keep/.omp/agent/models.yml")" "1"
 
 echo "═══ J: skill sampai ke KEDUA harness ═══"
-# omp tidak membaca ~/.grok/skills; tanpa salinan kedua, /handoff hanya ada di
-# Grok padahal seluruh gunanya bekerja di keduanya.
+# omp tidak membaca ~/.grok/skills; tanpa salinan kedua, /cooper-handoff hanya
+# ada di Grok padahal seluruh gunanya bekerja di keduanya.
 mkdir -p "$SB/skills/.grok"
 printf '[model.internal-qwen]\nbase_url = "http://198.51.100.10:8987/api/v1"\napi_key = "dev-uji@mesin"\n' > "$SB/skills/.grok/config.toml"
+# Skill lama ditanam lebih dulu: pergantian nama harus MENGHAPUSNYA, bukan
+# meninggalkan dua skill kembar yang keduanya muncul di daftar dev.
+mkdir -p "$SB/skills/.grok/skills/handoff" "$SB/skills/.cooper/skills/handoff"
+echo lama > "$SB/skills/.grok/skills/handoff/SKILL.md"
+echo lama > "$SB/skills/.cooper/skills/handoff/SKILL.md"
 HOME="$SB/skills" GROK_HOME="$SB/skills/.grok" $SETUP >/dev/null 2>&1
-t "skill untuk Grok" "$([ -f "$SB/skills/.grok/skills/handoff/SKILL.md" ] && echo ya)" "ya"
-t "skill untuk omp"  "$([ -f "$SB/skills/.cooper/skills/handoff/SKILL.md" ] && echo ya)" "ya"
-t "keduanya identik" "$(cmp -s "$SB/skills/.grok/skills/handoff/SKILL.md" "$SB/skills/.cooper/skills/handoff/SKILL.md" && echo ya)" "ya"
+for sk in cooper-handoff cooper-structure; do
+    t "$sk untuk Grok" "$([ -f "$SB/skills/.grok/skills/$sk/SKILL.md" ] && echo ya)" "ya"
+    t "$sk untuk omp"  "$([ -f "$SB/skills/.cooper/skills/$sk/SKILL.md" ] && echo ya)" "ya"
+    t "$sk identik"    "$(cmp -s "$SB/skills/.grok/skills/$sk/SKILL.md" "$SB/skills/.cooper/skills/$sk/SKILL.md" && echo ya)" "ya"
+done
+t "handoff lama hilang (Grok)" "$([ -d "$SB/skills/.grok/skills/handoff" ] && echo ada || echo tidak)" "tidak"
+t "handoff lama hilang (omp)"  "$([ -d "$SB/skills/.cooper/skills/handoff" ] && echo ada || echo tidak)" "tidak"
+# Skill mandiri: format checkpoint ada DI DALAMNYA, karena aturan global kini
+# opsional dan skill yang hanya menunjuk aturan yang ditolak dev tidak berguna.
+t "cooper-handoff mandiri" \
+  "$(grep -q '## Checkpoint format' "$SB/skills/.grok/skills/cooper-handoff/SKILL.md" && echo ya)" "ya"
+
+echo "═══ K: aturan agent OPSIONAL ═══"
+# Sejak 3 September 2026 AGENTS.md tidak lagi dipasang tanpa bertanya: sebagian
+# dev punya aturan harness sendiri, sebagian ingin agent mentah. Yang TIDAK
+# boleh ikut dilewati adalah skill -- itu perkakas, bukan pendapat.
+mkdir -p "$SB/norules/.grok"
+printf '[model.internal-qwen]\nbase_url = "http://198.51.100.10:8987/api/v1"\napi_key = "dev-uji@mesin"\n' > "$SB/norules/.grok/config.toml"
+HOME="$SB/norules" GROK_HOME="$SB/norules/.grok" $SETUP --no-rules >/dev/null 2>&1
+t "--no-rules: AGENTS.md Grok tidak ada" "$([ -f "$SB/norules/.grok/AGENTS.md" ] && echo ada || echo tidak)" "tidak"
+t "--no-rules: AGENTS.md omp tidak ada"  "$([ -f "$SB/norules/.omp/agent/AGENTS.md" ] && echo ada || echo tidak)" "tidak"
+t "--no-rules: skill TETAP dipasang"     "$([ -f "$SB/norules/.grok/skills/cooper-handoff/SKILL.md" ] && echo ya)" "ya"
+
+HOME="$SB/norules" GROK_HOME="$SB/norules/.grok" $SETUP --rules >/dev/null 2>&1
+t "--rules: aturan dipasang" "$([ -f "$SB/norules/.grok/AGENTS.md" ] && echo ya)" "ya"
+
+HOME="$SB/norules" GROK_HOME="$SB/norules/.grok" $SETUP --remove-rules >/dev/null 2>&1
+t "--remove-rules: aturan dilepas"   "$([ -f "$SB/norules/.grok/AGENTS.md" ] && echo ada || echo tidak)" "tidak"
+t "--remove-rules: cadangan dibuat"  "$(ls "$SB/norules/.grok/"AGENTS.md.bak.* >/dev/null 2>&1 && echo ya)" "ya"
+t "--remove-rules: skill utuh"       "$([ -f "$SB/norules/.grok/skills/cooper-handoff/SKILL.md" ] && echo ya)" "ya"
+
+# Aturan tulisan dev sendiri TIDAK boleh ikut terhapus. Ini aturan repo #3, dan
+# di sini taruhannya berkas yang tidak bisa ia ambil kembali.
+mkdir -p "$SB/ownrules/.grok"
+printf '[model.internal-qwen]\nbase_url = "http://198.51.100.10:8987/api/v1"\napi_key = "dev-uji@mesin"\n' > "$SB/ownrules/.grok/config.toml"
+printf '# Aturan saya sendiri\n\nJangan disentuh.\n' > "$SB/ownrules/.grok/AGENTS.md"
+HOME="$SB/ownrules" GROK_HOME="$SB/ownrules/.grok" $SETUP --remove-rules >/dev/null 2>&1
+t "aturan milik dev tidak dihapus" "$([ -f "$SB/ownrules/.grok/AGENTS.md" ] && echo ya)" "ya"
+t "isinya utuh" "$(grep -c 'Jangan disentuh' "$SB/ownrules/.grok/AGENTS.md")" "1"
 
 echo
 echo "LULUS: $pass   GAGAL: $fail"

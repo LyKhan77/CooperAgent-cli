@@ -21,7 +21,12 @@
     .\scripts\setup-dev.ps1
 #>
 [CmdletBinding()]
-param([switch]$DryRun, [string]$Token = '')
+# Aturan agent (`AGENTS.md`) OPSIONAL sejak 3 September 2026. Sebagian dev
+# membangun aturan harness sendiri, sebagian lagi memang ingin agent mentah;
+# memasangnya tanpa bertanya berarti menulis 6 KB pendapat ke direktori global
+# mereka atas nama "pemasangan". SKILL TIDAK IKUT -- ia perkakas, bukan pendapat.
+param([switch]$DryRun, [string]$Token = '',
+      [switch]$Rules, [switch]$NoRules, [switch]$RemoveRules)
 
 # Bentuk token diperiksa di sini, bukan diserahkan ke gateway. Salah tempel
 # adalah kesalahan paling umum saat onboarding, dan menemukannya sekarang jauh
@@ -202,9 +207,81 @@ function Install-Rules([string]$Dst, [string]$Label) {
     }
 }
 
-Install-Rules (Join-Path $GrokHome 'AGENTS.md') 'Aturan agent (Grok)'
-# Dipasang tanpa syarat: dev bisa memasang omp kapan saja setelah ini.
-Install-Rules (Join-Path $env:USERPROFILE '.omp\agent\AGENTS.md') 'Aturan agent (Oh My Pi)'
+$RulesPaths = @(
+    (Join-Path $GrokHome 'AGENTS.md'),
+    (Join-Path $env:USERPROFILE '.omp\agent\AGENTS.md')
+)
+# Baris pertama template. Dipakai mengenali berkas MILIK KAMI yang tertinggal
+# versi -- perbandingan isi penuh akan menyebut aturan kami sendiri dari rilis
+# lalu sebagai "milik dev", lalu menolak melepasnya.
+$RulesMark = ($tplText -split "\r?\n")[0]
+
+function Test-RulesAreOurs([string]$Path) {
+    if (-not (Test-Path $Path)) { return $false }
+    $raw = Get-Content -LiteralPath $Path -Raw
+    if ($raw -eq $tplText) { return $true }
+    return (($raw -split "\r?\n")[0] -eq $RulesMark)
+}
+
+# --- melepas aturan: -RemoveRules --------------------------------------------
+#
+# Hanya berkas yang BISA DIBUKTIKAN milik CooperAgent yang dilepas; aturan
+# tulisan dev sendiri tidak pernah disentuh. Cadangan tetap dibuat meski
+# berkasnya milik kami: dev bisa menambahkan baris sendiri di bawahnya, dan
+# penanda baris pertama tidak mengetahuinya.
+if ($RemoveRules) {
+    Write-Host 'Melepas aturan agent CooperAgent'
+    $found = 0
+    foreach ($dst in $RulesPaths) {
+        if (-not (Test-Path $dst)) { continue }
+        $found++
+        if (Test-RulesAreOurs $dst) {
+            if (-not $DryRun) {
+                Copy-Item $dst "$dst.bak.$Stamp"
+                Remove-Item -Force $dst
+            }
+            Write-Host "  OK  dilepas: $dst" -ForegroundColor Green
+            Write-Host "      cadangan: $(Split-Path -Leaf $dst).bak.$Stamp"
+        } else {
+            Write-Host "  !   BUKAN aturan CooperAgent: $dst" -ForegroundColor Yellow
+            Write-Host '      Isinya aturan Anda sendiri - tidak disentuh.'
+        }
+    }
+    if ($found -eq 0) { Write-Host '  !   Tidak ada aturan agent yang terpasang.' -ForegroundColor Yellow }
+    Write-Host ''
+    Write-Host '  OK  Skill TIDAK ikut dilepas - ia perkakas, bukan pendapat.' -ForegroundColor Green
+    Write-Host '      Pasang kembali kapan saja: .\scripts\setup-dev.ps1 -Rules'
+    exit 0
+}
+
+# Apakah aturan diinginkan? Bendera menang; selain itu keadaan yang menjawab.
+function Test-RulesWanted {
+    if ($Rules)   { return $true }
+    if ($NoRules) { return $false }
+    # Sudah ada = pilihan sudah pernah dibuat. Menanyakannya setiap kali skrip
+    # pembaru berjalan adalah pertanyaan yang jawabannya sudah kita tahu.
+    foreach ($dst in $RulesPaths) { if (Test-Path $dst) { return $true } }
+    # Tanpa konsol interaktif, perilaku lama dipertahankan: pemanggilan terskrip
+    # tidak boleh berubah diam-diam hanya karena promptnya ditambahkan.
+    if ([Console]::IsInputRedirected) { return $true }
+
+    Write-Host '--- Aturan kerja agent (CooperxHarness) ---' -ForegroundColor Cyan
+    Write-Host '  Aturan global: checkpoint, surgical changes, goal-driven execution.'
+    Write-Host "  Ukuran: $($tplText.Length) karakter, dipasang ke ~/.grok/ dan ~/.omp/agent/."
+    Write-Host '  Opsional. Anda boleh memakai aturan sendiri, atau tanpa aturan sama sekali.' -ForegroundColor Yellow
+    Write-Host '  Skill CooperAgent tetap dipasang apa pun jawabannya.'
+    $ans = Read-Host 'Pasang aturan CooperAgent? [Y/n]'
+    return ($ans -notmatch '^[Nn]')
+}
+
+if (Test-RulesWanted) {
+    Install-Rules $RulesPaths[0] 'Aturan agent (Grok)'
+    # Dipasang tanpa syarat: dev bisa memasang omp kapan saja setelah ini.
+    Install-Rules $RulesPaths[1] 'Aturan agent (Oh My Pi)'
+} else {
+    Write-Host '!   Aturan agent DILEWATI - Anda memakai aturan sendiri.' -ForegroundColor Yellow
+    Write-Host '    Pasang kapan saja: .\scripts\setup-dev.ps1 -Rules'
+}
 Write-Host ''
 
 # --- skills ------------------------------------------------------------------
@@ -254,11 +331,20 @@ Write-Host '  OK  skill juga dipasang untuk omp di ~/.cooper/skills' -Foreground
 # menjalankan setup lama tetap melihat /standardization sesudah memperbarui, dan
 # wizard itu menulis aturan ke proyek -- bertentangan dengan aturan global yang
 # baru dipasang. Hanya nama di bawah yang dihapus; skill lain tidak disentuh.
-foreach ($retired in @('standardization','init-changelog','checkpoint')) {
-    $old = Join-Path $GrokHome "skills/$retired"
-    if (Test-Path $old) {
-        if (-not $DryRun) { Remove-Item -Recurse -Force $old }
-        Write-Host "  --  $retired dihapus (dipensiunkan 2026-08-29)" -ForegroundColor Yellow
+#
+# `handoff` diganti nama menjadi `cooper-handoff` pada 3 September 2026 supaya
+# seluruh skill kami hidup di satu awalan. Tanpa baris itu dev melihat KEDUANYA.
+#
+# KEDUA lokasi disapu -- skill dipasang ke ~/.grok/skills DAN ~/.cooper/skills
+# (yang dibaca omp), jadi menyapu satu saja meninggalkan yang lain hidup di
+# harness sebelah.
+foreach ($retired in @('standardization','init-changelog','checkpoint','handoff')) {
+    foreach ($base in @((Join-Path $GrokHome 'skills'), $CooperSkills)) {
+        $old = Join-Path $base $retired
+        if (Test-Path $old) {
+            if (-not $DryRun) { Remove-Item -Recurse -Force $old }
+            Write-Host "  --  $retired dihapus dari $base (dipensiunkan)" -ForegroundColor Yellow
+        }
     }
 }
 
@@ -288,7 +374,7 @@ if ($OmpBin -or (Test-Path $OmpDir)) {
 
     if ($OmpBin) {
         if (-not $DryRun) {
-            # Tanpa ini omp tidak menemukan /handoff sama sekali.
+            # Tanpa ini omp tidak menemukan /cooper-handoff sama sekali.
             #
             # JSON WAJIB: `omp config set skills.customDirectories <path>` polos
             # ditolak diam-diam (nilai lama bertahan, exit 1). Jadi tanda kutip
@@ -349,7 +435,7 @@ if ($OmpBin -or (Test-Path $OmpDir)) {
                 # kegagalan terlaporkan sebagai berhasil. Laporan palsu lebih
                 # buruk daripada kegagalan yang terlihat.
                 Write-Host '  !   gagal mendaftarkan direktori skill omp' -ForegroundColor Yellow
-                Write-Host '      /handoff tidak tersedia di omp. Jalankan manual:'
+                Write-Host '      /cooper-handoff tidak tersedia di omp. Jalankan manual:'
                 Write-Host "        omp config set skills.customDirectories '[\`"~/.cooper/skills\`"]'"
                 Write-Host '      periksa: omp config get skills.customDirectories'
             }
