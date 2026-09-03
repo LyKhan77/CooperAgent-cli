@@ -231,16 +231,29 @@ INFO
         ;;
     --help|-h)
         cat <<'USAGE'
-setup.sh --token ca_...       onboarding penuh (interaktif)
-setup.sh                      onboarding tanpa token (config akan ditolak gateway)
+setup.sh --token ca_...       onboarding penuh (mesin BARU)
+setup.sh                      mesin baru: onboarding tanpa token
+                              mesin yang SUDAH terpasang: menu keadaan
 setup.sh --info               cetak endpoint + api key untuk harness lain
 setup.sh --endpoint lan       pindah ke LAN kantor
 setup.sh --endpoint vpn       pindah ke VPN kantor
 setup.sh --endpoint local     pindah ke localhost (di server AI)
 setup.sh --endpoint <url>     alamat lain
 
-Mode --endpoint hanya menulis ulang alamat gateway. Server MCP, seksi [ui],
-model tambahan, dan api_key Anda tidak disentuh.
+Pada mesin yang sudah terpasang, `setup.sh` tidak mengulang onboarding. Ia
+memeriksa kredensial Anda ke gateway, menampilkan keadaannya, lalu menawarkan:
+perbarui parameter · ganti gateway · ganti token · pasang harness tambahan ·
+pasang/lepas aturan agent.
+
+Token diverifikasi SEBELUM satu berkas pun ditulis. Gagal = keluar dengan kode
+3, dan tidak ada yang berubah.
+
+Mode --endpoint hanya menulis ulang alamat gateway, dan memverifikasi token di
+alamat baru lebih dulu. Server MCP, seksi [ui], model tambahan, dan api_key
+Anda tidak disentuh.
+
+Aturan agent (AGENTS.md) opsional:
+  ./scripts/setup-dev.sh --rules | --no-rules | --remove-rules
 USAGE
         exit 0
         ;;
