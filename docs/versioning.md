@@ -149,5 +149,8 @@ menaikkannya di sisi server dan mengira klien akan menyadarinya.
 
 | Versi | Isi |
 | :-- | :-- |
+| **1.3.0** | Aturan agent jadi opsional (prompt, default ya) + menu pasang/lepas. Skill berawalan `cooper-`: `handoff` → `cooper-handoff`, dan `cooper-structure` baru. |
+| **1.2.0** | Gerbang kredensial: token diverifikasi sebelum satu berkas pun ditulis, gagal = keluar kode 3 dengan sebab yang dibedakan. Mode "sudah terpasang". Perbaikan 401 pada `models.yml` omp. |
+| **1.1.1** | Meluruskan riwayat versi — `v1.0.0` tidak pernah ada. |
 | **1.1.0** | Rilis pertama yang bertag. Pemasang dipisahkan dari repo server; kontrak diambil dari gateway; tidak ada alamat internal di repo ini. |
 | ~~1.0.0~~ | Tidak pernah ada — hanya garis dasar manifest. Lihat catatan di atas. |
