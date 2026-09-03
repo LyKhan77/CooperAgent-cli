@@ -200,12 +200,16 @@ YML
 # 'uji' masuk ke sana, ditolak karena tidak diawali 'ca_', dan skrip keluar
 # sebelum menyentuh models.yml sama sekali. Prompt nama+device tetap ada pada
 # jalur TANPA token -- identitas dari gateway hanya berlaku bila tokennya ada.
-out=$(printf '2\n\nuji\nmesin\n1\n' | HOME="$SB/keep" bash setup.sh 2>&1)
+# `4` di depan: models.yml yang sudah memuat provider cooperagent membuat mesin
+# ini terbaca "sudah terpasang" sejak 3 September 2026, sehingga setup.sh
+# membuka menu keadaan lebih dulu. Pilihan 4 = pasang harness tambahan, yaitu
+# jalur onboarding yang sedang diuji di sini.
+out=$(printf '4\n2\n\nuji\nmesin\n1\n' | HOME="$SB/keep" bash setup.sh 2>&1)
 t "ditanya lebih dulu"      "$(grep -c 'models.yml omp sudah ada' <<<"$out")" "1"
 t "default mempertahankan"  "$(grep -c 'punya-saya' "$SB/keep/.omp/agent/models.yml")" "1"
 
 # Opsi 2 hanya memindahkan gateway lama, bukan setiap baseUrl.
-out=$(printf '2\n\nuji\nmesin\n2\n' | HOME="$SB/keep" bash setup.sh 2>&1)
+out=$(printf '4\n2\n\nuji\nmesin\n2\n' | HOME="$SB/keep" bash setup.sh 2>&1)
 t "gateway dipindahkan"     "$(grep -c "baseUrl: http://127.0.0.1:$GWPORT/v1" "$SB/keep/.omp/agent/models.yml")" "1"
 t "provider dev tak tersentuh" "$(grep -c 'api.anthropic.com' "$SB/keep/.omp/agent/models.yml")" "1"
 

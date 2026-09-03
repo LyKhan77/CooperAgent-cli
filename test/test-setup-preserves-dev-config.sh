@@ -96,20 +96,24 @@ rm -rf "$T3"
 # docs/onboarding.md menjanjikan ini. Sebuah janji yang tidak diuji adalah
 # janji yang belum tentu benar -- itu pelajaran hari ini.
 echo
-echo "setup.sh tanpa --token, config sudah punya token:"
+echo "setup.sh dijalankan ulang, config sudah punya token:"
 T2="$(mktemp -d)"; mkdir -p "$T2/.grok"
-sed "s|\"$TOK\"|\"$TOK\"|" "$T/.grok/config.toml" > "$T2/.grok/config.toml"
-# Jawab: agent=4 (manual), lalu endpoint=1. Tidak ada prompt token yang muncul
-# bila janjinya ditepati.
-OUT="$(printf '4\n1\nN\n' | HOME="$T2" timeout 40 bash "$REPO/setup.sh" 2>&1 || true)"
+cp "$T/.grok/config.toml" "$T2/.grok/config.toml"
+# Mesin yang sudah terpasang tidak diseret ke onboarding: setup.sh membuka menu
+# keadaan, dan `5` keluar tanpa mengubah apa pun. Yang dijanjikan
+# docs/onboarding.md dan diuji di sini: token yang sudah ada TIDAK diminta
+# ditempel ulang.
+OUT="$(printf '5\n' | HOME="$T2" timeout 40 bash "$REPO/setup.sh" 2>&1 || true)"
 rm -rf "$T2"
-if grep -q "Token dipertahankan" <<<"$OUT"; then
-  ok "token yang ada dipertahankan tanpa bertanya"
-elif grep -q "Tempel token" <<<"$OUT"; then
-  bad "MASIH BERTANYA token padahal config sudah punya"
-else
-  bad "tidak jelas: prompt token maupun pesan 'dipertahankan' tidak muncul"
-fi
+grep -q "sudah terpasang" <<<"$OUT" \
+  && ok "mesin terpasang dikenali, bukan diseret ke onboarding" \
+  || bad "menjalankan ulang setup memulai onboarding dari nol"
+grep -q "Tempel token" <<<"$OUT" \
+  && bad "MASIH BERTANYA token padahal config sudah punya" \
+  || ok "token yang ada dipertahankan tanpa bertanya"
+grep -qi "Masukkan nama" <<<"$OUT" \
+  && bad "MASIH menanyakan nama/device pada mesin yang sudah terpasang" \
+  || ok "identitas tidak ditanyakan ulang"
 
 echo
 [[ $FAIL -eq 0 ]] && { printf "  \033[32mLULUS\033[0m — setup tidak menyentuh milik dev\n"; exit 0; }

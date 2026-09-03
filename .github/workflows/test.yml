@@ -35,6 +35,12 @@ jobs:
       - name: Setup tidak menyentuh milik dev
         run: bash test/test-setup-preserves-dev-config.sh
 
+      - name: models.yml omp membawa token, bukan identitas
+        run: bash test/test-omp-api-key.sh
+
+      - name: Gerbang kredensial berhenti dengan sebabnya
+        run: bash test/test-credential-gate.sh
+
       # test-setup-dev.sh SENGAJA TIDAK dijalankan di sini.
       #
       # Ia memilih agent omp, sehingga setup.sh mencoba memasangnya dengan
