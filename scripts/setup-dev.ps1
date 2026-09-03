@@ -58,6 +58,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $GrokHome 'skills') | Out-N
 # kerja kedua skrip bertolak belakang.
 . (Join-Path $RepoRoot 'scripts/lib/MergeToml.ps1')
 . (Join-Path $RepoRoot 'scripts/lib/Contract.ps1')
+. (Join-Path $RepoRoot 'scripts/lib/OmpModels.ps1')
 
 # --- config.toml -------------------------------------------------------------
 $Cfg = Join-Path $GrokHome 'config.toml'
@@ -378,6 +379,10 @@ if ($OmpBin -or (Test-Path $OmpDir)) {
         $mu = $lines | Where-Object { $_ -match '^\s*base_url\s*=' } | Select-Object -First 1
         if ($mu -and $mu -match '["''"]([^"''"]*)["''"]') { $url = $Matches[1] }
     }
+    # -Token MENANG atas apa pun yang masih tertulis di config Grok. Tanpa ini,
+    # memutar token lewat -Token memperbarui config.toml tapi meninggalkan
+    # models.yml pada kunci lama -- `grok` jalan, `omp` 401.
+    if ($Token) { $id = $Token }
     $wantUrl = ($url -replace '/api/v1$', '') + '/v1'
     $my = Join-Path $OmpDir 'models.yml'
 
@@ -417,31 +422,10 @@ if ($OmpBin -or (Test-Path $OmpDir)) {
             Write-Host '  OK  models.yml identitas sesuai' -ForegroundColor Green
         } elseif (-not $DryRun) {
             Copy-Item $my "$my.bak.$Stamp"
-            # HANYA provider yang menunjuk gateway kita. -replace polos
-            # mengganti SETIAP apiKey -- termasuk Anthropic/OpenAI/Ollama milik
-            # dev. omp mendukung 60+ provider, dan menimpa kunci berbayar mereka
-            # jauh lebih mahal daripada masalah yang sedang diperbaiki.
-            $gwHost = $url -replace '/api/v1$', ''
-            $outY = New-Object System.Collections.Generic.List[string]
-            $bufY = New-Object System.Collections.Generic.List[string]
-            $mineY = $false
-            function Flush-Provider {
-                if ($bufY.Count -eq 0) { return }
-                foreach ($l in $bufY) {
-                    if ($script:mineY -and $l -match '^(\s*)apiKey:') {
-                        $outY.Add("$($Matches[1])apiKey: $id")
-                    } else { $outY.Add($l) }
-                }
-                $bufY.Clear(); $script:mineY = $false
-            }
-            foreach ($l in (Get-Content $my)) {
-                if ($l -match '^  [A-Za-z0-9_-]+:\s*$') { Flush-Provider; $bufY.Add($l); continue }
-                if ($bufY.Count -eq 0) { $outY.Add($l); continue }
-                if ($l -match 'baseUrl:' -and ($l -like "*$gwHost*" -or $l -like '*127.0.0.1*')) { $mineY = $true }
-                $bufY.Add($l)
-            }
-            Flush-Provider
-            $outY | Set-Content $my -Encoding UTF8
+            # Implementasinya di scripts/lib/OmpModels.ps1 -- dipakai juga oleh
+            # setup.ps1. Dua salinan yang harus dijaga sinkron dengan tangan
+            # adalah kelas kegagalan yang sudah berkali-kali menggigit repo ini.
+            [void](Set-OmpApiKey $my $id ($url -replace '/api/v1$', ''))
             if ((Get-Content $my) -match "apiKey:\s*$([regex]::Escape($id))") {
                 Write-Host "  OK  models.yml identitas diperbarui (cadangan: models.yml.bak.$Stamp)" -ForegroundColor Green
             } else {

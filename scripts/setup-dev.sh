@@ -107,6 +107,8 @@ mkdir -p "$GROK_HOME/skills"
 . "$REPO_ROOT/scripts/lib/merge_toml.sh"
 # shellcheck source=scripts/lib/contract.sh
 . "$REPO_ROOT/scripts/lib/contract.sh"
+# shellcheck source=scripts/lib/omp_models.sh
+. "$REPO_ROOT/scripts/lib/omp_models.sh"
 
 CFG="$GROK_HOME/config.toml"
 
@@ -337,6 +339,10 @@ if [ -z "${SKIP_OMP:-}" ]; then
     # bila menyimpang. Menimpanya diam-diam akan menghapus pekerjaan dev.
     GCFG="$GROK_HOME/config.toml"
     ID="$(grep -m1 -E '^[[:space:]]*api_key' "$GCFG" 2>/dev/null | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/' || true)"
+    # `--token` MENANG atas apa pun yang masih tertulis di config Grok. Tanpa
+    # ini, memutar token lewat `--token` memperbarui config.toml tapi
+    # meninggalkan models.yml pada kunci lama -- `grok` jalan, `omp` 401.
+    if [ -n "${TOKEN:-}" ]; then ID="$TOKEN"; fi
     URL="$(grep -m1 -E '^[[:space:]]*base_url' "$GCFG" 2>/dev/null | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/' || true)"
     WANT_URL="${URL%/api/v1}/v1"
     MY="$OMP_DIR/models.yml"
@@ -373,38 +379,10 @@ if [ -z "${SKIP_OMP:-}" ]; then
             echo "  ${GREEN}${S_OK}${NC} models.yml identitas sesuai"
         elif [ "$DRY_RUN" = 0 ]; then
             cp "$MY" "$MY.bak.$STAMP"
-            tmp="$(mktemp)"
-            # HANYA provider yang menunjuk gateway kita.
-            #
-            # `sed` polos mengganti SETIAP baris apiKey di berkas -- termasuk
-            # milik Anthropic, OpenAI, atau Ollama yang ditambahkan dev sendiri.
-            # omp mendukung 60+ provider, dan menimpa kunci berbayar mereka
-            # dengan token kita adalah kerusakan yang jauh lebih mahal daripada
-            # masalah yang sedang diperbaiki. Ditemukan lewat pengujian
-            # 1 September 2026.
-            #
-            # Blok dibuffer, dan apiKey hanya diganti bila blok itu memuat
-            # baseUrl yang menunjuk gateway.
-            awk -v tok="$ID" -v gw="${URL%/api/v1}" '
-                function flush(   i) {
-                    if (n == 0) return
-                    for (i = 1; i <= n; i++) {
-                        if (mine && buf[i] ~ /^[[:space:]]*apiKey:/) {
-                            match(buf[i], /^[[:space:]]*/)
-                            print substr(buf[i], 1, RLENGTH) "apiKey: " tok
-                        } else print buf[i]
-                    }
-                    n = 0; mine = 0
-                }
-                /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { flush(); buf[++n] = $0; next }
-                {
-                    if (n == 0) { print; next }
-                    if ($0 ~ /baseUrl:/ && (index($0, gw) > 0 || $0 ~ /127\.0\.0\.1/)) mine = 1
-                    buf[++n] = $0
-                }
-                END { flush() }
-            ' "$MY" > "$tmp"
-            mv "$tmp" "$MY"
+            # Implementasinya di scripts/lib/omp_models.sh -- dipakai juga oleh
+            # setup.sh. Dua salinan yang harus dijaga sinkron dengan tangan
+            # adalah kelas kegagalan yang sudah berkali-kali menggigit repo ini.
+            omp_set_api_key "$MY" "$ID" "${URL%/api/v1}" || true
             if grep -q "apiKey: *$ID" "$MY"; then
                 echo "  ${GREEN}${S_OK}${NC} models.yml identitas diperbarui (cadangan: models.yml.bak.$STAMP)"
             else

@@ -95,6 +95,15 @@ if ([string]::IsNullOrWhiteSpace($SCRIPT_DIR)) { $SCRIPT_DIR = Split-Path -Paren
 # ringkasnya: yang dipatok klien tidak pernah tahu saat server berubah.
 . (Join-Path $SCRIPT_DIR "scripts\lib\Contract.ps1")
 
+# Kunci api pada models.yml omp -- satu implementasi, dipakai skrip ini DAN
+# scripts/setup-dev.ps1. Sampai 3 September 2026 keduanya menyimpang, dan yang
+# di sini menulis bentuk lama yang dijawab 401.
+. (Join-Path $SCRIPT_DIR "scripts\lib\OmpModels.ps1")
+
+# Gerbang kredensial. Ia yang mengubah "setup selesai lalu 401 belakangan"
+# menjadi "setup berhenti sekarang, dengan sebabnya".
+. (Join-Path $SCRIPT_DIR "scripts\lib\Credential.ps1")
+
 # --- membaca kondisi yang sudah terpasang -------------------------------------
 # Seksi yang DIKELOLA CooperAgent. Apa pun di luar daftar ini milik dev --
 # server MCP, preferensi [ui], model tambahan -- dan dipakai untuk memberi tahu
@@ -252,14 +261,10 @@ function Show-ConfigModePrompt {
 # disebut di sini dan karena itu tidak pernah tersentuh oleh merge.
 function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode = 'merge') {
     $gw = $ServerUrl -replace '/api/v1$', ''
-    # Token menang bila ada; identitas lama hanya jalur mundur untuk gateway
-    # yang belum menegakkan kredensial.
-    # Yang SUDAH berupa token dipakai apa adanya. Tanpa cabang ini,
-    # -Endpoint vpn -- yang meneruskan api_key lama sebagai $Identity --
-    # menghasilkan `dev-ca_...`, yaitu token yang tidak pernah cocok.
-    $apiKeyValue = if ($script:Token) { $script:Token }
-                   elseif ($Identity -like 'ca_*') { $Identity }
-                   else { "dev-$Identity" }
+    # Aturannya di scripts/lib/OmpModels.ps1 -- SATU tempat, karena models.yml
+    # omp menuntut kunci yang sama persis dan salinan kedua yang menyimpang
+    # adalah bug yang baru terlihat saat `omp` 401 sementara `grok` jalan.
+    $apiKeyValue = Get-OmpApiKey $Identity $script:Token
     $grokDir = Join-Path $env:USERPROFILE ".grok"
     if (-not (Test-Path $grokDir)) { New-Item -ItemType Directory -Path $grokDir -Force | Out-Null }
     $cfg = Join-Path $grokDir "config.toml"
@@ -339,6 +344,78 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
 }
 
 
+# --- mode "sudah terpasang" ---------------------------------------------------
+#
+# Skrip ini adalah SATU pintu masuk, dan yang dilihat dev berbeda menurut
+# keadaan mesinnya: onboarding penuh hanya untuk yang belum terpasang. Yang
+# sudah terpasang tidak butuh ditanya harness dan endpoint lagi -- ia butuh tahu
+# keadaannya sekarang, dan mengubah satu hal.
+#
+# Kredensial diperiksa di SINI, setiap kali, bahkan ketika dev hanya ingin
+# memperbarui parameter. Pencabutan terjadi di sisi server tanpa memberi tahu
+# klien; kalau bukan kita yang bertanya, dev baru mengetahuinya lewat 401 di
+# tengah kerja.
+$GROK_CFG_PATH = Get-GrokConfigPath
+$OMP_YML_PATH  = Join-Path (Join-Path (Join-Path $env:USERPROFILE '.omp') 'agent') 'models.yml'
+
+function Test-CooperGrokInstalled {
+    return ((Test-Path $GROK_CFG_PATH) -and
+            ((Get-Content $GROK_CFG_PATH) -match '^\[model\.internal-qwen'))
+}
+function Test-CooperOmpInstalled {
+    return ((Test-Path $OMP_YML_PATH) -and
+            ((Get-Content $OMP_YML_PATH) -match '^  cooperagent:'))
+}
+
+# Alamat dan token dibaca dari MANA PUN yang ada. Dev yang memilih omp saja
+# tidak punya config.toml, dan sampai 3 September 2026 ia karena itu tidak
+# pernah terlihat sebagai "sudah terpasang".
+function Get-CooperStoredGateway {
+    $v = ''
+    if (Test-CooperGrokInstalled) { $v = Read-ExistingEndpoint }
+    if (-not $v -and (Test-CooperOmpInstalled)) { $v = Get-OmpStoredGateway $OMP_YML_PATH }
+    return $v
+}
+function Get-CooperStoredToken {
+    $v = ''
+    if (Test-CooperGrokInstalled) { $v = Read-ExistingIdentity }
+    if ($v -notlike 'ca_*') { $v = '' }
+    if (-not $v -and (Test-CooperOmpInstalled)) {
+        $v = Get-OmpStoredKey $OMP_YML_PATH
+        if ($v -notlike 'ca_*') { $v = '' }
+    }
+    return $v
+}
+
+# Menulis kredensial dan alamat ke SEMUA harness yang terpasang.
+#
+# Satu tempat, karena inilah yang selalu terlewat: sampai 3 September 2026
+# -Endpoint hanya menyentuh config Grok, sehingga dev yang memakai keduanya
+# berpindah jaringan di Grok dan tetap menunjuk alamat lama di omp.
+function Set-CooperAllHarness([string]$NewUrl, [string]$Tok, [string]$Ident) {
+    # Yang BUKAN token tidak boleh menyamar sebagai token: config lama berisi
+    # `dev-nama@device`, dan meneruskannya sebagai $Token akan menulis
+    # `api_key = "dev-nama@device"` menjadi `nama@device` -- bentuk ketiga yang
+    # tidak pernah benar di mana pun.
+    if ($Tok -notlike 'ca_*') { $Tok = '' }
+    $key = Get-OmpApiKey $Ident $Tok
+    if (Test-CooperGrokInstalled) {
+        $script:Token = $Tok
+        Write-GrokConfig $NewUrl $Ident
+    }
+    if (Test-CooperOmpInstalled) {
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        Copy-Item $OMP_YML_PATH "$OMP_YML_PATH.bak.$stamp"
+        $newBase = Get-CooperGatewayBase $NewUrl
+        $oldBase = Get-OmpStoredGateway $OMP_YML_PATH
+        if ($oldBase -and $oldBase -ne $newBase) {
+            [void](Set-OmpBaseUrl $OMP_YML_PATH $oldBase $newBase)
+        }
+        [void](Set-OmpApiKey $OMP_YML_PATH $key $newBase)
+        Write-Host "[v] models.yml omp diperbarui (cadangan: models.yml.bak.$stamp)" -ForegroundColor Green
+    }
+}
+
 # --- eksekusi mode ganti endpoint --------------------------------------------
 if (-not [string]::IsNullOrWhiteSpace($Endpoint)) {
     # Alias diselesaikan oleh GATEWAY, bukan oleh tabel di skrip ini.
@@ -398,16 +475,40 @@ if (-not [string]::IsNullOrWhiteSpace($Endpoint)) {
     }
 
     Write-Host "Memindahkan endpoint ke: $newUrl" -ForegroundColor Cyan
-    Write-Host "Identitas dipertahankan : $identity" -ForegroundColor Cyan
-    Write-GrokConfig $newUrl $identity
 
-    $healthUrl = ($newUrl -replace '/api/v1$', '') + "/api/health"
-    try {
-        Invoke-RestMethod -Uri $healthUrl -TimeoutSec 5 -ErrorAction Stop | Out-Null
-        Write-Host "[v] Gateway terjangkau di alamat baru." -ForegroundColor Green
-    } catch {
-        Write-Host "[!] Gateway belum terjangkau di $healthUrl - periksa koneksi jaringan." -ForegroundColor Red
+    # Diverifikasi SEBELUM ditulis. Berpindah ke alamat yang tidak menjawab
+    # berarti dev kehilangan gateway yang tadinya bekerja, dan sampai
+    # 3 September 2026 blok ini menulis dulu lalu memeriksa kesehatan sesudahnya
+    # -- urutan yang membuat pemeriksaannya tidak bisa mencegah apa pun.
+    $identSwitch = $identity
+    if ($identity -like 'ca_*') {
+        $chkSw = Test-CooperCredential $newUrl $identity
+        if ($chkSw.State -eq 'ok') {
+            Write-Host "[v] Kredensial sah di alamat baru - identitas: $($chkSw.Who)" -ForegroundColor Green
+            $identSwitch = $chkSw.Who
+        } else {
+            Write-Host "[x] Alamat baru TIDAK dipakai - kredensial tidak lolos di sana." -ForegroundColor Red
+            foreach ($l in (Get-CooperCredentialHelp $chkSw.State $newUrl)) { Write-Host "    $l" -ForegroundColor Yellow }
+            Write-Host ""
+            Write-Host "    Config lama dibiarkan utuh." -ForegroundColor Yellow
+            exit 3
+        }
+    } else {
+        # Config lama tanpa token: tidak ada yang bisa diverifikasi, dan itu
+        # dikatakan, bukan didiamkan. Awalan `dev-` dilepas karena yang disimpan
+        # Write-GrokConfig adalah IDENTITAS -- ia yang memasangnya kembali.
+        Write-Host "[!] Config ini belum memakai token - perpindahan tidak dapat diverifikasi." -ForegroundColor Yellow
+        Write-Host "    Gateway akan menjawab 401 sampai token dipasang: .\setup.ps1" -ForegroundColor Yellow
+        $identSwitch = $identity -replace '^dev-', ''
     }
+
+    [void](Get-CooperContract (Get-CooperGatewayBase $newUrl))
+    # SEMUA harness, bukan hanya Grok. Sampai 3 September 2026 baris ini hanya
+    # menulis config.toml, sehingga dev yang memakai keduanya berpindah jaringan
+    # di Grok dan tetap menunjuk alamat lama di omp -- gagal hanya di satu alat,
+    # yang paling sulit ditebak sebabnya.
+    Set-CooperAllHarness $newUrl $identity $identSwitch
+    Save-CooperEndpointCache
     exit 0
 }
 
@@ -429,6 +530,189 @@ try {
         [Environment]::SetEnvironmentVariable("Path", "$LOCAL_BIN;$userPath", [EnvironmentVariableTarget]::User)
     }
 } catch {}
+
+if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstalled))) {
+    $CUR_GATEWAY = Get-CooperStoredGateway
+    $CUR_TOKEN   = Get-CooperStoredToken
+    if ($Token) { $CUR_TOKEN = $Token }
+
+    Write-Host ""
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host "   CooperAgent - sudah terpasang di mesin ini                    " -ForegroundColor Cyan
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    $gwShow = if ($CUR_GATEWAY) { $CUR_GATEWAY } else { '(tidak terbaca)' }
+    Write-Host "  gateway   : $gwShow"
+    $hl = @()
+    if (Test-CooperGrokInstalled) { $hl += 'Grok Build' }
+    if (Test-CooperOmpInstalled)  { $hl += 'Oh My Pi (omp)' }
+    Write-Host "  harness   : $($hl -join ', ')"
+
+    # Kredensial: SELALU ditanyakan ke gateway, tidak pernah disimpulkan dari
+    # berkas. Berkas hanya tahu apa yang pernah benar.
+    $CRED_OK = $false
+    if (-not $CUR_TOKEN) {
+        Write-Host "  kredensial: tidak ada token di config" -ForegroundColor Yellow
+        Write-Host "              Permintaan ke gateway akan dijawab 401."
+    } elseif (-not $CUR_GATEWAY) {
+        Write-Host "  kredensial: tidak dapat diperiksa - alamat gateway tidak terbaca" -ForegroundColor Yellow
+    } else {
+        $chk = Test-CooperCredential $CUR_GATEWAY $CUR_TOKEN
+        if ($chk.State -eq 'ok') {
+            $CRED_OK = $true
+            $peran = if ($chk.Role) { $chk.Role } else { 'dev' }
+            Write-Host "  identitas : $($chk.Who) (peran: $peran)"
+            Write-Host "  kredensial: sah - diverifikasi ke gateway barusan" -ForegroundColor Green
+            $CUR_WHO = $chk.Who
+        } else {
+            Write-Host "  kredensial: DITOLAK ($($chk.State))" -ForegroundColor Red
+            Write-Host ""
+            foreach ($l in (Get-CooperCredentialHelp $chk.State $CUR_GATEWAY)) {
+                Write-Host "    $l" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    # Kontrak ditampilkan hanya bila benar-benar terambil: angka tebakan yang
+    # tampil seperti angka pasti adalah cara repo ini pernah kehilangan waktu.
+    if ($CUR_GATEWAY -and (Get-CooperContract (Get-CooperGatewayBase $CUR_GATEWAY))) {
+        Write-Host "  kontrak   : context $(Format-CooperNumber $ContractContextWindow) / output $ContractMaxTokens / compact $ContractCompactPct% / model $ContractModelId"
+        Save-CooperEndpointCache
+    } else {
+        Write-Host "  kontrak   : tidak terambil - nilai cadangan yang berlaku" -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+    Write-Host "Apa yang ingin Anda lakukan?" -ForegroundColor Yellow
+    # Rekomendasi mengikuti KEADAAN, bukan kebiasaan. Menyarankan "perbarui
+    # parameter" kepada dev yang kredensialnya ditolak berarti menyarankan
+    # satu-satunya pilihan yang tidak memperbaiki apa pun.
+    if ($CRED_OK) {
+        Write-Host "  1) Perbarui parameter dari kontrak gateway [disarankan]" -ForegroundColor Green
+    } else {
+        Write-Host "  1) Perbarui parameter dari kontrak gateway"
+    }
+    Write-Host "     aturan agent, skill, ambang compaction, context_window"
+    Write-Host "  2) Ganti alamat gateway (pindah LAN <-> VPN)"
+    if ($CRED_OK) {
+        Write-Host "  3) Pasang / ganti token kredensial"
+    } else {
+        Write-Host "  3) Pasang / ganti token kredensial [disarankan - inilah yang memperbaiki 401]" -ForegroundColor Green
+    }
+    Write-Host "  4) Pasang harness tambahan (Grok / omp yang belum ada)"
+    Write-Host "  5) Keluar"
+    $HOME_CHOICE = Read-Host "Pilihan [1/2/3/4/5, default: 1]"
+    if ([string]::IsNullOrWhiteSpace($HOME_CHOICE)) { $HOME_CHOICE = '1' }
+
+    switch ($HOME_CHOICE) {
+        '2' {
+            # Alamat baru diverifikasi SEBELUM ditulis: berpindah ke alamat yang
+            # tidak menjawab berarti dev kehilangan gateway yang tadinya bekerja.
+            Write-Host ""
+            Write-Host "--- Alamat gateway baru ---" -ForegroundColor Cyan
+            $known = @(Get-CooperEndpointCache)
+            if ($known.Count -gt 0) {
+                Write-Host "Yang pernah bekerja di mesin ini:" -ForegroundColor Yellow
+                foreach ($e in $known) { Write-Host "    $($e.url)  ($($e.label))" -ForegroundColor Cyan }
+            }
+            $newEp = Read-Host "Alias (lan/vpn/local) atau alamat lengkap"
+            if ([string]::IsNullOrWhiteSpace($newEp)) { Write-Host "Dibatalkan." -ForegroundColor Yellow; exit 0 }
+            if ($newEp -match '^https?://') { $newUrl = ConvertTo-CanonicalEndpoint $newEp }
+            else {
+                $newUrl = Get-CooperEndpointUrl $newEp
+                if (-not $newUrl) {
+                    $hit = @(Get-CooperEndpointCache) | Where-Object { $_.id -eq $newEp } | Select-Object -First 1
+                    if ($hit) { $newUrl = $hit.url }
+                }
+            }
+            if (-not $newUrl) {
+                Write-Host "[x] Alias '$newEp' tidak dikenal gateway dan tidak ada di daftar tersimpan." -ForegroundColor Red
+                exit 1
+            }
+            if (-not $CUR_TOKEN) {
+                Write-Host "[x] Tidak ada token untuk diverifikasi di alamat baru." -ForegroundColor Red
+                Write-Host "    Jalankan pilihan 3 lebih dulu." -ForegroundColor Yellow
+                exit 3
+            }
+            Write-Host "Memverifikasi kredensial di alamat baru..." -ForegroundColor Yellow
+            $chk2 = Test-CooperCredential $newUrl $CUR_TOKEN
+            if ($chk2.State -ne 'ok') {
+                Write-Host "[x] Alamat baru tidak dipakai - kredensial tidak lolos di sana." -ForegroundColor Red
+                foreach ($l in (Get-CooperCredentialHelp $chk2.State $newUrl)) { Write-Host "    $l" -ForegroundColor Yellow }
+                Write-Host ""
+                Write-Host "    Config lama dibiarkan utuh." -ForegroundColor Yellow
+                exit 3
+            }
+            [void](Get-CooperContract (Get-CooperGatewayBase $newUrl))
+            Set-CooperAllHarness $newUrl $CUR_TOKEN $chk2.Who
+            Save-CooperEndpointCache
+            Write-Host ""
+            Write-Host "[v] Gateway dipindahkan ke: $newUrl" -ForegroundColor Green
+            Write-Host "[v] Identitas: $($chk2.Who)" -ForegroundColor Green
+            exit 0
+        }
+        '3' {
+            Write-Host ""
+            Write-Host "--- Token CooperAgent ---" -ForegroundColor Cyan
+            Write-Host "Minta ke admin bila belum punya: cooper issue <nama> <device>" -ForegroundColor Cyan
+            $newTok = (Read-Host "Tempel token baru (ca_...)").Trim()
+            if ([string]::IsNullOrWhiteSpace($newTok)) { Write-Host "Dibatalkan." -ForegroundColor Yellow; exit 0 }
+            $gwForTok = $CUR_GATEWAY
+            if (-not $gwForTok) {
+                $gwForTok = (Read-Host "Alamat gateway").Trim()
+                if (-not $gwForTok) { Write-Host "[x] Alamat wajib diisi." -ForegroundColor Red; exit 1 }
+            }
+            $chk3 = Test-CooperCredential $gwForTok $newTok
+            if ($chk3.State -ne 'ok') {
+                Write-Host "[x] Token tidak lolos pemeriksaan - tidak ada yang ditulis." -ForegroundColor Red
+                foreach ($l in (Get-CooperCredentialHelp $chk3.State $gwForTok)) { Write-Host "    $l" -ForegroundColor Yellow }
+                exit 3
+            }
+            [void](Get-CooperContract (Get-CooperGatewayBase $gwForTok))
+            Set-CooperAllHarness $gwForTok $newTok $chk3.Who
+            Write-Host ""
+            Write-Host "[v] Token dipasang ke semua harness." -ForegroundColor Green
+            Write-Host "[v] Identitas: $($chk3.Who)" -ForegroundColor Green
+            exit 0
+        }
+        '4' {
+            # Jatuh ke onboarding di bawah. Token dan alamat yang sudah ada
+            # dibawa serta, jadi dev tidak ditanya ulang.
+            Write-Host ""
+            Write-Host "Melanjutkan ke pemasangan harness tambahan." -ForegroundColor Cyan
+            if (-not $Token) { $Token = $CUR_TOKEN }
+            if ($CUR_GATEWAY -and -not $COOPERAGENT_GATEWAY) { $COOPERAGENT_GATEWAY = $CUR_GATEWAY }
+        }
+        '5' {
+            Write-Host "Tidak ada yang diubah." -ForegroundColor Green
+            exit 0
+        }
+        default {
+            # Pilihan 1 dan apa pun yang tidak dikenal: jalur paling aman, yang
+            # hanya memperbarui parameter dan tidak menyentuh kredensial.
+            if (-not $CRED_OK) {
+                Write-Host ""
+                Write-Host "[!] Parameter tetap diperbarui, tapi kredensial di atas belum sah -" -ForegroundColor Yellow
+                Write-Host "    permintaan ke gateway akan tetap dijawab 401 sampai pilihan 3 dijalankan." -ForegroundColor Yellow
+            }
+            Write-Host ""
+            $sd = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
+            if (Test-Path $sd) {
+                # Alamat DITERUSKAN lewat env. setup-dev membacanya dari config
+                # Grok, dan dev yang memilih omp saja tidak punya berkas itu --
+                # tanpa ini ia berhenti dengan "tidak ada alamat gateway" pada
+                # pilihan yang justru default.
+                if ($CUR_GATEWAY -and -not $env:COOPERAGENT_GATEWAY) {
+                    $env:COOPERAGENT_GATEWAY = $CUR_GATEWAY
+                }
+                if ($CUR_TOKEN) { & $sd -Token $CUR_TOKEN } else { & $sd }
+            } else {
+                Write-Host "[x] scripts\setup-dev.ps1 tidak ditemukan." -ForegroundColor Red
+                exit 1
+            }
+            exit 0
+        }
+    }
+}
 
 Write-Host ""
 Write-Host "=================================================================" -ForegroundColor Cyan
@@ -548,30 +832,35 @@ if (-not [string]::IsNullOrWhiteSpace($KEEP_ENDPOINT)) {
     $SERVER_URL = ConvertTo-CanonicalEndpoint $custom
 }
 
-# 2b. Identitas — DITANYAKAN KE GATEWAY bila token ada
+# 2b. GERBANG KREDENSIAL — diperiksa SEBELUM satu berkas pun ditulis
 #
-# Gateway mencatat identitas dari TOKEN, bukan dari config klien. Sampai
-# 1 September 2026 skrip ini tetap menanyakan nama dan perangkat -- jawaban yang
-# tidak pernah dipakai untuk apa pun. Dev yang mengetik `laptop` sementara
-# tokennya diterbitkan untuk `laptop-tuf` melihat `laptop-tuf` di dashboard, dan
-# tidak ada yang menjelaskan kenapa.
+# Gateway mencatat identitas dari TOKEN (`cred.devName`, `cred.device`), bukan
+# dari config klien, jadi pemeriksaan ini sekaligus menjawab "siapa Anda".
+#
+# Sampai 3 September 2026 kegagalan di sini ditelan `catch {}` KOSONG: gateway
+# tak terjangkau, token tidak dikenal, dan kredensial dicabut sama-sama jatuh
+# diam-diam ke prompt nama manual di bawah, lalu setup berjalan sampai akhir dan
+# menulis config yang pasti dijawab 401. Sekarang ia berhenti, dengan sebabnya.
 $DEV_IDENTITY = ""
 if ($Token) {
-    # Alamat sudah ditentukan di langkah 3 di atas -- itulah sebabnya langkah 3
-    # dipindahkan ke depan. Sebelumnya baris ini jatuh ke alamat LAN yang
-    # dipatok, sehingga probe ini "bekerja" hanya karena patokan itu ada.
-    $gwProbe = $SERVER_URL
-    $probeUrl = ($gwProbe -replace '/api/v1$', '') + '/api/auth/whoami'
-    try {
-        $r = Invoke-RestMethod -Uri $probeUrl -Headers @{ Authorization = "Bearer $Token" } -TimeoutSec 5 -ErrorAction Stop
-        if ($r.who) {
-            $DEV_IDENTITY = $r.who
-            Write-Host ""
-            Write-Host "[v] Identitas dari token: $DEV_IDENTITY" -ForegroundColor Green
-            Write-Host "    Inilah yang tercatat di dashboard - tidak perlu diketik." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "--- Verifikasi kredensial ---" -ForegroundColor Cyan
+    Write-Host "  gateway : $(Get-CooperGatewayBase $SERVER_URL)"
+    Write-Host "  token   : ...$($Token.Substring($Token.Length-4))"
+    $chk = Test-CooperCredential $SERVER_URL $Token
+    if ($chk.State -eq 'ok') {
+        $DEV_IDENTITY = $chk.Who
+        $peran = if ($chk.Role) { $chk.Role } else { 'dev' }
+        Write-Host "[v] Kredensial sah - identitas: $DEV_IDENTITY (peran: $peran)" -ForegroundColor Green
+        Write-Host "    Inilah yang tercatat di dashboard - tidak perlu diketik." -ForegroundColor Yellow
+    } else {
+        Write-Host "[x] Kredensial tidak lolos pemeriksaan." -ForegroundColor Red
+        foreach ($l in (Get-CooperCredentialHelp $chk.State $SERVER_URL)) {
+            Write-Host "    $l" -ForegroundColor Yellow
         }
-    } catch {
-        # Gateway tidak terjangkau atau token ditolak: jatuh ke prompt manual.
+        Write-Host ""
+        Write-Host "    Tidak ada satu berkas pun yang ditulis." -ForegroundColor Yellow
+        exit 3
     }
 }
 
@@ -819,10 +1108,19 @@ if ($AGENT_CHOICE -eq "2" -or $AGENT_CHOICE -eq "3") {
     $ompGw  = $SERVER_URL -replace '/api/v1$', ''
     $utf8NoBomOmp = New-Object System.Text.UTF8Encoding($false)
 
+    # Kunci dari TOKEN, bukan dari "dev-$DEV_IDENTITY".
+    #
+    # Sampai 3 September 2026 kedua baris render di bawah menulis
+    # `dev-nama@device` tanpa syarat -- bentuk yang gateway jawab 401 sejak
+    # 1 September. Jalur Grok (Write-GrokConfig) sudah benar sejak awal, jadi
+    # gejalanya khas: `grok` jalan, `omp` 401, dan token yang sama berhasil
+    # login di dashboard.
+    $ompApiKey = Get-OmpApiKey $DEV_IDENTITY $Token
+
     if (-not (Test-Path $ompTpl)) {
         Write-Host "[x] Template tidak ditemukan: $ompTpl" -ForegroundColor Red
     } elseif (-not (Test-Path $MODELS_YML)) {
-        $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', "dev-$DEV_IDENTITY")
+        $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', $ompApiKey)
         if (-not (Assert-CooperRendered $yml 'models.yml')) { exit 1 }
         [System.IO.File]::WriteAllText($MODELS_YML, $yml, $utf8NoBomOmp)
         Write-Host "[v] models.yml dibuat (3 provider: otomatis, localhost, server 2)" -ForegroundColor Green
@@ -865,12 +1163,32 @@ if ($AGENT_CHOICE -eq "2" -or $AGENT_CHOICE -eq "3") {
             }
             "3" {
                 Copy-Item $MODELS_YML "$MODELS_YML.bak.$stampOmp"
-                $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', "dev-$DEV_IDENTITY")
-        if (-not (Assert-CooperRendered $yml 'models.yml')) { exit 1 }
+                $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', $ompApiKey)
+                if (-not (Assert-CooperRendered $yml 'models.yml')) { exit 1 }
                 [System.IO.File]::WriteAllText($MODELS_YML, $yml, $utf8NoBomOmp)
                 Write-Host "[v] models.yml ditulis ulang dari template (cadangan dibuat)" -ForegroundColor Green
             }
             default { Write-Host "[v] models.yml dipertahankan - tidak ada yang disentuh." -ForegroundColor Green }
+        }
+
+        # apiKey DIPERBARUI apa pun pilihan di atas. Pilihan 1-3 mengatur
+        # provider dan alamat -- itu memang milik dev. apiKey bukan: ia
+        # kredensial terbitan admin, dan models.yml yang tertinggal berarti
+        # `omp` 401 sementara `grok` jalan normal. Yang disentuh hanya provider
+        # yang menunjuk gateway kita; kunci berbayar dev tidak ikut.
+        if ($Token -and -not ((Get-Content $MODELS_YML) -match "apiKey:\s*$([regex]::Escape($ompApiKey))")) {
+            # Cadangan hanya bila pilihan 2/3 belum membuatnya: menyalin lagi
+            # dengan stempel yang sama akan MENIMPA cadangan asli dengan berkas
+            # yang sudah diubah -- cadangan yang tidak mencadangkan apa pun.
+            if (-not (Test-Path "$MODELS_YML.bak.$stampOmp")) {
+                Copy-Item $MODELS_YML "$MODELS_YML.bak.$stampOmp"
+            }
+            $done = Set-OmpApiKey $MODELS_YML $ompApiKey $ompGw
+            if ($done -and ((Get-Content $MODELS_YML) -match "apiKey:\s*$([regex]::Escape($ompApiKey))")) {
+                Write-Host "[v] apiKey diperbarui ke token (cadangan dibuat)" -ForegroundColor Green
+            } else {
+                Write-Host "[!] Gagal memperbarui apiKey di $MODELS_YML - sunting manual." -ForegroundColor Yellow
+            }
         }
     }
 

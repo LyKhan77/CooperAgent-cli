@@ -73,8 +73,37 @@ dipakai untuk apa pun, dan yang membingungkan: dev yang mengetik `laptop`
 sementara tokennya diterbitkan untuk `laptop-tuf` melihat `laptop-tuf` di
 dashboard tanpa penjelasan.
 
-Prompt manual hanya muncul bila token tidak diberikan, atau gateway tidak
-terjangkau saat setup berjalan.
+Prompt manual hanya muncul bila token **tidak diberikan sama sekali**.
+
+### Gerbang kredensial
+
+Sebelum satu berkas pun ditulis, skrip menanyakan token Anda ke
+`/api/auth/whoami` pada gateway yang Anda pilih. Kalau jawabannya bukan "sah",
+setup **berhenti** — dengan kode keluar `3` dan sebab yang spesifik:
+
+```
+[x] Kredensial tidak lolos pemeriksaan.
+    Token DITOLAK gateway (401): kredensial telah DICABUT.
+    Ini bukan salah ketik — admin mencabutnya di sisi server.
+    Minta penerbitan ulang ke pemilik gateway:
+        cooper issue <nama> <device>
+
+    Tidak ada satu berkas pun yang ditulis.
+```
+
+Empat sebab dibedakan, karena jalan keluarnya berbeda:
+
+| Sebab | Artinya | Yang perlu dilakukan |
+| :--- | :--- | :--- |
+| bentuk salah | bukan `ca_` + 48 heksadesimal | periksa salinan, minta ulang |
+| gateway tak menjawab | jaringan atau alamat | nyalakan VPN, periksa alamat |
+| token tidak dikenal | tidak ada di gateway | `cooper issue <nama> <device>` |
+| kredensial dicabut | admin mencabutnya | minta penerbitan ulang |
+
+Sampai 3 September 2026 pemeriksaan ini ada tapi kegagalannya **ditelan**:
+ketiganya jatuh diam-diam ke prompt "ketik nama dan device Anda", setup berjalan
+sampai akhir, dan config yang ditulis pasti dijawab 401 — yang baru ditemukan
+saat mencoba bekerja.
 
 ### Tanpa `--token`
 
@@ -116,21 +145,54 @@ git pull
 ./setup.sh --token ca_...
 ```
 
-Ia mendeteksi apa yang sudah ada dan menawarkan tiga pilihan:
+Mesin yang **sudah terpasang tidak diseret ke onboarding**. Skrip menampilkan
+keadaannya, memeriksa ulang kredensial ke gateway, lalu menawarkan lima pilihan:
 
 ```
-1) Perbarui parameter CooperAgent saja   [disarankan]
-   Endpoint dan identitas dipertahankan. Milik Anda tidak disentuh.
-2) Ganti endpoint saja
-3) Tulis ulang penuh dari template
+=================================================================
+   CooperAgent — sudah terpasang di mesin ini
+=================================================================
+  gateway   : http://<host>:8987/api/v1
+  harness   : Grok Build, Oh My Pi (omp)
+  identitas : lee@laptop-tuf (peran: dev)
+  kredensial: sah — diverifikasi ke gateway barusan
+  kontrak   : context 131.072 · output 12.288 · compact 80% · model intercon-agent
+
+Apa yang ingin Anda lakukan?
+  1) Perbarui parameter dari kontrak gateway [disarankan]
+     aturan agent, skill, ambang compaction, context_window
+  2) Ganti alamat gateway (pindah LAN <-> VPN)
+  3) Pasang / ganti token kredensial
+  4) Pasang harness tambahan (Grok / omp yang belum ada)
+  5) Keluar
 ```
 
-Pilihan **1** adalah yang normal. Server MCP, seksi `[ui]`, dan model tambahan
-yang Anda tambahkan sendiri **tidak disentuh** — skrip hanya mengelola kunci
-yang memang miliknya, dan menyebutkan apa yang di luar kelolaannya sebelum
-Anda memilih.
+**Kredensial diperiksa setiap kali**, bahkan ketika Anda hanya ingin memperbarui
+parameter. Pencabutan terjadi di sisi server tanpa memberi tahu klien — kalau
+bukan skrip yang bertanya, Anda baru mengetahuinya lewat 401 di tengah kerja:
 
-Cadangan selalu dibuat, apa pun pilihannya.
+```
+  kredensial: DITOLAK (revoked)
+
+    Token DITOLAK gateway (401): kredensial telah DICABUT.
+```
+
+Saat itu terjadi, tanda `[disarankan]` **berpindah ke pilihan 3** — menyarankan
+"perbarui parameter" kepada dev yang kredensialnya baru ditolak berarti
+menyarankan satu-satunya pilihan yang tidak memperbaiki apa pun.
+
+Semua pilihan bekerja untuk dev yang memasang **omp saja**. Alamat gateway dan
+kredensialnya dibaca dari `models.yml`, dan diteruskan ke pembaru parameter —
+`~/.grok/config.toml` yang tidak pernah ia punya bukan lagi syarat.
+
+Pilihan **2** dan **3** memverifikasi lebih dulu dan **tidak menulis apa pun**
+bila verifikasinya gagal — berpindah ke alamat yang tidak menjawab berarti
+kehilangan gateway yang tadinya bekerja. Keduanya menyentuh **semua harness yang
+terpasang**, jadi Grok dan omp tidak pernah lagi menunjuk alamat yang berbeda.
+
+Server MCP, seksi `[ui]`, model tambahan, dan **kunci berbayar** Anda
+(Anthropic, OpenAI, Ollama) tidak disentuh pada pilihan mana pun. Cadangan
+selalu dibuat.
 
 ### Hanya berpindah jaringan
 
@@ -140,6 +202,11 @@ Cadangan selalu dibuat, apa pun pilihannya.
 
 Tidak ada prompt, tidak ada pemasangan. Identitas dibaca ulang dari config yang
 ada — berpindah jaringan tidak mengubah siapa Anda.
+
+Token diverifikasi di alamat **baru** sebelum config disentuh: alamat yang tidak
+menjawab ditolak dengan kode `3`, dan config lama dibiarkan utuh. `models.yml`
+omp ikut berpindah — sampai 3 September 2026 hanya config Grok yang bergerak,
+sehingga omp tetap menunjuk jaringan lama dan gagal sendirian.
 
 ### Hanya mengganti token
 

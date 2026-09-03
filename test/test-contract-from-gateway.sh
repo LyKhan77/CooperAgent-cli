@@ -38,10 +38,17 @@ C = {"object":"list","data":[{"id":"model-uji","object":"model",
       "compaction":{"threshold_percent":75,"threshold_tokens":196608},
       "context_source":"upstream","upstreams":[]}}
 class H(BaseHTTPRequestHandler):
-    def do_GET(self):
-        b = json.dumps(C).encode()
-        self.send_response(200); self.send_header("Content-Type","application/json")
+    def reply(self, code, obj):
+        b = json.dumps(obj).encode()
+        self.send_response(code); self.send_header("Content-Type","application/json")
         self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+    def do_GET(self):
+        # Sejak 3 September 2026 pemasang memverifikasi token sebelum menulis,
+        # jadi gateway tiruan harus bisa menjawab siapa pemiliknya.
+        if self.path.startswith("/api/auth/whoami"):
+            return self.reply(200, {"name":"lee","device":"laptop-uji",
+                                    "role":"dev","who":"lee@laptop-uji"})
+        return self.reply(200, C)
     def log_message(self, *a): pass
 HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 PY
@@ -221,8 +228,14 @@ fi
 echo
 echo $'\033[1mBerpindah jaringan mempertahankan token:\033[0m'
 SW="$T/switch"; mkdir -p "$SW/.grok" "$SW/.cooper"
-TOK="ca_000102030405060708090a0b0c0d0e0f101112131415161718"
-printf 'vpn\tVPN Kantor\thttp://10.99.99.99:8987/api/v1\n' > "$SW/.cooper/gateway-endpoints"
+# 48 heksadesimal, bukan 50. Bentuk yang sah adalah `ca_` + 48 = 51 karakter,
+# dan sejak 3 September 2026 pemasang memeriksanya sebelum menghubungi gateway
+# -- fixture yang panjangnya salah akan ditolak, dengan benar.
+TOK="ca_000102030405060708090a0b0c0d0e0f1011121314151617"
+# Alias menunjuk gateway tiruan yang HIDUP: sejak 3 September 2026 perpindahan
+# diverifikasi lebih dulu, jadi alamat yang tidak menjawab memang ditolak --
+# itu diuji terpisah di bawah.
+printf 'vpn\tVPN Kantor\thttp://127.0.0.1:%s/api/v1\n' "$PORT" > "$SW/.cooper/gateway-endpoints"
 cat > "$SW/.grok/config.toml" <<CFG
 [model.internal-qwen]
 base_url = "http://127.0.0.1:9/api/v1"
@@ -234,9 +247,27 @@ if [ "$(grep -c "api_key = \"$TOK\"" "$SW/.grok/config.toml")" -ge 1 ]; then
 else
     bad "token rusak: $(grep -m1 api_key "$SW/.grok/config.toml")"
 fi
-grep -q 'base_url = "http://10.99.99.99:8987/api/v1"' "$SW/.grok/config.toml" \
+grep -q "base_url = \"http://127.0.0.1:$PORT/api/v1\"" "$SW/.grok/config.toml" \
     && ok "alamat berpindah ke alias dari daftar tersimpan" \
     || bad "alamat tidak berpindah"
+
+# Alamat yang TIDAK menjawab harus ditolak, bukan ditulis lalu diperiksa
+# sesudahnya. Sampai 3 September 2026 urutannya terbalik, sehingga satu perintah
+# salah ketik cukup untuk membuang gateway yang tadinya bekerja.
+SW2="$T/switch-mati"; mkdir -p "$SW2/.grok" "$SW2/.cooper"
+printf 'vpn\tVPN Kantor\thttp://127.0.0.1:9/api/v1\n' > "$SW2/.cooper/gateway-endpoints"
+cat > "$SW2/.grok/config.toml" <<CFG
+[model.internal-qwen]
+base_url = "http://127.0.0.1:$PORT/api/v1"
+api_key = "$TOK"
+CFG
+HOME="$SW2" bash "$REPO/setup.sh" --endpoint vpn >/dev/null 2>&1
+RC_SW=$?
+[ "$RC_SW" -eq 3 ] && ok "pindah ke gateway mati ditolak (kode 3)" \
+    || bad "pindah ke gateway mati tidak ditolak (kode $RC_SW)"
+grep -q "base_url = \"http://127.0.0.1:$PORT/api/v1\"" "$SW2/.grok/config.toml" \
+    && ok "config lama dibiarkan utuh" \
+    || bad "config lama TERTIMPA oleh alamat yang tidak menjawab"
 
 echo
 if [ "$FAIL" = 0 ]; then

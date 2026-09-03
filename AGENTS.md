@@ -10,7 +10,7 @@ dari itu yang boleh masuk ke sini.**
 
 ---
 
-## Empat aturan yang tidak boleh dilanggar
+## Lima aturan yang tidak boleh dilanggar
 
 ### 1. Tidak ada alamat internal
 
@@ -53,7 +53,24 @@ menghapus kunci berbayar dev.
 
 Dijaga: `test/test-setup-preserves-dev-config.sh`.
 
-### 4. Keluaran harus terbaca di tempat ia dibaca
+### 4. Kegagalan kredensial tidak boleh ditelan
+
+Token diverifikasi ke `/api/auth/whoami` **sebelum satu berkas pun ditulis**, dan
+kegagalannya menghentikan skrip dengan kode `3` serta sebab yang spesifik —
+bentuk salah, gateway tak terjangkau, token tidak dikenal, kredensial dicabut.
+Keempatnya jalan keluarnya berbeda; satu pesan untuk semuanya adalah pesan yang
+tidak menolong satu pun.
+
+Jangan pernah jatuh diam-diam ke identitas yang diketik dev sendiri. Itu bug
+aslinya: sampai 3 September 2026 sebuah `catch {}` kosong membuat setup berjalan
+sampai akhir, mencetak tanda centang, dan menulis config yang pasti dijawab 401.
+
+Kredensial diperiksa **setiap kali skrip berjalan**, bukan hanya saat pertama:
+pencabutan terjadi di sisi server tanpa memberi tahu klien.
+
+Dijaga: `test/test-credential-gate.sh`.
+
+### 5. Keluaran harus terbaca di tempat ia dibaca
 
 Warna hanya ke terminal (`[ -t 1 ]`). `NO_COLOR` dan `TERM=dumb` dihormati.
 Simbol Unicode hanya bila locale-nya UTF-8; selain itu `[v]` / `[x]`.
@@ -75,6 +92,8 @@ bash test/test-contract-from-gateway.sh      # 17 pemeriksaan
 bash test/test-setup-dev.sh                  # 50 pemeriksaan (perlu jaringan)
 bash test/test-cli-output.sh                 #  9 pemeriksaan
 bash test/test-setup-preserves-dev-config.sh
+bash test/test-omp-api-key.sh                # models.yml omp membawa token
+bash test/test-credential-gate.sh            # gerbang kredensial + mode "sudah terpasang"
 ```
 
 Tiga yang pertama hermetis — masing-masing menyalakan gateway tiruannya sendiri

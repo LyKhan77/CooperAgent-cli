@@ -121,6 +121,17 @@ OS_TYPE="$(uname -s)"
 # shellcheck source=scripts/lib/contract.sh
 . "${SCRIPT_DIR}/scripts/lib/contract.sh"
 
+# Kunci api pada models.yml omp -- satu implementasi, dipakai skrip ini DAN
+# scripts/setup-dev.sh. Sampai 3 September 2026 keduanya menyimpang, dan yang
+# di sini menulis bentuk lama yang dijawab 401.
+# shellcheck source=scripts/lib/omp_models.sh
+. "${SCRIPT_DIR}/scripts/lib/omp_models.sh"
+
+# Gerbang kredensial. Ia yang mengubah "setup selesai lalu 401 belakangan"
+# menjadi "setup berhenti sekarang, dengan sebabnya".
+# shellcheck source=scripts/lib/credential.sh
+. "${SCRIPT_DIR}/scripts/lib/credential.sh"
+
 # --- mode ganti endpoint ------------------------------------------------------
 # `setup.sh --endpoint vpn` hanya memindahkan alamat gateway: identitas dev
 # dibaca ulang dari config yang ada, tidak ada prompt, tidak ada pemasangan.
@@ -431,6 +442,81 @@ EOF
     rm -f "$tpl"
 }
 
+# --- mode "sudah terpasang" ---------------------------------------------------
+#
+# Skrip ini adalah SATU pintu masuk, dan yang dilihat dev berbeda menurut
+# keadaan mesinnya: onboarding penuh hanya untuk yang belum terpasang. Yang
+# sudah terpasang tidak butuh ditanya harness dan endpoint lagi -- ia butuh
+# tahu keadaannya sekarang, dan mengubah satu hal.
+#
+# Kredensial diperiksa di SINI, setiap kali, bahkan ketika dev hanya ingin
+# memperbarui parameter. Pencabutan terjadi di sisi server tanpa memberi tahu
+# klien; kalau bukan kita yang bertanya, dev baru mengetahuinya lewat 401 di
+# tengah kerja.
+GROK_CFG="$HOME/.grok/config.toml"
+OMP_YML_PATH="$HOME/.omp/agent/models.yml"
+
+installed_grok() {
+    [ -f "$GROK_CFG" ] && grep -q '^\[model\.internal-qwen' "$GROK_CFG" 2>/dev/null
+}
+installed_omp() {
+    [ -f "$OMP_YML_PATH" ] && grep -qE '^  cooperagent:' "$OMP_YML_PATH" 2>/dev/null
+}
+
+# Alamat dan token dibaca dari MANA PUN yang ada. Dev yang memilih omp saja
+# tidak punya config.toml, dan sampai 3 September 2026 ia karena itu tidak
+# pernah terlihat sebagai "sudah terpasang".
+stored_gateway() {
+    local v=""
+    if installed_grok; then
+        v="$(grep -m1 -E '^[[:space:]]*base_url' "$GROK_CFG" 2>/dev/null \
+             | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/' || true)"
+    fi
+    [ -z "$v" ] && installed_omp && v="$(omp_gateway_of "$OMP_YML_PATH" || true)"
+    printf '%s' "$v"
+}
+stored_token() {
+    local v=""
+    if installed_grok; then
+        v="$(grep -m1 -E '^[[:space:]]*api_key' "$GROK_CFG" 2>/dev/null \
+             | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/' || true)"
+    fi
+    case "$v" in ca_*) ;; *) v="" ;; esac
+    if [ -z "$v" ] && installed_omp; then
+        v="$(omp_api_key_of "$OMP_YML_PATH" || true)"
+        case "$v" in ca_*) ;; *) v="" ;; esac
+    fi
+    printf '%s' "$v"
+}
+
+# Menulis kredensial dan alamat ke SEMUA harness yang terpasang.
+#
+# Satu tempat, karena inilah yang selalu terlewat: sampai 3 September 2026
+# `--endpoint` hanya menyentuh config Grok, sehingga dev yang memakai keduanya
+# berpindah jaringan di Grok dan tetap menunjuk alamat lama di omp.
+apply_to_all_harness() { # $1 = gateway baru  $2 = kredensial  $3 = identitas
+    local new_url="$1" tok="$2" ident="$3" key old_gw stamp
+    # Yang BUKAN token tidak boleh menyamar sebagai token: config lama berisi
+    # `dev-nama@device`, dan meneruskannya sebagai DEV_TOKEN akan menulis
+    # `api_key = "dev-nama@device"` menjadi `nama@device` -- bentuk ketiga yang
+    # tidak pernah benar di mana pun.
+    case "$tok" in ca_*) ;; *) tok="" ;; esac
+    key="$(omp_api_key "$ident" "$tok")"
+    if installed_grok; then
+        DEV_TOKEN="$tok" write_grok_config "$new_url" "$ident"
+    fi
+    if installed_omp; then
+        stamp="$(date +%Y%m%d-%H%M%S)"
+        cp "$OMP_YML_PATH" "$OMP_YML_PATH.bak.$stamp"
+        old_gw="$(omp_gateway_of "$OMP_YML_PATH" || true)"
+        if [ -n "$old_gw" ] && [ "$old_gw" != "$(cooper_gateway_base "$new_url")" ]; then
+            omp_set_base_url "$OMP_YML_PATH" "$old_gw" "$(cooper_gateway_base "$new_url")" || true
+        fi
+        omp_set_api_key "$OMP_YML_PATH" "$key" "$(cooper_gateway_base "$new_url")" || true
+        echo -e "${GREEN}${S_OK}${NC} models.yml omp diperbarui (cadangan: models.yml.bak.$stamp)"
+    fi
+}
+
 # --- eksekusi mode ganti endpoint --------------------------------------------
 if [ -n "$SWITCH_ONLY" ]; then
     # Alias diselesaikan oleh GATEWAY, bukan oleh tabel di skrip ini.
@@ -489,16 +575,202 @@ if [ -n "$SWITCH_ONLY" ]; then
     fi
 
     echo -e "${CYAN}Memindahkan endpoint ke:${NC} $NEW_URL"
-    echo -e "${CYAN}Identitas dipertahankan :${NC} $EXISTING_KEY"
-    write_grok_config "$NEW_URL" "$EXISTING_KEY"
 
-    HEALTH_URL="${NEW_URL%/api/v1}/api/health"
-    if curl -s --connect-timeout 5 "$HEALTH_URL" | grep -q "ok"; then
-        echo -e "${GREEN}${S_OK} Gateway terjangkau di alamat baru.${NC}"
-    else
-        echo -e "${RED}${S_NO} Gateway belum terjangkau di $HEALTH_URL — periksa koneksi jaringan.${NC}"
-    fi
+    # Diverifikasi SEBELUM ditulis. Berpindah ke alamat yang tidak menjawab
+    # berarti dev kehilangan gateway yang tadinya bekerja, dan sampai
+    # 3 September 2026 blok ini menulis dulu lalu memeriksa kesehatan sesudahnya
+    # -- urutan yang membuat pemeriksaannya tidak bisa mencegah apa pun.
+    case "$EXISTING_KEY" in
+        ca_*)
+            if cooper_verify_token "$NEW_URL" "$EXISTING_KEY"; then
+                echo -e "${GREEN}${S_OK} Kredensial sah di alamat baru${NC} — identitas: ${CYAN}${COOPER_WHO}${NC}"
+                EXISTING_ID="$COOPER_WHO"
+            else
+                echo -e "${RED}${S_NO} Alamat baru TIDAK dipakai — kredensial tidak lolos di sana.${NC}"
+                cooper_verify_explain "$COOPER_VERIFY_STATE" "$NEW_URL" | sed 's/^/    /'
+                echo -e "\n    ${YELLOW}Config lama dibiarkan utuh.${NC}"
+                exit 3
+            fi ;;
+        *)
+            # Config lama tanpa token: tidak ada yang bisa diverifikasi, dan itu
+            # dikatakan, bukan didiamkan.
+            echo -e "${YELLOW}! Config ini belum memakai token — perpindahan tidak dapat diverifikasi.${NC}"
+            echo -e "${YELLOW}  Gateway akan menjawab 401 sampai token dipasang: bash setup.sh${NC}"
+            # Awalan `dev-` dilepas: yang disimpan write_grok_config adalah
+            # IDENTITAS, dan ia yang memasang awalannya kembali.
+            EXISTING_ID="${EXISTING_KEY#dev-}" ;;
+    esac
+
+    fetch_contract "$(cooper_gateway_base "$NEW_URL")" || true
+    # SEMUA harness, bukan hanya Grok. Sampai 3 September 2026 baris ini hanya
+    # menulis config.toml, sehingga dev yang memakai keduanya berpindah jaringan
+    # di Grok dan tetap menunjuk alamat lama di omp -- gagal hanya di satu alat,
+    # yang paling sulit ditebak sebabnya.
+    apply_to_all_harness "$NEW_URL" "$EXISTING_KEY" "$EXISTING_ID"
+    cache_endpoints
     exit 0
+fi
+
+if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
+    CUR_GATEWAY="$(stored_gateway)"
+    CUR_TOKEN="$(stored_token)"
+    [ -n "$DEV_TOKEN" ] && CUR_TOKEN="$DEV_TOKEN"
+
+    echo -e "${CYAN}================================================================${NC}"
+    echo -e "${CYAN}   CooperAgent — sudah terpasang di mesin ini                    ${NC}"
+    echo -e "${CYAN}================================================================${NC}"
+    echo -e "  gateway   : ${CUR_GATEWAY:-(tidak terbaca)}"
+    HARNESS_LIST=""
+    installed_grok && HARNESS_LIST="Grok Build"
+    installed_omp  && HARNESS_LIST="${HARNESS_LIST:+$HARNESS_LIST, }Oh My Pi (omp)"
+    echo -e "  harness   : ${HARNESS_LIST}"
+
+    # Kredensial: SELALU ditanyakan ke gateway, tidak pernah disimpulkan dari
+    # berkas. Berkas hanya tahu apa yang pernah benar.
+    CRED_OK=0
+    if [ -z "$CUR_TOKEN" ]; then
+        echo -e "  kredensial: ${YELLOW}tidak ada token di config${NC}"
+        echo -e "              Permintaan ke gateway akan dijawab 401."
+    elif [ -z "$CUR_GATEWAY" ]; then
+        echo -e "  kredensial: ${YELLOW}tidak dapat diperiksa — alamat gateway tidak terbaca${NC}"
+    elif cooper_verify_token "$CUR_GATEWAY" "$CUR_TOKEN"; then
+        CRED_OK=1
+        echo -e "  identitas : ${CYAN}${COOPER_WHO}${NC} (peran: ${COOPER_ROLE:-dev})"
+        echo -e "  kredensial: ${GREEN}sah${NC} — diverifikasi ke gateway barusan"
+    else
+        echo -e "  kredensial: ${RED}DITOLAK${NC} (${COOPER_VERIFY_STATE})"
+        echo ""
+        cooper_verify_explain "$COOPER_VERIFY_STATE" "$CUR_GATEWAY" | sed 's/^/    /'
+    fi
+
+    # Kontrak ditampilkan hanya bila benar-benar terambil: angka tebakan yang
+    # tampil seperti angka pasti adalah cara repo ini pernah kehilangan waktu.
+    if [ -n "$CUR_GATEWAY" ] && fetch_contract "$(cooper_gateway_base "$CUR_GATEWAY")"; then
+        echo -e "  kontrak   : context $(contract_fmt "$CONTRACT_CONTEXT_WINDOW") ${S_DOT} output ${CONTRACT_MAX_TOKENS} ${S_DOT} compact ${CONTRACT_COMPACT_PCT}% ${S_DOT} model ${CONTRACT_MODEL_ID}"
+        cache_endpoints
+    else
+        echo -e "  kontrak   : ${YELLOW}tidak terambil — nilai cadangan yang berlaku${NC}"
+    fi
+
+    echo ""
+    echo -e "${YELLOW}Apa yang ingin Anda lakukan?${NC}"
+    # Rekomendasi mengikuti KEADAAN, bukan kebiasaan. Menyarankan "perbarui
+    # parameter" kepada dev yang kredensialnya ditolak berarti menyarankan
+    # satu-satunya pilihan yang tidak memperbaiki apa pun.
+    if [ "$CRED_OK" = 1 ]; then
+        echo -e "  ${GREEN}1) Perbarui parameter dari kontrak gateway [disarankan]${NC}"
+    else
+        echo -e "  1) Perbarui parameter dari kontrak gateway"
+    fi
+    echo -e "     aturan agent, skill, ambang compaction, context_window"
+    echo -e "  2) Ganti alamat gateway (pindah LAN <-> VPN)"
+    if [ "$CRED_OK" = 1 ]; then
+        echo -e "  3) Pasang / ganti token kredensial"
+    else
+        echo -e "  ${GREEN}3) Pasang / ganti token kredensial [disarankan — inilah yang memperbaiki 401]${NC}"
+    fi
+    echo -e "  4) Pasang harness tambahan (Grok / omp yang belum ada)"
+    echo -e "  5) Keluar"
+    read -rp "Pilihan [1/2/3/4/5, default: 1]: " HOME_CHOICE || HOME_CHOICE=""
+    HOME_CHOICE="${HOME_CHOICE:-1}"
+
+    case "$HOME_CHOICE" in
+        2)
+            # Alamat baru diverifikasi SEBELUM ditulis: berpindah ke alamat yang
+            # tidak menjawab berarti dev kehilangan gateway yang tadinya bekerja.
+            echo -e "\n${CYAN}--- Alamat gateway baru ---${NC}"
+            if [ -n "$CONTRACT_ENDPOINTS" ]; then
+                echo -e "${YELLOW}Yang diumumkan gateway:${NC}"
+                printf '%s\n' "$CONTRACT_ENDPOINTS" | while IFS="$(printf '\t')" read -r eid elabel eurl; do
+                    [ -n "$eid" ] && echo -e "    ${CYAN}${eid}${NC}  ${eurl}  (${elabel})"
+                done
+            fi
+            read -rp "Alias (lan/vpn/local) atau alamat lengkap: " NEW_EP || NEW_EP=""
+            [ -z "$NEW_EP" ] && { echo -e "${YELLOW}Dibatalkan.${NC}"; exit 0; }
+            case "$NEW_EP" in
+                http://*|https://*) NEW_URL="$(normalize_endpoint "$NEW_EP")" ;;
+                *) NEW_URL="$(contract_endpoint_url "$NEW_EP")"
+                   [ -z "$NEW_URL" ] && NEW_URL="$(cached_endpoints | awk -F"$(printf '\t')" -v k="$NEW_EP" '$1==k {print $3; exit}')" ;;
+            esac
+            if [ -z "$NEW_URL" ]; then
+                echo -e "${RED}${S_NO} Alias '${NEW_EP}' tidak dikenal gateway dan tidak ada di daftar tersimpan.${NC}"
+                exit 1
+            fi
+            if [ -z "$CUR_TOKEN" ]; then
+                echo -e "${RED}${S_NO} Tidak ada token untuk diverifikasi di alamat baru.${NC}"
+                echo -e "${YELLOW}    Jalankan pilihan 3 lebih dulu.${NC}"
+                exit 3
+            fi
+            echo -e "${YELLOW}Memverifikasi kredensial di alamat baru...${NC}"
+            if ! cooper_verify_token "$NEW_URL" "$CUR_TOKEN"; then
+                echo -e "${RED}${S_NO} Alamat baru tidak dipakai — kredensial tidak lolos di sana.${NC}"
+                cooper_verify_explain "$COOPER_VERIFY_STATE" "$NEW_URL" | sed 's/^/    /'
+                echo -e "\n    ${YELLOW}Config lama dibiarkan utuh.${NC}"
+                exit 3
+            fi
+            fetch_contract "$(cooper_gateway_base "$NEW_URL")" || true
+            apply_to_all_harness "$NEW_URL" "$CUR_TOKEN" "$COOPER_WHO"
+            cache_endpoints
+            echo -e "\n${GREEN}${S_OK} Gateway dipindahkan ke:${NC} $NEW_URL"
+            echo -e "${GREEN}${S_OK} Identitas:${NC} $COOPER_WHO"
+            exit 0 ;;
+        3)
+            echo -e "\n${CYAN}--- Token CooperAgent ---${NC}"
+            echo -e "Minta ke admin bila belum punya: ${CYAN}cooper issue <nama> <device>${NC}"
+            read -rp "Tempel token baru (ca_...): " NEW_TOK || NEW_TOK=""
+            NEW_TOK="$(printf '%s' "$NEW_TOK" | tr -d '[:space:]')"
+            [ -z "$NEW_TOK" ] && { echo -e "${YELLOW}Dibatalkan.${NC}"; exit 0; }
+            GW_FOR_TOK="${CUR_GATEWAY}"
+            if [ -z "$GW_FOR_TOK" ]; then
+                read -rp "Alamat gateway: " GW_FOR_TOK || GW_FOR_TOK=""
+                [ -z "$GW_FOR_TOK" ] && { echo -e "${RED}${S_NO} Alamat wajib diisi.${NC}"; exit 1; }
+            fi
+            if ! cooper_verify_token "$GW_FOR_TOK" "$NEW_TOK"; then
+                echo -e "${RED}${S_NO} Token tidak lolos pemeriksaan — tidak ada yang ditulis.${NC}"
+                cooper_verify_explain "$COOPER_VERIFY_STATE" "$GW_FOR_TOK" | sed 's/^/    /'
+                exit 3
+            fi
+            fetch_contract "$(cooper_gateway_base "$GW_FOR_TOK")" || true
+            apply_to_all_harness "$GW_FOR_TOK" "$NEW_TOK" "$COOPER_WHO"
+            echo -e "\n${GREEN}${S_OK} Token dipasang ke semua harness.${NC}"
+            echo -e "${GREEN}${S_OK} Identitas:${NC} $COOPER_WHO"
+            exit 0 ;;
+        4)
+            # Jatuh ke onboarding di bawah. Token dan alamat yang sudah ada
+            # dibawa serta, jadi dev tidak ditanya ulang.
+            echo -e "\n${CYAN}Melanjutkan ke pemasangan harness tambahan.${NC}"
+            [ -z "$DEV_TOKEN" ] && DEV_TOKEN="$CUR_TOKEN"
+            [ -n "$CUR_GATEWAY" ] && COOPERAGENT_GATEWAY="${COOPERAGENT_GATEWAY:-$CUR_GATEWAY}"
+            ;;
+        5)
+            echo -e "${GREEN}Tidak ada yang diubah.${NC}"
+            exit 0 ;;
+        *)
+            # Pilihan 1 dan apa pun yang tidak dikenal: jalur paling aman, yang
+            # hanya memperbarui parameter dan tidak menyentuh kredensial.
+            if [ "$CRED_OK" != 1 ]; then
+                echo -e "\n${YELLOW}! Parameter tetap diperbarui, tapi kredensial di atas belum sah —${NC}"
+                echo -e "${YELLOW}  permintaan ke gateway akan tetap dijawab 401 sampai pilihan 3 dijalankan.${NC}"
+            fi
+            echo ""
+            if [ -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
+                # Alamat DITERUSKAN. setup-dev membacanya dari config Grok, dan
+                # dev yang memilih omp saja tidak punya berkas itu -- tanpa ini
+                # ia berhenti dengan "tidak ada alamat gateway" pada pilihan
+                # yang justru default.
+                if [ -n "$CUR_TOKEN" ]; then
+                    COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" \
+                        bash "$SCRIPT_DIR/scripts/setup-dev.sh" --token "$CUR_TOKEN"
+                else
+                    COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" \
+                        bash "$SCRIPT_DIR/scripts/setup-dev.sh"
+                fi
+            else
+                echo -e "${RED}${S_NO} scripts/setup-dev.sh tidak ditemukan.${NC}"
+                exit 1
+            fi
+            exit 0 ;;
+    esac
 fi
 
 echo -e "${CYAN}================================================================${NC}"
@@ -621,26 +893,29 @@ else
 fi
 
 
-# 2b. Identitas — DITANYAKAN KE GATEWAY bila token ada
+# 2b. GERBANG KREDENSIAL — diperiksa SEBELUM satu berkas pun ditulis
 #
 # Gateway mencatat identitas dari TOKEN (`cred.devName`, `cred.device`), bukan
-# dari config klien. Sampai 1 September 2026 skrip ini tetap menanyakan nama dan
-# perangkat -- jawaban yang tidak pernah dipakai untuk apa pun. Dev yang
-# mengetik `laptop` sementara tokennya diterbitkan untuk `laptop-tuf` melihat
-# `laptop-tuf` di dashboard, dan tidak ada yang menjelaskan kenapa.
+# dari config klien, jadi pemeriksaan ini sekaligus menjawab "siapa Anda".
+#
+# Sampai 3 September 2026 kegagalan di sini DITELAN: gateway tak terjangkau,
+# token tidak dikenal, dan kredensial dicabut sama-sama jatuh diam-diam ke
+# prompt nama manual di bawah, lalu setup berjalan sampai akhir dan menulis
+# config yang pasti dijawab 401. Sekarang ia berhenti, dengan sebabnya.
 DEV_IDENTITY=""
 if [ -n "$DEV_TOKEN" ]; then
-    # Alamat sudah ditentukan di langkah 3 di atas -- itulah sebabnya langkah 3
-    # dipindahkan ke depan. Sebelumnya baris ini jatuh ke alamat LAN yang
-    # dipatok, sehingga probe ini "bekerja" hanya karena patokan itu ada.
-    GW_PROBE="$SERVER_URL"
-    WHO="$(curl -s --connect-timeout 5 -H "Authorization: Bearer $DEV_TOKEN" \
-        "${GW_PROBE%/api/v1}/api/auth/whoami" 2>/dev/null \
-        | sed -n 's/.*"who"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
-    if [ -n "$WHO" ]; then
-        DEV_IDENTITY="$WHO"
-        echo -e "\n${GREEN}${S_OK} Identitas dari token:${NC} ${DEV_IDENTITY}"
+    echo -e "\n${CYAN}--- Verifikasi kredensial ---${NC}"
+    echo -e "  gateway : $(cooper_gateway_base "$SERVER_URL")"
+    echo -e "  token   : ...${DEV_TOKEN: -4}"
+    if cooper_verify_token "$SERVER_URL" "$DEV_TOKEN"; then
+        DEV_IDENTITY="$COOPER_WHO"
+        echo -e "${GREEN}${S_OK} Kredensial sah${NC} — identitas: ${CYAN}${DEV_IDENTITY}${NC} (peran: ${COOPER_ROLE:-dev})"
         echo -e "  ${YELLOW}Inilah yang tercatat di dashboard — tidak perlu diketik.${NC}"
+    else
+        echo -e "${RED}${S_NO} Kredensial tidak lolos pemeriksaan.${NC}"
+        cooper_verify_explain "$COOPER_VERIFY_STATE" "$SERVER_URL" | sed 's/^/    /'
+        echo -e "\n    ${YELLOW}Tidak ada satu berkas pun yang ditulis.${NC}"
+        exit 3
     fi
 fi
 
@@ -868,16 +1143,34 @@ if [ "$AGENT_CHOICE" == "2" ] || [ "$AGENT_CHOICE" == "3" ]; then
     OMP_YML="$HOME/.omp/agent/models.yml"
     OMP_GW="${SERVER_URL%/api/v1}"
 
+    # Kunci dari TOKEN, bukan dari `dev-${DEV_IDENTITY}`.
+    #
+    # Sampai 3 September 2026 baris ini menulis `dev-nama@device` tanpa syarat --
+    # bentuk yang gateway jawab 401 sejak 1 September. Jalur Grok di
+    # `write_grok_config` sudah benar sejak awal, jadi gejalanya khas: `grok`
+    # jalan, `omp` 401, dan token yang sama berhasil login di dashboard.
+    OMP_API_KEY="$(omp_api_key "$DEV_IDENTITY" "${DEV_TOKEN:-}")"
+
     render_omp_models() {
-        sed -e "s|__GATEWAY__|${OMP_GW}|g" -e "s|__API_KEY__|dev-${DEV_IDENTITY}|g" \
-            "$OMP_TPL" > "$OMP_YML"
+        # contract_render, bukan `sed` mentah: template memuat __MODEL_ID__,
+        # __CONTEXT_WINDOW__, dan __MAX_TOKENS__ yang hanya kontrak gateway bisa
+        # isi. Tanpa ini models.yml lahir dengan placeholder yang belum terganti.
+        local tmp
+        tmp="$(mktemp)" || return 1
+        contract_render "$OMP_TPL" \
+            | sed -e "s|__GATEWAY__|${OMP_GW}|g" -e "s|__API_KEY__|${OMP_API_KEY}|g" > "$tmp"
+        contract_assert_rendered "$tmp" || { rm -f "$tmp"; return 1; }
+        mv "$tmp" "$OMP_YML"
     }
 
     if [ ! -f "$OMP_TPL" ]; then
         echo -e "${RED}${S_NO} Template tidak ditemukan: $OMP_TPL${NC}"
     elif [ ! -f "$OMP_YML" ]; then
-        render_omp_models
-        echo -e "${GREEN}${S_OK} models.yml dibuat${NC} (3 provider: otomatis, localhost, server 2)"
+        if render_omp_models; then
+            echo -e "${GREEN}${S_OK} models.yml dibuat${NC} (3 provider: otomatis, localhost, server 2)"
+        else
+            echo -e "${RED}${S_NO} models.yml gagal dirender${NC} — jalankan ulang saat gateway terjangkau."
+        fi
     else
         CUR_GW="$(grep -m1 -E '^\s+baseUrl:' "$OMP_YML" | sed -E 's|.*baseUrl: (https?://[^/]*).*|\1|')"
         OTHER="$(grep -cE '^  [a-z0-9-]+:' "$OMP_YML")"
@@ -907,10 +1200,32 @@ if [ "$AGENT_CHOICE" == "2" ] || [ "$AGENT_CHOICE" == "3" ]; then
                     echo -e "${YELLOW}! Alamat lama tidak terbaca — tidak ada yang diubah.${NC}"
                 fi ;;
             3)  cp "$OMP_YML" "$OMP_YML.bak.$(date +%Y%m%d-%H%M%S)"
-                render_omp_models
-                echo -e "${GREEN}${S_OK} models.yml ditulis ulang dari template${NC} (cadangan dibuat)" ;;
+                if render_omp_models; then
+                    echo -e "${GREEN}${S_OK} models.yml ditulis ulang dari template${NC} (cadangan dibuat)"
+                else
+                    echo -e "${RED}${S_NO} models.yml gagal dirender${NC} — berkas lama dipertahankan."
+                fi ;;
             *)  echo -e "${GREEN}${S_OK} models.yml dipertahankan${NC} — tidak ada yang disentuh." ;;
         esac
+
+        # apiKey DIPERBARUI apa pun pilihan di atas. Pilihan 1--3 mengatur
+        # provider dan alamat -- itu memang milik dev. apiKey bukan: ia
+        # kredensial terbitan admin, dan models.yml yang tertinggal berarti
+        # `omp` 401 sementara `grok` jalan normal. Yang disentuh hanya provider
+        # yang menunjuk gateway kita; kunci berbayar dev tidak ikut.
+        if [ -n "${DEV_TOKEN:-}" ] && ! grep -q "apiKey: *${OMP_API_KEY}" "$OMP_YML"; then
+            # Cadangan hanya bila pilihan 2/3 belum membuatnya pada detik yang
+            # sama: menyalin lagi akan MENIMPA cadangan asli dengan berkas yang
+            # sudah diubah -- cadangan yang tidak mencadangkan apa pun.
+            OMP_BAK="$OMP_YML.bak.$(date +%Y%m%d-%H%M%S)"
+            [ -f "$OMP_BAK" ] || cp "$OMP_YML" "$OMP_BAK"
+            if omp_set_api_key "$OMP_YML" "$OMP_API_KEY" "$OMP_GW" \
+               && grep -q "apiKey: *${OMP_API_KEY}" "$OMP_YML"; then
+                echo -e "${GREEN}${S_OK} apiKey diperbarui ke token${NC} (cadangan dibuat)"
+            else
+                echo -e "${YELLOW}! Gagal memperbarui apiKey di $OMP_YML — sunting manual.${NC}"
+            fi
+        fi
     fi
 
     echo -e "${GREEN}${S_OK} Provider:${NC} $OMP_YML"
