@@ -10,6 +10,14 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [1.3.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.2.0...v1.3.0) (2026-09-03)
+
+
+### Fitur
+
+* aturan agent opsional dan skill berawalan cooper- ([84e16bb](https://github.com/LyKhan77/CooperAgent-cli/commit/84e16bb0cbfec8eb86c5122a1359ed590b06c9e9))
+* aturan agent opsional dan skill berawalan cooper- ([5657012](https://github.com/LyKhan77/CooperAgent-cli/commit/5657012f060a8a8b43ed0504e41a8fe927b30c75))
+
 ## [1.2.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.1.1...v1.2.0) (2026-09-03)
 
 
