@@ -14,6 +14,39 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **harness:** pilihan 5 (pi) tidak terlihat di menu Windows
+
+  **Konteks.** Sesudah cacat parse diperbaiki, `.\setup.ps1` berjalan tetapi
+  menu harness hanya menampilkan 1–4. Promptnya sendiri sudah menerima 5
+  (`Pilihan [1/2/3/4/5, default: 1]`), sehingga pilihannya ada tetapi tak
+  seorang pun tahu.
+
+  **Perubahan.**
+  - `setup.ps1` — `Write-Host "  5) Pi Agent ..."` berada SESUDAH
+    `Read-Host`. `Read-Host` memblokir, jadi baris itu baru tercetak setelah dev
+    menjawab. Dipindah ke sebelum prompt, sejajar dengan `setup.sh` yang memang
+    sudah benar.
+  - `setup.sh`, `setup.ps1` — label menu mode "sudah terpasang" diperbarui dari
+    `Pasang harness tambahan (Grok / omp yang belum ada)` menjadi
+    `(Grok / omp / pi yang belum ada)`. Jalur itulah yang menuju pemasangan pi,
+    dan sebelumnya namanya tidak menyebutkannya.
+  - `test/test-pi-adapter.sh` — uji baru memeriksa **urutan**: baris menu
+    pilihan 5 harus muncul sebelum baris prompt, di kedua installer.
+
+  **Bukti.** Uji lama lolos karena hanya memeriksa string `5) Pi` **ada** di
+  berkas, bukan letaknya. Uji baru gagal pada berkas sebelum perbaikan dan lulus
+  sesudahnya, di `setup.sh` maupun `setup.ps1`.
+
+  **Dampak.** Dev Windows kini melihat pilihan pi. Tidak ada perubahan perilaku
+  bagi yang memilih 1–4.
+
+  **Rollback.** `git revert` commit ini; pilihan 5 kembali tersembunyi di
+  Windows.
+
+  **Catatan.** Cacat ini tidak dapat ditangkap job `ps-parse`: berkasnya sah
+  secara sintaks, hanya urutan eksekusinya yang salah. Parser membuktikan berkas
+  dapat dijalankan, bukan bahwa ia melakukan hal yang benar.
+
 * **harness:** `setup.ps1` gagal di-parse untuk SETIAP dev Windows
 
   **Konteks.** Sesudah `v1.4.0` terbit, `.\setup.ps1` mati sebelum baris

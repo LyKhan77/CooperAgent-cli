@@ -630,7 +630,7 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
     } else {
         Write-Host "  3) Pasang / ganti token kredensial [disarankan - inilah yang memperbaiki 401]" -ForegroundColor Green
     }
-    Write-Host "  4) Pasang harness tambahan (Grok / omp yang belum ada)"
+    Write-Host "  4) Pasang harness tambahan (Grok / omp / pi yang belum ada)"
     if ($RULES_ON) {
         Write-Host "  5) Lepas aturan agent CooperxHarness (skill tetap terpasang)"
     } else {
@@ -803,8 +803,8 @@ Write-Host "  1) Grok Build (Fullscreen Rust TUI, Visual Diff Viewer) [Rekomenda
 Write-Host "  2) Oh My Pi / omp (coding agent CLI: 31 tool, LSP, session resume)"
 Write-Host "  3) Keduanya (Grok Build + Oh My Pi)"
 Write-Host "  4) Manual - endpoint gateway saja (pakai coding agent Anda sendiri)"
-$AGENT_CHOICE = Read-Host "Pilihan [1/2/3/4/5, default: 1]"
 Write-Host "  5) Pi Agent (coding agent Node.js; jalur tambahan, aturan + checkpoint CooperAgent)"
+$AGENT_CHOICE = Read-Host "Pilihan [1/2/3/4/5, default: 1]"
 if ([string]::IsNullOrWhiteSpace($AGENT_CHOICE)) { $AGENT_CHOICE = "1" }
 
 # Apa yang sudah terpasang di mesin ini? Ditanyakan SEBELUM prompt lain, karena

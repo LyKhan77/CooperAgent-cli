@@ -258,6 +258,25 @@ echo "Paritas dan batas default:"
 grep -q '5) Pi' "$REPO/setup.sh" && grep -q '5) Pi' "$REPO/setup.ps1" \
     && ok "pi ditambahkan sebagai pilihan baru" \
     || bad "pi tidak ditambahkan sebagai pilihan baru di kedua installer"
+
+# Baris menu harus dicetak SEBELUM prompt membaca jawaban.
+#
+# Keberadaan string saja tidak cukup: pada setup.ps1, `Write-Host "  5) Pi ..."`
+# sempat berada SESUDAH `Read-Host`. Read-Host memblokir, jadi pilihan 5 baru
+# muncul setelah dev menjawab -- di layar, pilihan itu tidak ada. Uji lama lolos
+# karena hanya memeriksa stringnya ada di berkas, bukan letaknya.
+menu_before_prompt() { # berkas, pola menu, pola prompt
+    local m p
+    m="$(grep -n "$2" "$1" | head -1 | cut -d: -f1)"
+    p="$(grep -n "$3" "$1" | head -1 | cut -d: -f1)"
+    [ -n "$m" ] && [ -n "$p" ] && [ "$m" -lt "$p" ]
+}
+menu_before_prompt "$REPO/setup.sh"  '5) Pi' 'Pilihan \[1/2/3/4/5,' \
+    && ok "setup.sh: menu pilihan 5 dicetak sebelum prompt" \
+    || bad "setup.sh: pilihan 5 tidak terlihat sebelum dev diminta menjawab"
+menu_before_prompt "$REPO/setup.ps1" '5) Pi' 'Pilihan \[1/2/3/4/5,' \
+    && ok "setup.ps1: menu pilihan 5 dicetak sebelum prompt" \
+    || bad "setup.ps1: pilihan 5 tidak terlihat sebelum dev diminta menjawab"
 grep -q 'default: 1' "$REPO/setup.sh" && grep -q 'default: 1' "$REPO/setup.ps1" \
     && ok "default lama tetap pilihan 1" \
     || bad "default installer berubah"

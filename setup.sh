@@ -719,7 +719,7 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp || installed_pi; }
     else
         echo -e "  ${GREEN}3) Pasang / ganti token kredensial [disarankan — inilah yang memperbaiki 401]${NC}"
     fi
-    echo -e "  4) Pasang harness tambahan (Grok / omp yang belum ada)"
+    echo -e "  4) Pasang harness tambahan (Grok / omp / pi yang belum ada)"
     if [ "$RULES_ON" = 1 ]; then
         echo -e "  5) Lepas aturan agent CooperxHarness (skill tetap terpasang)"
     else
