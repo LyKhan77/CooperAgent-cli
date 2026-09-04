@@ -14,6 +14,47 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **harness:** pi jadi pilihan 3, opsi "Keduanya" dihapus, header menyebut pi
+
+  **Konteks.** Sesudah jalur Windows terbukti, menu masih memperlakukan pi
+  sebagai tempelan di nomor 5, dan header "sudah terpasang" tidak pernah
+  menyebut pi meski jelas terpasang.
+
+  **Perubahan.**
+  - `setup.sh`, `setup.ps1` — menu harness diurutkan ulang: `1) Grok Build`,
+    `2) Oh My Pi / omp`, `3) Pi Agent / pi`, `4) Manual`. Opsi
+    `Keduanya (Grok Build + Oh My Pi)` **dihapus** atas keputusan pemilik.
+    Nomor 4 (Manual) tidak bergeser; nomor 5 tidak lagi ada.
+  - `setup.sh`, `setup.ps1` — keterangan pi diganti agar sejajar gaya dua
+    lainnya: `coding agent CLI ringan: 4 tool inti, hemat token, sesi
+    bercabang`.
+  - `setup.sh:663`, `setup.ps1:565` — pi ditambahkan ke daftar harness
+    **sesudah** barisnya dicetak, sehingga header selamanya berbunyi
+    `Grok Build, Oh My Pi (omp)` pada mesin yang punya ketiganya. Dipindah ke
+    sebelum pencetakan, di kedua installer.
+  - `setup.sh`, `setup.ps1` — "Perbarui parameter dari kontrak gateway" kini
+    menyegarkan pi bila terpasang. Syarat lamanya menuntut pi terpasang **dan**
+    Grok/omp tidak ada, sehingga hanya dev yang memakai pi saja yang terlayani.
+    pi tidak pernah **dipasang** di jalur ini: yang belum punya pi tetap tidak
+    mendapatkannya.
+  - `test/test-pi-adapter.sh` — tiga uji baru: pi ada di nomor 3 dan dicetak
+    sebelum prompt; pi masuk daftar harness sebelum baris header dicetak; dan
+    jalur "perbarui parameter" tidak lagi memakai syarat sempit.
+
+  **Bukti.** Suite 7 dari 7 hijau.
+
+  **Dampak — perlu diketahui dev.** Dev yang terbiasa mengetik `3` untuk
+  memasang Grok + omp sekarang mendapat **pi**. Kombinasi Grok + omp dalam satu
+  jalan tidak lagi tersedia; keduanya dipasang dengan menjalankan setup dua
+  kali. Default (`1` = Grok Build) tidak berubah.
+
+  **Rollback.** `git revert` commit ini.
+
+  **Diketahui, belum diputuskan.** Pilihan 5 ("Lepas aturan agent") masih
+  memakai syarat sempit yang sama, sehingga dev dengan Grok/omp **dan** pi
+  mengatur aturan pi-nya tidak lewat jalur itu. Cacat yang sama bentuknya,
+  sengaja tidak disentuh karena tidak diminta.
+
 * **harness:** `verify()` pi di Windows menyalin config ke jalur yang salah
 
   **Konteks.** Sesudah merge diperbaiki, `.\setup.ps1` pilihan 5 menulis

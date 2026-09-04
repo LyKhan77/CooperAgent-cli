@@ -255,13 +255,13 @@ grep -q 'checkpoint' "$T/setup.out" \
 
 echo
 echo "Paritas dan batas default:"
-grep -q '5) Pi' "$REPO/setup.sh" && grep -q '5) Pi' "$REPO/setup.ps1" \
+grep -q '3) Pi' "$REPO/setup.sh" && grep -q '3) Pi' "$REPO/setup.ps1" \
     && ok "pi ditambahkan sebagai pilihan baru" \
     || bad "pi tidak ditambahkan sebagai pilihan baru di kedua installer"
 
 # Baris menu harus dicetak SEBELUM prompt membaca jawaban.
 #
-# Keberadaan string saja tidak cukup: pada setup.ps1, `Write-Host "  5) Pi ..."`
+# Keberadaan string saja tidak cukup: pada setup.ps1, `Write-Host "  3) Pi ..."`
 # sempat berada SESUDAH `Read-Host`. Read-Host memblokir, jadi pilihan 5 baru
 # muncul setelah dev menjawab -- di layar, pilihan itu tidak ada. Uji lama lolos
 # karena hanya memeriksa stringnya ada di berkas, bukan letaknya.
@@ -271,15 +271,47 @@ menu_before_prompt() { # berkas, pola menu, pola prompt
     p="$(grep -n "$3" "$1" | head -1 | cut -d: -f1)"
     [ -n "$m" ] && [ -n "$p" ] && [ "$m" -lt "$p" ]
 }
-menu_before_prompt "$REPO/setup.sh"  '5) Pi' 'Pilihan \[1/2/3/4/5,' \
-    && ok "setup.sh: menu pilihan 5 dicetak sebelum prompt" \
-    || bad "setup.sh: pilihan 5 tidak terlihat sebelum dev diminta menjawab"
-menu_before_prompt "$REPO/setup.ps1" '5) Pi' 'Pilihan \[1/2/3/4/5,' \
-    && ok "setup.ps1: menu pilihan 5 dicetak sebelum prompt" \
-    || bad "setup.ps1: pilihan 5 tidak terlihat sebelum dev diminta menjawab"
+menu_before_prompt "$REPO/setup.sh"  '3) Pi' 'Pilihan \[1/2/3/4,' \
+    && ok "setup.sh: menu pilihan pi dicetak sebelum prompt" \
+    || bad "setup.sh: pilihan pi tidak terlihat sebelum dev diminta menjawab"
+menu_before_prompt "$REPO/setup.ps1" '3) Pi' 'Pilihan \[1/2/3/4,' \
+    && ok "setup.ps1: menu pilihan pi dicetak sebelum prompt" \
+    || bad "setup.ps1: pilihan pi tidak terlihat sebelum dev diminta menjawab"
 grep -q 'default: 1' "$REPO/setup.sh" && grep -q 'default: 1' "$REPO/setup.ps1" \
     && ok "default lama tetap pilihan 1" \
     || bad "default installer berubah"
+# Header "sudah terpasang" harus MENYEBUT pi.
+#
+# Di kedua installer, pi sempat ditambahkan ke daftar harness SESUDAH barisnya
+# dicetak, sehingga header selamanya berbunyi "Grok Build, Oh My Pi (omp)" pada
+# mesin yang jelas-jelas punya ketiganya.
+menu_before_prompt "$REPO/setup.sh"  'Pi Agent (pi)' 'harness   :' \
+    && ok "setup.sh: pi masuk daftar harness sebelum dicetak" \
+    || bad "setup.sh: pi ditambahkan sesudah header dicetak"
+menu_before_prompt "$REPO/setup.ps1" 'Pi Agent (pi)' 'harness   :' \
+    && ok "setup.ps1: pi masuk daftar harness sebelum dicetak" \
+    || bad "setup.ps1: pi ditambahkan sesudah header dicetak"
+
+# Pilihan "Perbarui parameter" harus menyegarkan pi yang SUDAH terpasang,
+# apa pun harness lain yang ada -- syarat lama menuntut Grok/omp TIDAK ada.
+# Pilihan "Perbarui parameter" harus menyegarkan pi yang SUDAH terpasang, apa
+# pun harness lain yang ada. Syarat lamanya menuntut Grok/omp TIDAK ada, jadi
+# dev dengan ketiganya tidak pernah melihat pi-nya disegarkan.
+#
+# Satu kemunculan syarat sempit masih SAH: cabang 5 (lepas aturan) memakainya,
+# dan itu cacat terpisah yang belum diputuskan. Lebih dari satu berarti jalur
+# "perbarui parameter" ikut memakainya lagi.
+# Baris komentar dibuang: penjelasan cacat ini di setup.sh MENGUTIP syarat
+# lamanya, dan pemeriksa yang menghitung dokumentasinya sendiri akan segera
+# dimatikan orang. Jebakan yang sama sudah kena dua kali hari ini.
+sempit=$(grep -v '^[[:space:]]*#' "$REPO/setup.sh" |
+         grep -c 'installed_pi && ! installed_grok && ! installed_omp')
+if [ "$sempit" -le 1 ] && grep -q 'if installed_pi; then' "$REPO/setup.sh"; then
+    ok "setup.sh: perbarui parameter menyegarkan pi tanpa syarat harness lain"
+else
+    bad "setup.sh: perbarui parameter masih melewati pi bila Grok/omp ada (syarat sempit: $sempit)"
+fi
+
 grep -q 'PiModels.ps1' "$REPO/scripts/setup-pi.ps1" &&
 grep -q 'models.json' "$REPO/scripts/setup-pi.ps1" \
     && ok "jalur PowerShell pi tersedia" \

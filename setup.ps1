@@ -561,8 +561,10 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
     $hl = @()
     if (Test-CooperGrokInstalled) { $hl += 'Grok Build' }
     if (Test-CooperOmpInstalled)  { $hl += 'Oh My Pi (omp)' }
-    Write-Host "  harness   : $($hl -join ', ')"
+    # pi ditambahkan SEBELUM barisnya dicetak. Sebelumnya ia disisipkan sesudah
+    # Write-Host, sehingga header tidak pernah menyebut pi meski jelas terpasang.
     if (Test-CooperPiInstalled)   { $hl += 'Pi Agent (pi)' }
+    Write-Host "  harness   : $($hl -join ', ')"
 
     # Aturan agent OPSIONAL sejak 3 September 2026, jadi keadaannya harus
     # terlihat: dev yang menolaknya perlu tahu ia memang belum terpasang, bukan
@@ -766,11 +768,24 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
                 Write-Host "    permintaan ke gateway akan tetap dijawab 401 sampai pilihan 3 dijalankan." -ForegroundColor Yellow
             }
             Write-Host ""
-            if ((Test-CooperPiInstalled) -and -not (Test-CooperGrokInstalled) -and -not (Test-CooperOmpInstalled)) {
+            # pi disegarkan BILA TERPASANG, apa pun harness lain yang ada.
+            #
+            # Syaratnya dulu menuntut pi terpasang DAN Grok/omp tidak ada,
+            # sehingga hanya dev yang memakai pi saja yang terlayani. Dev dengan
+            # ketiganya -- keadaan yang paling lazim -- menjalankan "Perbarui
+            # parameter" dan pi-nya tidak pernah tersentuh.
+            #
+            # pi TIDAK dipasang di sini; pilihan ini menyegarkan, bukan menambah.
+            $piRefreshRc = 0
+            if (Test-CooperPiInstalled) {
                 $piSetup = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
                 if (-not (Test-Path $piSetup)) { throw 'scripts\setup-pi.ps1 tidak ditemukan.' }
                 if ($CUR_TOKEN) { & $piSetup -Token $CUR_TOKEN } else { & $piSetup }
-                exit 0
+                $piRefreshRc = $LASTEXITCODE
+                if ($null -eq $piRefreshRc) { $piRefreshRc = 0 }
+            }
+            if (-not (Test-CooperGrokInstalled) -and -not (Test-CooperOmpInstalled)) {
+                exit $piRefreshRc
             }
             $sd = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
             if (Test-Path $sd) {
@@ -786,7 +801,7 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
                 Write-Host "[x] scripts\setup-dev.ps1 tidak ditemukan." -ForegroundColor Red
                 exit 1
             }
-            exit 0
+            exit $piRefreshRc
         }
     }
 }
@@ -801,10 +816,9 @@ Write-Host ""
 Write-Host "Pilih Coding Agent yang ingin dipasang/dikonfigurasi:" -ForegroundColor Yellow
 Write-Host "  1) Grok Build (Fullscreen Rust TUI, Visual Diff Viewer) [Rekomendasi]"
 Write-Host "  2) Oh My Pi / omp (coding agent CLI: 31 tool, LSP, session resume)"
-Write-Host "  3) Keduanya (Grok Build + Oh My Pi)"
+Write-Host "  3) Pi Agent / pi (coding agent CLI ringan: 4 tool inti, hemat token, sesi bercabang)"
 Write-Host "  4) Manual - endpoint gateway saja (pakai coding agent Anda sendiri)"
-Write-Host "  5) Pi Agent (coding agent Node.js; jalur tambahan, aturan + checkpoint CooperAgent)"
-$AGENT_CHOICE = Read-Host "Pilihan [1/2/3/4/5, default: 1]"
+$AGENT_CHOICE = Read-Host "Pilihan [1/2/3/4, default: 1]"
 if ([string]::IsNullOrWhiteSpace($AGENT_CHOICE)) { $AGENT_CHOICE = "1" }
 
 # Apa yang sudah terpasang di mesin ini? Ditanyakan SEBELUM prompt lain, karena
@@ -812,7 +826,7 @@ if ([string]::IsNullOrWhiteSpace($AGENT_CHOICE)) { $AGENT_CHOICE = "1" }
 $CONFIG_MODE = "fresh"
 $KEEP_IDENTITY = ""
 $KEEP_ENDPOINT = ""
-if ($AGENT_CHOICE -eq "1" -or $AGENT_CHOICE -eq "3") {
+if ($AGENT_CHOICE -eq "1") {
     if (Get-Command "grok" -ErrorAction SilentlyContinue) {
         Write-Host "[v] Grok CLI sudah terpasang di sistem." -ForegroundColor Green
     } else {
@@ -837,7 +851,7 @@ if (-not $Token) {
         $mk = Get-Content $cfgTok | Where-Object { $_ -match "^\s*api_key\s*=\s*['`"](ca_[a-f0-9]+)['`"]" } | Select-Object -First 1
         if ($mk -match "(ca_[a-f0-9]+)") { $existingTok = $Matches[1] }
     }
-    if ($AGENT_CHOICE -eq '5' -and -not $existingTok) {
+    if ($AGENT_CHOICE -eq '3' -and -not $existingTok) {
         $existingTok = Get-PiStoredKey $PI_MODELS_PATH
     }
     if ($existingTok) {
@@ -873,7 +887,7 @@ if ($Token) {
 }
 
 
-if ($AGENT_CHOICE -eq '5' -and -not $Token) {
+if ($AGENT_CHOICE -eq '3' -and -not $Token) {
     Write-Host '[x] Pilihan pi membutuhkan token ca_... yang dapat diverifikasi.' -ForegroundColor Red
     exit 3
 }
@@ -1111,7 +1125,7 @@ Yang perlu diketahui:
 }
 
 # 5. Instalasi & Konfigurasi Grok Build (jika opsi 1 atau 3)
-if ($AGENT_CHOICE -eq "1" -or $AGENT_CHOICE -eq "3") {
+if ($AGENT_CHOICE -eq "1") {
     Write-Host ""
     Write-Host "--- Mengonfigurasi Grok Build (Rust TUI) ---" -ForegroundColor Cyan
     if (Get-Command "grok" -ErrorAction SilentlyContinue) {
@@ -1135,7 +1149,7 @@ if ($AGENT_CHOICE -eq "1" -or $AGENT_CHOICE -eq "3") {
 # buatan sendiri tanpa tool, tanpa edit berkas, tanpa memory. omp adalah coding
 # agent sungguhan, dan ia menemukan AGENTS.md sendiri sehingga aturan kerja kita
 # sampai tanpa mekanisme tambahan.
-if ($AGENT_CHOICE -eq "2" -or $AGENT_CHOICE -eq "3") {
+if ($AGENT_CHOICE -eq "2") {
     Write-Host ""
     Write-Host "--- Mengonfigurasi Oh My Pi (omp) ---" -ForegroundColor Cyan
 
@@ -1281,7 +1295,7 @@ if ($AGENT_CHOICE -eq "2" -or $AGENT_CHOICE -eq "3") {
 }
 
 # 6a. Konfigurasi pi (jalur tambahan, tidak memanggil Grok/omp)
-if ($AGENT_CHOICE -eq '5') {
+if ($AGENT_CHOICE -eq '3') {
     Write-Host ''
     Write-Host '--- Memasang dan mengonfigurasi Pi Agent ---' -ForegroundColor Cyan
     $piCommand = Get-Command pi -ErrorAction SilentlyContinue
@@ -1311,7 +1325,7 @@ if ($AGENT_CHOICE -eq '5') {
 # Dua salinan yang harus dijaga sinkron dengan tangan adalah kelas kegagalan
 # yang sudah berkali-kali menggigit repo ini.
 $setupDev = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
-if (($AGENT_CHOICE -ne '5') -and (Test-Path $setupDev)) {
+if (($AGENT_CHOICE -ne '3') -and (Test-Path $setupDev)) {
     Write-Host ""
     Write-Host "--- Aturan agent, skill, dan penyetelan omp ---" -ForegroundColor Cyan
     try {
@@ -1336,7 +1350,7 @@ Write-Host "=================================================================" -
 Write-Host "[+] Setup Selesai! Selamat datang di CooperAgent (Windows)!" -ForegroundColor Green
 Write-Host "  - Menjalankan Grok:      Ketik 'grok' di PowerShell folder project Anda."
 Write-Host "  - Menjalankan Oh My Pi:  Ketik 'omp' -- BUKA TERMINAL BARU dulu bila baru dipasang."
-if ($AGENT_CHOICE -eq '5') {
+if ($AGENT_CHOICE -eq '3') {
     Write-Host "  - Menjalankan Pi Agent:  Ketik 'pi' di PowerShell folder project Anda."
 }
 Write-Host "  - Checkpoint sesi:       .cooper/context/ di proyek Anda; /cooper-handoff saat context penuh."
