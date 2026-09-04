@@ -121,23 +121,6 @@ try {
         ok "server MCP, extension, dan keybinding milik dev utuh"
     } else { no "config dev di luar kelolaan CooperAgent hilang" }
 
-    # --- lint jalur -------------------------------------------------------
-    # Bukan bukti, tapi menangkap bentuk typo yang sudah pernah terjadi:
-    # `Join-Path $tmp 'agentmodels.json'` -- nama direktori disambung ke nama
-    # berkas TANPA pemisah, sisa terjemahan harfiah dari "$tmp/agent/models.json"
-    # versi bash. Berkasnya mendarat di tempat yang salah, direktori yang
-    # ditunjuk PI_CODING_AGENT_DIR kosong, dan pi menjawab
-    # `Unknown provider "cooperagent"` atas config yang sudah benar.
-    # Baris komentar dibuang lebih dulu: penjelasan cacat ini di PiModels.ps1
-    # memuat contoh yang persis dicari lint, dan lint yang menyala pada
-    # dokumentasinya sendiri akan segera dimatikan orang.
-    $srcLines = [System.IO.File]::ReadAllLines((Join-Path $repo 'scripts\lib\PiModels.ps1'))
-    $src = ($srcLines | Where-Object { $_.TrimStart() -notlike '#*' }) -join "`n"
-    if ($src -match "Join-Path\s+\`$\w+\s+'agent[A-Za-z]") {
-        no "ada Join-Path yang menyambung 'agent' ke nama berkas tanpa pemisah"
-    } else {
-        ok "tidak ada segmen jalur yang tersambung tanpa pemisah"
-    }
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

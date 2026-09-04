@@ -14,6 +14,35 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **test:** lint jalur dipindah ke bash; uji PowerShell gagal di-parse
+
+  **Konteks.** Job `ps-parse` merah pada PR. Kedelapan berkas `.ps1` **produksi**
+  lolos — termasuk `setup.ps1`, `setup-pi.ps1`, dan `PiModels.ps1` yang disunting
+  paling banyak. Yang gagal hanya `test/Test-PiModels.ps1`, berkas uji yang saya
+  tulis sendiri: `baris 137: The string is missing the terminator`.
+
+  **Perubahan.**
+  - `test/Test-PiModels.ps1` — lint jalur dicabut. Regexnya memakai backtick
+    sebagai escape di dalam string berkutip-ganda, dan itu membuat parser
+    kehilangan jejak kutip; galat di baris 28 dan 81 hanyalah efek berantai.
+  - `test/test-pi-adapter.sh` — lint yang sama dipasang **di bash**. Ia membaca
+    berkas sebagai teks dan tidak pernah butuh PowerShell; menaruhnya di uji
+    PowerShell berarti menulis kode yang tidak bisa dijalankan penulisnya.
+
+  **Bukti.** Lint diuji dua arah dari bash: **terdeteksi** pada `PiModels.ps1`
+  versi sebelum perbaikan jalur, **bersih** pada versi sekarang. Suite 7 dari 7
+  hijau.
+
+  **Yang belum terbukti.** Karena job berhenti di langkah parse,
+  `Test-PiModels.ps1` **belum pernah benar-benar dieksekusi**. Ia lolos parse
+  sekarang menurut pemeriksaan tangan — backtick hanya di komentar, terminator
+  here-string di kolom 0, kurung seimbang — tetapi itu bukan pengganti
+  menjalankannya. Job CI berikutnya yang akan membuktikannya.
+
+  **Catatan.** Tidak ada PowerShell di mesin pengembangan, jadi berkas `.ps1`
+  tidak dapat diverifikasi secara lokal sama sekali. Itu justru alasan job
+  `ps-parse` ada — dan ia bekerja: ongkosnya satu putaran CI, bukan rilis rusak.
+
 * **harness:** pesan "aturan pi milik dev" mengklaim yang tidak diperiksa
 
   **Konteks.** Log Windows menunjukkan dua baris yang saling bertentangan dalam

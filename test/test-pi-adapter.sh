@@ -324,6 +324,24 @@ else
     bad "setup.sh: masih ada jalur yang melewati pi bila Grok/omp ada (syarat sempit: $sempit)"
 fi
 
+# Lint jalur PowerShell — dijalankan DI SINI, bukan di Test-PiModels.ps1.
+#
+# Ia membaca berkas sebagai teks dan tidak butuh PowerShell sama sekali.
+# Versi pertamanya ditaruh di uji PowerShell, dan regexnya sendiri memakai
+# backtick sebagai escape di dalam string berkutip-ganda — sehingga uji itu
+# gagal di-parse di CI. Kode yang tidak bisa dijalankan penulisnya sebaiknya
+# tidak ditulis di tempat itu.
+#
+# Yang dicari: `Join-Path $x 'agentmodels.json'` — nama direktori disambung ke
+# nama berkas TANPA pemisah. Baris komentar dibuang dulu; penjelasan cacatnya
+# di PiModels.ps1 mengutip contohnya.
+if grep -v '^[[:space:]]*#' "$REPO/scripts/lib/PiModels.ps1" |
+   grep -qE "Join-Path[[:space:]]+\\\$[A-Za-z_]+[[:space:]]+'agent[A-Za-z]"; then
+    bad "PiModels.ps1: Join-Path menyambung 'agent' ke nama berkas tanpa pemisah"
+else
+    ok "PiModels.ps1: tidak ada segmen jalur yang tersambung tanpa pemisah"
+fi
+
 grep -q 'PiModels.ps1' "$REPO/scripts/setup-pi.ps1" &&
 grep -q 'models.json' "$REPO/scripts/setup-pi.ps1" \
     && ok "jalur PowerShell pi tersedia" \
