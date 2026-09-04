@@ -14,6 +14,42 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **harness:** `verify()` pi di Windows menyalin config ke jalur yang salah
+
+  **Konteks.** Sesudah merge diperbaiki, `.\setup.ps1` pilihan 5 menulis
+  `models.json`, `settings.json`, aturan, dan cadangannya dengan benar, lalu
+  `verify()` gagal: `Unknown provider "cooperagent"` — pi tidak melihat provider
+  yang baru saja ditulis.
+
+  **Perubahan.**
+  - `scripts/lib/PiModels.ps1` — `Invoke-PiVerify` menyalin berkas ke
+    `Join-Path $tmp 'agentmodels.json'`: nama direktori `agent` disambung ke
+    nama berkas **tanpa pemisah**, sisa terjemahan harfiah dari
+    `"$tmp/agent/models.json"` versi bash. Berkasnya mendarat di akar direktori
+    sementara, sementara `PI_CODING_AGENT_DIR` menunjuk `agent` yang ada tetapi
+    kosong. Direktori kini dibentuk sekali (`$agentTmp`, `$projectTmp`) dan
+    dipakai ulang.
+  - `scripts/lib/PiModels.ps1` — marker aturan diberi label
+    (`VERIFICATION SENTENCE: ...`) dan promptnya dibuat deterministik, sejajar
+    dengan jalur Unix; tiga sebab kegagalan dilaporkan terpisah alih-alih satu
+    pesan gabungan.
+  - `test/Test-PiModels.ps1` — lint yang menolak `Join-Path` yang menyambung
+    `agent` ke nama berkas tanpa pemisah, dengan baris komentar dibuang lebih
+    dulu supaya ia tidak menyala pada dokumentasinya sendiri.
+
+  **Bukti.** Lint diuji terhadap kedua versi: **4 kecocokan** pada berkas
+  sebelum perbaikan, **0** sesudahnya.
+
+  **Dampak.** Memulihkan `verify()` pi di Windows. Tidak ada perubahan pada
+  jalur Linux/macOS.
+
+  **Rollback.** `git revert` commit ini.
+
+  **Batas yang jujur.** Lint hanya menangkap bentuk typo ini, bukan kelas
+  "jalur salah" secara umum. `Invoke-PiVerify` sendiri tetap tidak dapat diuji
+  di CI — ia menuntut biner pi dan gateway yang hidup — jadi jalur itu masih
+  bergantung pada uji manual di Windows.
+
 * **harness:** merge config pi gagal di Windows — array satu elemen terbongkar
 
   **Konteks.** Sesudah menu diperbaiki, `.\setup.ps1` pilihan 5 berhasil

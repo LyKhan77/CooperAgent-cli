@@ -267,29 +267,52 @@ function Invoke-PiVerify([string]$AgentDir, [string]$ModelsPath, [string]$Settin
     if ($Who -notmatch '@' -or $Who -like 'dev-*') { throw "Identitas gateway tidak sah untuk pi: $Who" }
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('cooperagent-pi-verify-' + [guid]::NewGuid().ToString('N'))
     try {
-        New-Item -ItemType Directory -Force -Path (Join-Path $tmp 'agent'), (Join-Path $tmp 'project') | Out-Null
-        Copy-Item $ModelsPath (Join-Path $tmp 'agentmodels.json')
-        Copy-Item $SettingsPath (Join-Path $tmp 'agentsettings.json')
-        Copy-Item (Join-Path $AgentDir 'AGENTS.md') (Join-Path $tmp 'agentAGENTS.md')
+        # Direktori dibentuk SEKALI lalu dipakai ulang.
+        #
+        # Sebelumnya berkas disalin ke `Join-Path $tmp 'agentmodels.json'` --
+        # 'agent' dan 'models.json' disambung TANPA pemisah, sisa terjemahan
+        # harfiah dari "$tmp/agent/models.json" versi bash. Berkasnya mendarat
+        # di akar temp, `PI_CODING_AGENT_DIR` menunjuk direktori `agent` yang
+        # ada tapi kosong, dan pi menjawab `Unknown provider "cooperagent"`
+        # atas config yang baru saja ditulis dengan benar.
+        $agentTmp = Join-Path $tmp 'agent'
+        $projectTmp = Join-Path $tmp 'project'
+        New-Item -ItemType Directory -Force -Path $agentTmp, $projectTmp | Out-Null
+        Copy-Item $ModelsPath (Join-Path $agentTmp 'models.json')
+        Copy-Item $SettingsPath (Join-Path $agentTmp 'settings.json')
+        Copy-Item (Join-Path $AgentDir 'AGENTS.md') (Join-Path $agentTmp 'AGENTS.md')
         $marker = 'COOPER_PI_RULES_GATE_' + (Get-Random)
         $checkpointMarker = 'COOPER_PI_CHECKPOINT_GATE_' + (Get-Random)
-        $rulesPath = Join-Path $tmp 'agentAGENTS.md'
-        [System.IO.File]::AppendAllText($rulesPath, [Environment]::NewLine + $marker + [Environment]::NewLine,
+        $rulesPath = Join-Path $agentTmp 'AGENTS.md'
+        # Marker DIBERI LABEL, sejajar dengan jalur Unix: token telanjang tidak
+        # bisa dikenali model sebagai "the verification sentence", sehingga ia
+        # berkelana beberapa giliran sebelum menemukannya.
+        [System.IO.File]::AppendAllText($rulesPath,
+            [Environment]::NewLine + '## Verifikasi pemasangan' + [Environment]::NewLine +
+            [Environment]::NewLine + 'VERIFICATION SENTENCE: ' + $marker + [Environment]::NewLine,
             (New-Object System.Text.UTF8Encoding($false)))
-        $first = Invoke-PiPrint $PiPath (Join-Path $tmp 'agent') (Join-Path $tmp 'project') $Model `
-            'Read the global work rules. Return only the exact verification sentence appended to that global AGENTS.md.'
-        if ($first.ExitCode -ne 0 -or $first.Output -notmatch '"type"\s*:\s*"message_end"' -or
-            $first.Output -notmatch '"stopReason"\s*:\s*"stop"' -or $first.Output -notmatch [regex]::Escape($marker)) {
-            throw 'POST /v1/chat/completions lewat pi tidak terverifikasi 200 atau marker AGENTS.md tidak muncul.'
+        $first = Invoke-PiPrint $PiPath $agentTmp $projectTmp $Model `
+            'The global work rules contain one line that starts with "VERIFICATION SENTENCE:". Reply with that entire line verbatim and nothing else. Do not use any tools.'
+        # Tiga sebab kegagalan dilaporkan TERPISAH; satu pesan gabungan membuat
+        # gerbang ini mahal didiagnosis, dan ketiganya menuntut tindakan berbeda.
+        if ($first.ExitCode -ne 0) {
+            throw "pi keluar dengan kode $($first.ExitCode) -- panggilan ke gateway tidak selesai."
+        }
+        if ($first.Output -notmatch '"type"\s*:\s*"message_end"' -or
+            $first.Output -notmatch '"stopReason"\s*:\s*"stop"') {
+            throw 'pi tidak menyelesaikan satu pesan pun (message_end/stop tidak muncul).'
+        }
+        if ($first.Output -notmatch [regex]::Escape($marker)) {
+            throw 'pi TIDAK membaca aturan kerja global: marker di AGENTS.md tidak muncul.'
         }
         Write-Host "  [v] POST /v1/chat/completions lewat pi selesai (message_end/stop; HTTP 200)."
         Write-Host "  [v] identitas gateway untuk leaderboard: $Who"
         Write-Host "  [v] pi membaca AGENTS.md global (marker sementara cocok: $marker)."
 
         $slug = 'pi-verify-' + (Get-Random)
-        $checkpoint = Join-Path $tmp ("project\.cooper\context\$slug.md")
+        $checkpoint = Join-Path $projectTmp (".cooper\context\$slug.md")
         $prompt = "Read the global work rules. This is a disposable project task boundary. Create .cooper/context/$slug.md using a temporary file and mv. Include the exact line $checkpointMarker and do not write elsewhere. Reply checkpoint-written."
-        $second = Invoke-PiPrint $PiPath (Join-Path $tmp 'agent') (Join-Path $tmp 'project') $Model $prompt
+        $second = Invoke-PiPrint $PiPath $agentTmp $projectTmp $Model $prompt
         if ($second.ExitCode -ne 0 -or $second.Output -notmatch '"type"\s*:\s*"message_end"' -or
             $second.Output -notmatch '"stopReason"\s*:\s*"stop"' -or
             -not (Test-Path -LiteralPath $checkpoint) -or
