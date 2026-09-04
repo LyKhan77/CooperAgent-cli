@@ -215,8 +215,26 @@ function Invoke-PiPrint([string]$PiPath, [string]$AgentDir, [string]$ProjectDir,
         $env:PI_CODING_AGENT_DIR = $AgentDir
         $env:PI_TELEMETRY = '0'
         Push-Location $ProjectDir
-        $out = (& $PiPath --provider cooperagent --model $Model --mode json
-            --no-session --print --no-extensions --no-prompt-templates --no-themes $Prompt 2>&1 | Out-String)
+        # Argumen dikumpulkan ke ARRAY, lalu di-splat.
+        #
+        # PowerShell TIDAK melanjutkan pemanggilan perintah ke baris berikutnya
+        # tanpa backtick: `--no-session` di awal baris dibaca sebagai operator,
+        # dan seluruh berkas gagal di-parse -- bukan hanya fungsi ini. Terjadi
+        # 4 September 2026 dan membuat setup.ps1 mati untuk SETIAP dev Windows,
+        # apa pun harness yang dipilihnya.
+        #
+        # Backtick di akhir baris memperbaiki gejalanya tetapi rapuh sendiri:
+        # satu spasi di belakangnya sudah cukup untuk mematahkannya lagi, dan
+        # spasi itu tidak terlihat di review. Array tidak punya mode gagal itu.
+        $piArgs = @(
+            '--provider', 'cooperagent',
+            '--model', $Model,
+            '--mode', 'json',
+            '--no-session', '--print',
+            '--no-extensions', '--no-prompt-templates', '--no-themes',
+            $Prompt
+        )
+        $out = (& $PiPath @piArgs 2>&1 | Out-String)
         $rc = $LASTEXITCODE
         return [pscustomobject]@{ Output = $out; ExitCode = $rc }
     } finally {

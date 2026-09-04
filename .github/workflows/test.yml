@@ -55,3 +55,43 @@ jobs:
       #
       # Sampai saat itu ia dijalankan dengan tangan:
       #     bash test/test-setup-dev.sh
+
+  # Sintaks PowerShell TIDAK dapat diperiksa dari runner Linux, dan
+  # menghitung kurung BUKAN parser. Terbukti 4 September 2026:
+  # scripts/lib/PiModels.ps1 punya kurung yang seimbang sempurna tetapi
+  # gagal di-parse karena satu pemanggilan perintah dipecah ke baris
+  # berikutnya tanpa backtick. Seluruh berkas ikut gagal, sehingga
+  # setup.ps1 mati untuk SETIAP dev Windows -- apa pun harness yang
+  # dipilihnya -- dan baru ketahuan sesudah v1.4.0 terbit.
+  #
+  # Job ini memakai Windows PowerShell 5.1 (bukan pwsh 7) karena 5.1 yang
+  # menjadi target kompatibilitas repo ini; sintaks yang diterima 7 belum
+  # tentu diterima 5.1.
+  ps-parse:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse seluruh berkas .ps1 dengan parser PowerShell 5.1
+        shell: powershell
+        run: |
+          $failed = @()
+          foreach ($f in Get-ChildItem -Recurse -Filter *.ps1) {
+              $errs = $null
+              [void][System.Management.Automation.Language.Parser]::ParseFile(
+                  $f.FullName, [ref]$null, [ref]$errs)
+              if ($errs -and $errs.Count -gt 0) {
+                  $failed += $f.FullName
+                  Write-Host ("GAGAL: " + $f.FullName)
+                  foreach ($e in $errs) {
+                      Write-Host ("  baris {0}: {1}" -f $e.Extent.StartLineNumber, $e.Message)
+                  }
+              } else {
+                  Write-Host ("ok: " + $f.FullName)
+              }
+          }
+          if ($failed.Count -gt 0) {
+              Write-Host ""
+              Write-Host ("{0} berkas .ps1 tidak dapat di-parse." -f $failed.Count)
+              exit 1
+          }

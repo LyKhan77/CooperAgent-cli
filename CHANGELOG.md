@@ -10,6 +10,47 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [Unreleased]
+
+### Perbaikan
+
+* **harness:** `setup.ps1` gagal di-parse untuk SETIAP dev Windows
+
+  **Konteks.** Sesudah `v1.4.0` terbit, `.\setup.ps1` mati sebelum baris
+  pertama dengan `MissingEndParenthesisInExpression`. Bukan hanya jalur pi:
+  berkas yang tidak dapat di-parse membuat seluruh pemasang berhenti, apa pun
+  harness yang dipilih dev.
+
+  **Perubahan.**
+  - `scripts/lib/PiModels.ps1` — `Invoke-PiPrint` memecah satu pemanggilan
+    perintah ke baris berikutnya tanpa backtick. PowerShell membaca
+    `--no-session` di awal baris sebagai operator, dan seluruh berkas gagal
+    di-parse. Argumen kini dikumpulkan ke array lalu di-splat (`& $PiPath
+    @piArgs`) — backtick di akhir baris memperbaiki gejalanya tetapi rapuh
+    sendiri, karena satu spasi di belakangnya mematahkannya lagi dan spasi itu
+    tidak terlihat saat review.
+  - `.github/workflows/test.yml` — job baru `ps-parse` pada `windows-latest`
+    mem-parse **setiap** berkas `.ps1` dengan parser Windows PowerShell 5.1
+    (`[Parser]::ParseFile`), bukan pwsh 7, karena 5.1 yang menjadi target
+    kompatibilitas repo ini.
+
+  **Bukti.** Galat aslinya menunjuk `scripts/lib/PiModels.ps1:218 char:76`.
+  Berkas itu lolos uji hitung-kurung yang ada (`80/80` kurawal, `127/127`
+  kurung biasa) — bukti langsung bahwa menghitung kurung **bukan** parser.
+  Tidak ada `pwsh` di mesin pengembangan, sehingga satu-satunya penjaga yang
+  sahih adalah runner Windows di CI.
+
+  **Dampak.** Memulihkan `setup.ps1` untuk seluruh dev Windows. Tidak ada
+  perubahan pada jalur Linux/macOS, pada config yang ditulis, maupun pada
+  perilaku Grok/omp.
+
+  **Rollback.** `git revert` commit ini; `setup.ps1` kembali gagal di-parse di
+  Windows, jadi rollback hanya masuk akal bila diganti perbaikan lain.
+
+  **Catatan proses.** `v1.4.0` terbit sebelum jalur Windows pernah dieksekusi
+  sekali pun. Job `ps-parse` ada supaya urutan itu tidak terulang: cacat
+  sintaks PowerShell kini menghentikan PR, bukan menunggu dev menemukannya.
+
 ## [1.4.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.3.0...v1.4.0) (2026-09-04)
 
 
@@ -25,38 +66,9 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Dokumentasi
 
-* luruskan --help, riwayat versi, dan entri changelog kembar ([467dac8](https://github.com/LyKhan77/CooperAgent-cli/commit/467dac84af9f27f063053273d326f5c2c0af3bba))
 * luruskan --help, riwayat versi, dan entri changelog kembar ([205d7b7](https://github.com/LyKhan77/CooperAgent-cli/commit/205d7b7d81d03b8cb1e54aa6b65777c853955701))
 
-## [1.3.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.2.0...v1.3.0) (2026-09-03)
-
-
-### Fitur
-
-* aturan agent opsional dan skill berawalan cooper- ([5657012](https://github.com/LyKhan77/CooperAgent-cli/commit/5657012f060a8a8b43ed0504e41a8fe927b30c75))
-
-## [1.2.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.1.1...v1.2.0) (2026-09-03)
-
-
-### Fitur
-
-* gerbang kredensial dan mode "sudah terpasang" pada pemasang ([19052bf](https://github.com/LyKhan77/CooperAgent-cli/commit/19052bf659ace3b15c4077482936dd274bd9b656))
-
-
-### Perbaikan
-
-* pilihan default tidak buntu bagi dev omp-saja, dan rekomendasi mengikuti keadaan ([14980b3](https://github.com/LyKhan77/CooperAgent-cli/commit/14980b3e8f7af97d360e934a4b5bfe995e093c92))
-
-## [1.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.1.0...v1.1.1) (2026-09-02)
-
-
-### Dokumentasi
-
-* luruskan riwayat versi — tidak ada v1.0.0 ([9656f9e](https://github.com/LyKhan77/CooperAgent-cli/commit/9656f9e096776c2705b16f512b51d4248450c887))
-
-## [Unreleased]
-
-### Fitur
+#### Rincian — Fitur
 
 * pi ditambahkan sebagai harness opsional pada pilihan 5. Adapter terisolasi
   menulis `~/.pi/agent/models.json` dan `settings.json` secara merge, memakai
@@ -64,7 +76,7 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
   compaction turunan kontrak, serta `verify()` untuk chat, identitas gateway,
   aturan global, dan checkpoint; default Grok/omp tidak berubah.
 
-### Perbaikan
+#### Rincian — Perbaikan
 
 * **harness:** `verify()` pi menolak pemasangan yang benar
 
@@ -114,6 +126,32 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
   dan `test/test-cli-output.sh` (baris 89). Keduanya lulus hari ini karena
   keluarannya kecil, tetapi rapuh untuk alasan yang sama. `scripts/setup-pi.sh`
   juga masih menerima token lewat argumen `--token`, yang terlihat di `ps aux`.
+
+## [1.3.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.2.0...v1.3.0) (2026-09-03)
+
+
+### Fitur
+
+* aturan agent opsional dan skill berawalan cooper- ([5657012](https://github.com/LyKhan77/CooperAgent-cli/commit/5657012f060a8a8b43ed0504e41a8fe927b30c75))
+
+## [1.2.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.1.1...v1.2.0) (2026-09-03)
+
+
+### Fitur
+
+* gerbang kredensial dan mode "sudah terpasang" pada pemasang ([19052bf](https://github.com/LyKhan77/CooperAgent-cli/commit/19052bf659ace3b15c4077482936dd274bd9b656))
+
+
+### Perbaikan
+
+* pilihan default tidak buntu bagi dev omp-saja, dan rekomendasi mengikuti keadaan ([14980b3](https://github.com/LyKhan77/CooperAgent-cli/commit/14980b3e8f7af97d360e934a4b5bfe995e093c92))
+
+## [1.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.1.0...v1.1.1) (2026-09-02)
+
+
+### Dokumentasi
+
+* luruskan riwayat versi — tidak ada v1.0.0 ([9656f9e](https://github.com/LyKhan77/CooperAgent-cli/commit/9656f9e096776c2705b16f512b51d4248450c887))
 
 ## [1.1.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.0.0...v1.1.0) (2026-09-02)
 
