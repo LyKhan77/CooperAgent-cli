@@ -69,12 +69,27 @@ function Merge-PiModels([string]$ExistingPath, [string]$TemplatePath) {
     if ($null -eq $provider) { $provider = [pscustomobject]@{} }
     else { Assert-PiObject $provider 'providers.cooperagent' | Out-Null }
 
-    $desiredModels = Get-PiPropertyValue $tplProvider 'models'
-    if ($null -eq $desiredModels -or $desiredModels -isnot [System.Array] -or
-        @($desiredModels).Count -eq 0) {
+    # `Get-PiPropertyValue` TIDAK boleh dipakai untuk nilai bertipe array.
+    #
+    # Ia berakhir dengan `return $p.Value`, dan `return` mengirim nilai ke
+    # pipeline -- pipeline MEMBONGKAR array. Array berisi satu elemen keluar
+    # sebagai elemennya sendiri, bukan sebagai array. Template ini memuat tepat
+    # satu model, sehingga `-isnot [System.Array]` bernilai benar dan gerbang
+    # menuduh template kosong: "Template models pi tidak memuat model" pada
+    # template yang jelas-jelas memuatnya.
+    #
+    # Membaca `.Value` dari objek propertinya langsung mempertahankan tipe --
+    # pola yang memang sudah dipakai Merge-PiSettings untuk `skills`. Terjadi
+    # di Windows 4 September 2026; jalur Unix tidak terpengaruh karena merge-nya
+    # dikerjakan Node, bukan PowerShell.
+    $desiredModelsProperty = Get-PiProperty $tplProvider 'models'
+    if ($null -eq $desiredModelsProperty -or
+        $desiredModelsProperty.Value -isnot [System.Array] -or
+        @($desiredModelsProperty.Value).Count -eq 0) {
         throw 'Template models pi tidak memuat model'
     }
-    $desired = @($desiredModels)[0]
+    $desiredModels = @($desiredModelsProperty.Value)
+    $desired = $desiredModels[0]
     Assert-PiObject $desired 'cooperagent model template' | Out-Null
 
     $oldModels = @()

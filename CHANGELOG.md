@@ -14,6 +14,45 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **harness:** merge config pi gagal di Windows — array satu elemen terbongkar
+
+  **Konteks.** Sesudah menu diperbaiki, `.\setup.ps1` pilihan 5 berhasil
+  melewati gerbang kredensial dan mengambil kontrak, lalu berhenti dengan
+  `Template models pi tidak memuat model` di `PiModels.ps1:75` — pada template
+  yang jelas-jelas memuat satu model.
+
+  **Perubahan.**
+  - `scripts/lib/PiModels.ps1` — `Merge-PiModels` membaca `models` lewat
+    `Get-PiPropertyValue`, yang berakhir dengan `return $p.Value`. `return`
+    mengirim nilai ke pipeline, dan pipeline **membongkar** array: array berisi
+    satu elemen keluar sebagai elemennya sendiri. Karena template memuat tepat
+    satu model, `-isnot [System.Array]` bernilai benar dan gerbang menuduh
+    template kosong. Kini membaca `.Value` dari objek propertinya langsung,
+    pola yang memang sudah dipakai `Merge-PiSettings` untuk `skills`.
+  - `test/Test-PiModels.ps1` (baru) — uji runtime yang menjalankan
+    `Merge-PiModels` dan `Merge-PiSettings` sungguhan atas template yang
+    dirender, memakai config dev tiruan. Ia menegaskan `models` tetap array,
+    angka kontrak masuk, provider dan kunci berbayar milik dev utuh, `skills`
+    tetap array, dan setelan lain tidak hilang. Tanpa jaringan, tanpa memasang
+    apa pun.
+  - `.github/workflows/test.yml` — uji itu dijalankan pada runner Windows,
+    bersama job parse.
+
+  **Bukti.** Galat aslinya `PiModels.ps1:75`, dan jalur Unix tidak pernah
+  terpengaruh karena merge di sana dikerjakan Node, bukan PowerShell.
+
+  **Dampak.** Memulihkan pemasangan pi di Windows. Tidak ada perubahan pada
+  jalur Linux/macOS maupun pada bentuk config yang ditulis.
+
+  **Rollback.** `git revert` commit ini; pemasangan pi di Windows kembali
+  berhenti di merge.
+
+  **Catatan.** Ini cacat Windows **kedua** yang lolos karena tidak ada satu pun
+  yang menjalankan PowerShell. Job parse membuktikan berkas sah; ia tidak
+  membuktikan fungsinya bekerja. Membongkar array satu elemen saat `return`
+  adalah perilaku yang tidak punya padanan di bash, jadi tidak ada uji Linux
+  yang bisa menangkapnya — hanya menjalankannya di Windows yang bisa.
+
 * **harness:** pilihan 5 (pi) tidak terlihat di menu Windows
 
   **Konteks.** Sesudah cacat parse diperbaiki, `.\setup.ps1` berjalan tetapi
