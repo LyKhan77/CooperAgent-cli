@@ -39,13 +39,38 @@ Skrip menanyakan coding agent mana yang Anda pakai:
 4. **Manual** — hanya mencetak endpoint, untuk agent pilihan Anda sendiri
    (Cline, Continue, Cursor, SDK OpenAI, `curl`)
 
+5. **Pi Agent (`pi`)** — harness tambahan Node.js dengan aturan, compaction,
+   dan checkpoint CooperAgent
 Nama dan perangkat **tidak ditanyakan** — keduanya melekat pada token, dan
 gateway yang memberi tahu skrip siapa Anda. Yang muncul di dashboard adalah yang
 tercatat pada token, bukan yang Anda ketik.
 
 Menjalankan ulang skrip ini aman. Ia menggabungkan, bukan menimpa: server MCP,
 seksi `[ui]`, model tambahan, dan kunci berbayar Anda sendiri tidak disentuh.
+Pilihan 5 bersifat tambahan dan eksplisit; bila Anda menekan Enter, default tetap
+Grok Build seperti sebelum pi ditambahkan.
 
+## Pi Agent (opsi tambahan)
+
+Pi dipasang hanya bila Anda memilih **5**. Jalurnya menulis hanya:
+
+- `~/.pi/agent/models.json`, dengan provider `cooperagent` di-merge;
+- `~/.pi/agent/settings.json`, dengan compaction kontrak;
+- `~/.pi/agent/AGENTS.md`, salinan penuh `templates/agent-rules.md`;
+- `~/.cooper/skills/`, sumber skill bersama tanpa menghapus tambahan dev.
+
+Provider lain, model tambahan, kunci berbayar, dan setting pribadi dipertahankan.
+`baseUrl`, model, context window, max output, dan ambang compaction berasal dari
+`GET /v1/models`; `reserveTokens` pi diturunkan dari kontrak, bukan dipatok.
+Token `ca_...` diverifikasi ke `/api/auth/whoami` sebelum berkas ditulis; bentuk
+`dev-<nama>@<device>` tidak digunakan. `verify()` lalu menguji chat melalui pi,
+pembacaan AGENTS, dan checkpoint `.cooper/context/` pada proyek sementara.
+
+Pembaruan langsung:
+
+```bash
+./scripts/setup-pi.sh --endpoint <gateway> --token ca_... --rules
+```
 ---
 
 ## Cline (ekstensi VS Code)
@@ -147,3 +172,4 @@ bash test/test-cli-output.sh              # keluaran terbaca di berkas & non-UTF
 bash test/test-setup-dev.sh               # pemasang idempoten
 bash test/test-setup-preserves-dev-config.sh
 ```
+bash test/test-pi-adapter.sh

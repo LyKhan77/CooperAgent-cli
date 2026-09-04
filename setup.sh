@@ -127,6 +127,11 @@ OS_TYPE="$(uname -s)"
 # shellcheck source=scripts/lib/omp_models.sh
 . "${SCRIPT_DIR}/scripts/lib/omp_models.sh"
 
+# Helper pi hanya dipakai bila pi dipilih atau memang sudah terpasang. Ia tidak
+# mengubah provider maupun jalur aturan Grok/omp.
+. "${SCRIPT_DIR}/scripts/lib/pi_models.sh"
+
+
 # Gerbang kredensial. Ia yang mengubah "setup selesai lalu 401 belakangan"
 # menjadi "setup berhenti sekarang, dengan sebabnya".
 # shellcheck source=scripts/lib/credential.sh
@@ -468,6 +473,12 @@ EOF
 # tengah kerja.
 GROK_CFG="$HOME/.grok/config.toml"
 OMP_YML_PATH="$HOME/.omp/agent/models.yml"
+PI_MODELS_PATH="$HOME/.pi/agent/models.json"
+
+installed_pi() {
+    pi_provider_present "$PI_MODELS_PATH"
+}
+
 
 installed_grok() {
     [ -f "$GROK_CFG" ] && grep -q '^\[model\.internal-qwen' "$GROK_CFG" 2>/dev/null
@@ -486,6 +497,7 @@ stored_gateway() {
              | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/' || true)"
     fi
     [ -z "$v" ] && installed_omp && v="$(omp_gateway_of "$OMP_YML_PATH" || true)"
+    [ -z "$v" ] && installed_pi && v="$(pi_gateway_of "$PI_MODELS_PATH" || true)"
     printf '%s' "$v"
 }
 stored_token() {
@@ -498,6 +510,9 @@ stored_token() {
     if [ -z "$v" ] && installed_omp; then
         v="$(omp_api_key_of "$OMP_YML_PATH" || true)"
         case "$v" in ca_*) ;; *) v="" ;; esac
+    if [ -z "$v" ] && installed_pi; then
+        v="$(pi_api_key_of "$PI_MODELS_PATH" || true)"
+    fi
     fi
     printf '%s' "$v"
 }
@@ -528,6 +543,13 @@ apply_to_all_harness() { # $1 = gateway baru  $2 = kredensial  $3 = identitas
         omp_set_api_key "$OMP_YML_PATH" "$key" "$(cooper_gateway_base "$new_url")" || true
         echo -e "${GREEN}${S_OK}${NC} models.yml omp diperbarui (cadangan: models.yml.bak.$stamp)"
     fi
+    if installed_pi; then
+        echo -e "${CYAN}--- Memperbarui konfigurasi pi yang sudah terpasang ---${NC}"
+        pi_bin="${COOPERAGENT_PI_BIN:-$(command -v pi 2>/dev/null || true)}"
+        COOPERAGENT_PI_BIN="$pi_bin" bash "${SCRIPT_DIR}/scripts/setup-pi.sh" \
+            --endpoint "$new_url" --token "$tok"
+    fi
+
 }
 
 # --- eksekusi mode ganti endpoint --------------------------------------------
@@ -542,8 +564,7 @@ if [ -n "$SWITCH_ONLY" ]; then
         http://*|https://*)
             NEW_URL="$(normalize_endpoint "$SWITCH_ONLY")" ;;
         *)
-            CUR_URL="$(grep -m1 -E '^[[:space:]]*base_url' "$HOME/.grok/config.toml" 2>/dev/null \
-                | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/' || true)"
+            CUR_URL="$(stored_gateway)"
             NEW_URL=""
             if [ -n "$CUR_URL" ] && fetch_contract "${CUR_URL%/api/v1}"; then
                 NEW_URL="$(contract_endpoint_url "$SWITCH_ONLY")"
@@ -581,6 +602,8 @@ if [ -n "$SWITCH_ONLY" ]; then
     # pada config bertoken.
     EXISTING_KEY="$(grep -m1 -E '^[[:space:]]*api_key' "$HOME/.grok/config.toml" 2>/dev/null \
         | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/' || true)"
+    [ -z "$EXISTING_KEY" ] && installed_omp && EXISTING_KEY="$(omp_api_key_of "$OMP_YML_PATH" || true)"
+    [ -z "$EXISTING_KEY" ] && installed_pi && EXISTING_KEY="$(pi_api_key_of "$PI_MODELS_PATH" || true)"
     if [ -z "$EXISTING_KEY" ]; then
         echo -e "${RED}${S_NO} Tidak menemukan api_key di ~/.grok/config.toml.${NC}"
         echo -e "${YELLOW}Jalankan setup penuh dulu: bash setup.sh${NC}"
@@ -624,7 +647,7 @@ if [ -n "$SWITCH_ONLY" ]; then
     exit 0
 fi
 
-if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
+if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp || installed_pi; }; then
     CUR_GATEWAY="$(stored_gateway)"
     CUR_TOKEN="$(stored_token)"
     [ -n "$DEV_TOKEN" ] && CUR_TOKEN="$DEV_TOKEN"
@@ -637,12 +660,13 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
     installed_grok && HARNESS_LIST="Grok Build"
     installed_omp  && HARNESS_LIST="${HARNESS_LIST:+$HARNESS_LIST, }Oh My Pi (omp)"
     echo -e "  harness   : ${HARNESS_LIST}"
+    installed_pi   && HARNESS_LIST="${HARNESS_LIST:+$HARNESS_LIST, }Pi Agent (pi)"
 
     # Aturan agent OPSIONAL sejak 3 September 2026, jadi keadaannya harus
     # terlihat: dev yang menolaknya perlu tahu ia memang belum terpasang, bukan
     # menduga pemasangannya gagal.
     RULES_ON=0
-    for r in "$HOME/.grok/AGENTS.md" "$HOME/.omp/agent/AGENTS.md"; do
+    for r in "$HOME/.grok/AGENTS.md" "$HOME/.omp/agent/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"; do
         [ -f "$r" ] && RULES_ON=1
     done
     if [ "$RULES_ON" = 1 ]; then
@@ -778,6 +802,18 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
             # perkakas. Melepas yang pertama tidak boleh ikut membawa yang
             # kedua -- dev yang menolak aturan kami tetap berhak atas
             # /cooper-handoff dan /cooper-structure.
+            if installed_pi && ! installed_grok && ! installed_omp; then
+                echo -e "\n${CYAN}--- Aturan agent pi ---${NC}"
+                if [ "$RULES_ON" = 1 ]; then
+                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --remove-rules
+                elif [ -n "$CUR_TOKEN" ]; then
+                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules --token "$CUR_TOKEN"
+                else
+                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules
+                fi
+                exit $?
+            fi
+
             if [ ! -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
                 echo -e "${RED}${S_NO} scripts/setup-dev.sh tidak ditemukan.${NC}"
                 exit 1
@@ -802,6 +838,15 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp; }; then
                 echo -e "${YELLOW}  permintaan ke gateway akan tetap dijawab 401 sampai pilihan 3 dijalankan.${NC}"
             fi
             echo ""
+            if installed_pi && ! installed_grok && ! installed_omp; then
+                if [ -n "$CUR_TOKEN" ]; then
+                    COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" bash "$SCRIPT_DIR/scripts/setup-pi.sh" --token "$CUR_TOKEN"
+                else
+                    COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" bash "$SCRIPT_DIR/scripts/setup-pi.sh"
+                fi
+                exit $?
+            fi
+
             if [ -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
                 # Alamat DITERUSKAN. setup-dev membacanya dari config Grok, dan
                 # dev yang memilih omp saja tidak punya berkas itu -- tanpa ini
@@ -832,7 +877,8 @@ echo -e "  1) Grok Build (Fullscreen Rust TUI, Visual Diff Viewer) [Rekomendasi 
 echo -e "  2) Oh My Pi / omp (coding agent CLI: 31 tool, LSP, session resume)"
 echo -e "  3) Keduanya (Grok Build + Oh My Pi)"
 echo -e "  4) Manual — endpoint gateway saja (pakai coding agent Anda sendiri)"
-read -rp "Pilihan [1/2/3/4, default: 1]: " AGENT_CHOICE
+echo -e "  5) Pi Agent (coding agent Node.js; jalur tambahan, aturan + checkpoint CooperAgent)"
+read -rp "Pilihan [1/2/3/4/5, default: 1]: " AGENT_CHOICE
 AGENT_CHOICE=${AGENT_CHOICE:-1}
 
 # Apa yang sudah terpasang di mesin ini? Ditanyakan SEBELUM prompt lain, karena
@@ -861,6 +907,9 @@ if [ -z "$DEV_TOKEN" ]; then
     # ditempel ulang.
     EXISTING_TOKEN="$(grep -m1 -E '^[[:space:]]*api_key' "$HOME/.grok/config.toml" 2>/dev/null \
         | sed 's/.*["'"'"']\(ca_[a-f0-9]*\)["'"'"'].*/\1/')"
+    if [ "$AGENT_CHOICE" = "5" ] && [ -z "$EXISTING_TOKEN" ]; then
+        EXISTING_TOKEN="$(pi_api_key_of "$PI_MODELS_PATH" || true)"
+    fi
     case "$EXISTING_TOKEN" in
         ca_*) DEV_TOKEN="$EXISTING_TOKEN"
               echo -e "\n${GREEN}${S_OK} Token dipertahankan dari config:${NC} ...${DEV_TOKEN: -4}" ;;
@@ -893,6 +942,10 @@ else
     echo -e "${YELLOW}! Tanpa token, config yang ditulis AKAN DITOLAK gateway (401).${NC}"
     echo -e "  Agent tetap dipasang. Tambahkan tokennya nanti dengan:"
     echo -e "    ${CYAN}./scripts/setup-dev.sh --token ca_...${NC}"
+fi
+if [ "$AGENT_CHOICE" = "5" ] && [ -z "$DEV_TOKEN" ]; then
+    echo -e "${RED}${S_NO} Pilihan pi membutuhkan token ca_... yang dapat diverifikasi.${NC}"
+    exit 3
 fi
 
 
@@ -1281,6 +1334,38 @@ if [ "$AGENT_CHOICE" == "2" ] || [ "$AGENT_CHOICE" == "3" ]; then
     echo -e "${YELLOW}  Pilih modelnya saat pertama menjalankan \`omp\`, atau set di ~/.omp/agent/config.yml${NC}"
 fi
 
+# 6a. Konfigurasi pi (jalur tambahan, tidak memanggil Grok/omp)
+if [ "$AGENT_CHOICE" == "5" ]; then
+    echo -e "\n${CYAN}--- Memasang dan mengonfigurasi Pi Agent ---${NC}"
+    if command -v pi &> /dev/null; then
+        echo -e "${GREEN}${S_OK} pi sudah terpasang:${NC} $(pi --version 2>/dev/null || echo 'terdeteksi')"
+    else
+        if ! command -v npm &> /dev/null; then
+            echo -e "${RED}${S_NO} npm tidak ditemukan — pi tidak dipasang.${NC}" >&2
+            exit 1
+        fi
+        echo -e "${YELLOW}Memasang pi dari npm (@earendil-works/pi-coding-agent)...${NC}"
+        if ! npm install -g @earendil-works/pi-coding-agent; then
+            echo -e "${RED}${S_NO} Pemasangan pi gagal; tidak ada konfigurasi pi yang ditulis.${NC}" >&2
+            exit 1
+        fi
+        NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+        [ -n "$NPM_PREFIX" ] && export PATH="$NPM_PREFIX/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+    fi
+    PI_BIN="$(command -v pi 2>/dev/null || true)"
+    if [ -z "$PI_BIN" ] || [ ! -x "$PI_BIN" ]; then
+        echo -e "${RED}${S_NO} Biner pi tidak ditemukan setelah pemasangan.${NC}" >&2
+        exit 1
+    fi
+    if COOPERAGENT_PI_BIN="$PI_BIN" bash "${SCRIPT_DIR}/scripts/setup-pi.sh" \
+        --endpoint "$SERVER_URL" --token "$DEV_TOKEN" --rules; then
+        :
+    else
+        rc=$?
+        echo -e "${RED}${S_NO} Adapter pi gagal; konfigurasi tidak dinyatakan selesai.${NC}" >&2
+        exit "$rc"
+    fi
+fi
 # 6b. Aturan agent, skill, dan penyetelan omp
 #
 # DIDELEGASIKAN, tidak disalin. `scripts/setup-dev.sh` sudah melakukan persis
@@ -1293,7 +1378,7 @@ fi
 # Pembagiannya: setup.sh memasang agent dan memilih endpoint (dev BARU),
 # setup-dev.sh memperbarui aturan dan parameter (dev yang SUDAH ada). Yang
 # kedua tetap bisa dijalankan sendiri kapan saja.
-if [ -x "${SCRIPT_DIR}/scripts/setup-dev.sh" ]; then
+if [ "$AGENT_CHOICE" != "5" ] && [ -x "${SCRIPT_DIR}/scripts/setup-dev.sh" ]; then
     echo -e "\n${CYAN}--- Aturan agent, skill, dan penyetelan omp ---${NC}"
     if [ -n "$DEV_TOKEN" ]; then
         bash "${SCRIPT_DIR}/scripts/setup-dev.sh" --token "$DEV_TOKEN" || true
@@ -1315,6 +1400,9 @@ echo -e "\n${CYAN}==============================================================
 echo -e "${GREEN}${S_PARTY} Setup Selesai! Selamat datang di CooperAgent!${NC}"
 echo -e "  - Menjalankan Grok Build: Ketik ${CYAN}grok${NC} di folder project Anda."
 echo -e "  - Menjalankan Oh My Pi:   Ketik ${CYAN}omp${NC} — buka terminal baru dulu bila baru dipasang."
+if [ "$AGENT_CHOICE" == "5" ]; then
+    echo -e "  - Menjalankan Pi Agent:   Ketik ${CYAN}pi${NC} di folder project Anda."
+fi
 echo -e "  - Handoff saat context penuh: ${YELLOW}/cooper-handoff${NC}"
 echo -e "  - Checkpoint sesi:       ${CYAN}.cooper/context/${NC} di proyek Anda; ${YELLOW}/cooper-handoff${NC} saat context penuh."
 echo -e "  - Pantau Dashboard:      Buka ${CYAN}${SERVER_URL%/api/v1}/${NC}"

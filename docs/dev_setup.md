@@ -101,3 +101,23 @@ Jangan menyunting `~/.grok/` langsung — suntingannya hilang pada pembaruan
 berikutnya. Sunting sumbernya di `templates/`, commit, lalu tiap dev
 `git pull` dan menjalankan ulang skrip setup. Skrip bersifat idempoten: bila
 sudah sesuai, ia tidak menulis apa pun dan tidak membuat cadangan baru.
+
+## Pi Agent (opsi tambahan)
+
+`setup-dev.*` tetap updater jalur Grok/omp. Pi dipasang hanya dari pilihan **5**
+pada `setup.sh`/`setup.ps1`, atau dari adapter terisolasi:
+
+```bash
+./scripts/setup-pi.sh --endpoint <gateway> --token ca_... --rules
+```
+
+Adapter pi menulis `~/.pi/agent/models.json`, `settings.json`, dan aturan penuh
+ke `~/.pi/agent/AGENTS.md`. JSON di-merge sehingga provider/model tambahan,
+provider berbayar, kunci, tema, dan setting dev lain tetap utuh. Skill dibaca
+dari `~/.cooper/skills/` bersama.
+
+Model id, context window, max output, dan ambang compaction dibaca dari
+`/v1/models`; `reserveTokens = context_window - threshold_tokens`. Token `ca_...`
+diperiksa sebelum penulisan dan identitas berasal dari `/api/auth/whoami`.
+`verify()` juga menguji chat lewat pi, AGENTS global, dan checkpoint sementara.
+Pi hanya untuk mesin dev, bukan s1/s2.

@@ -38,6 +38,65 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ## [Unreleased]
 
+### Fitur
+
+* pi ditambahkan sebagai harness opsional pada pilihan 5. Adapter terisolasi
+  menulis `~/.pi/agent/models.json` dan `settings.json` secara merge, memakai
+  token `ca_...`, kontrak `/v1/models`, aturan penuh `~/.pi/agent/AGENTS.md`,
+  compaction turunan kontrak, serta `verify()` untuk chat, identitas gateway,
+  aturan global, dan checkpoint; default Grok/omp tidak berubah.
+
+### Perbaikan
+
+* **harness:** `verify()` pi menolak pemasangan yang benar
+
+  **Konteks.** `setup.sh` pilihan 5 selesai menulis config, lalu `verify()`
+  melaporkan `POST /v1/chat/completions lewat pi tidak terverifikasi 200 atau
+  marker AGENTS.md tidak muncul` — padahal pi sungguhan menembus gateway dan
+  membaca aturan global dengan benar. Kegagalannya berpindah-pindah titik antar
+  percobaan, sehingga sempat dikira beban mesin inferensi.
+
+  **Perubahan.**
+  - `scripts/lib/pi_verify.sh` — seluruh assertion membaca dari berkas, bukan
+    dari pipa. `printf '%s' "$output" | grep -q POLA` tidak aman di bawah
+    `set -o pipefail`: `grep -q` menutup pipa saat cocok, `printf` kena SIGPIPE
+    dan keluar 141, dan `pipefail` menjadikan 141 status pipeline — sehingga
+    assertion gagal **persis ketika polanya ditemukan**. Hanya muncul bila
+    keluaran cukup besar sehingga `printf` belum selesai menulis.
+  - `scripts/lib/pi_verify.sh` — marker aturan diberi label
+    (`VERIFICATION SENTENCE: ...`), bukan token acak telanjang; prompt tidak
+    lagi menuntut penalaran.
+  - `scripts/lib/pi_verify.sh` — tiga sebab kegagalan dilaporkan terpisah:
+    habis waktu (disebut eksplisit **bukan** bukti pemasangan salah), pi keluar
+    bukan-nol, dan marker tidak muncul.
+  - `scripts/lib/pi_verify.sh` — `PI_VERIFY_TIMEOUT` (default 240s) per
+    panggilan, dan `COOPER_PI_KEEP_TMP=1` menyimpan bukti kegagalan
+    (`call1.jsonl`, `call2.jsonl`, config, aturan bertanda) alih-alih
+    menghapusnya.
+  - `test/test-pi-adapter.sh` — stub pi mengikuti kontrak marker berlabel yang
+    sama seperti model sungguhan.
+
+  **Bukti.** Pada keluaran 34 KB, `call1.jsonl` yang tersimpan memuat
+  `message_end` dan tiga `"stopReason":"stop"`, sementara gerbang melaporkan
+  keduanya tidak ada — itulah yang menunjukkan akarnya. Sesudah perbaikan,
+  `setup-pi.sh` terhadap pi 0.84.4 dan gateway sungguhan meluluskan keempat
+  gerbang, termasuk checkpoint task-boundary yang menulis
+  `.cooper/context/pi-verify-29118.md`. Suite 7 dari 7 hijau; `setup.ps1` tetap
+  seimbang 296/296 kurung.
+
+  **Dampak.** Tidak ada perubahan pada config yang ditulis maupun pada jalur
+  Grok/omp. Yang berubah hanya cara `verify()` menilai dan melaporkan. Dev yang
+  sebelumnya melihat pemasangan pi ditolak kini melihatnya lulus.
+
+  **Rollback.** `git revert` commit ini. Tidak ada state di mesin dev yang perlu
+  dibatalkan — `verify()` tidak menulis apa pun di luar direktori sementaranya.
+
+  **Utang yang diketahui, belum disentuh:** pola `printf | grep -q` yang sama
+  masih ada di `test/test-contract-from-gateway.sh` (baris 148, 154, 157, 161)
+  dan `test/test-cli-output.sh` (baris 89). Keduanya lulus hari ini karena
+  keluarannya kecil, tetapi rapuh untuk alasan yang sama. `scripts/setup-pi.sh`
+  juga masih menerima token lewat argumen `--token`, yang terlihat di `ps aux`.
+
 ## [1.1.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.0.0...v1.1.0) (2026-09-02)
 
 

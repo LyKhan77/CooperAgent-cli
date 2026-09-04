@@ -122,6 +122,10 @@ function Expand-CooperTemplate {
 
     $peak  = $script:ContractCompactTokens + $script:ContractMaxTokens
     $slack = $script:ContractContextWindow - $peak
+    $reserve = $script:ContractContextWindow - $script:ContractCompactTokens
+    if ($reserve -le 0) {
+        throw 'Kontrak compaction tidak valid: threshold_tokens >= context_window'
+    }
 
     $t = $Text
     $t = $t.Replace('__CONTEXT_WINDOW_FMT__', (Format-CooperNumber $script:ContractContextWindow))
@@ -131,6 +135,7 @@ function Expand-CooperTemplate {
     $t = $t.Replace('__MAX_TOKENS__',         [string]$script:ContractMaxTokens)
     $t = $t.Replace('__COMPACT_PCT__',        [string]$script:ContractCompactPct)
     $t = $t.Replace('__COMPACT_TOKENS__',     (Format-CooperNumber $script:ContractCompactTokens))
+    $t = $t.Replace('__PI_COMPACTION_RESERVE__', [string]$reserve)
     $t = $t.Replace('__PEAK__',               (Format-CooperNumber $peak))
     $t = $t.Replace('__SLACK__',              (Format-CooperNumber $slack))
     return $t

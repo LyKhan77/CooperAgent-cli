@@ -100,6 +100,10 @@ if ([string]::IsNullOrWhiteSpace($SCRIPT_DIR)) { $SCRIPT_DIR = Split-Path -Paren
 # di sini menulis bentuk lama yang dijawab 401.
 . (Join-Path $SCRIPT_DIR "scripts\lib\OmpModels.ps1")
 
+
+# Helper pi hanya digunakan oleh pilihan pi atau provider pi yang sudah ada.
+. (Join-Path $SCRIPT_DIR "scripts\lib\PiModels.ps1")
+
 # Gerbang kredensial. Ia yang mengubah "setup selesai lalu 401 belakangan"
 # menjadi "setup berhenti sekarang, dengan sebabnya".
 . (Join-Path $SCRIPT_DIR "scripts\lib\Credential.ps1")
@@ -357,6 +361,12 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
 # tengah kerja.
 $GROK_CFG_PATH = Get-GrokConfigPath
 $OMP_YML_PATH  = Join-Path (Join-Path (Join-Path $env:USERPROFILE '.omp') 'agent') 'models.yml'
+$PI_MODELS_PATH = Join-Path (Join-Path (Join-Path $env:USERPROFILE '.pi') 'agent') 'models.json'
+
+function Test-CooperPiInstalled {
+    return (Test-PiProvider $PI_MODELS_PATH)
+}
+
 
 function Test-CooperGrokInstalled {
     return ((Test-Path $GROK_CFG_PATH) -and
@@ -374,6 +384,7 @@ function Get-CooperStoredGateway {
     $v = ''
     if (Test-CooperGrokInstalled) { $v = Read-ExistingEndpoint }
     if (-not $v -and (Test-CooperOmpInstalled)) { $v = Get-OmpStoredGateway $OMP_YML_PATH }
+    if (-not $v -and (Test-CooperPiInstalled)) { $v = Get-PiStoredGateway $PI_MODELS_PATH }
     return $v
 }
 function Get-CooperStoredToken {
@@ -382,6 +393,9 @@ function Get-CooperStoredToken {
     if ($v -notlike 'ca_*') { $v = '' }
     if (-not $v -and (Test-CooperOmpInstalled)) {
         $v = Get-OmpStoredKey $OMP_YML_PATH
+    if (-not $v -and (Test-CooperPiInstalled)) {
+        $v = Get-PiStoredKey $PI_MODELS_PATH
+    }
         if ($v -notlike 'ca_*') { $v = '' }
     }
     return $v
@@ -414,6 +428,12 @@ function Set-CooperAllHarness([string]$NewUrl, [string]$Tok, [string]$Ident) {
         [void](Set-OmpApiKey $OMP_YML_PATH $key $newBase)
         Write-Host "[v] models.yml omp diperbarui (cadangan: models.yml.bak.$stamp)" -ForegroundColor Green
     }
+    if (Test-CooperPiInstalled) {
+        $setupPi = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
+        if (-not (Test-Path $setupPi)) { throw 'scripts\setup-pi.ps1 tidak ditemukan.' }
+        & $setupPi -Endpoint $NewUrl -Token $Tok
+    }
+
 }
 
 # --- eksekusi mode ganti endpoint --------------------------------------------
@@ -425,12 +445,7 @@ if (-not [string]::IsNullOrWhiteSpace($Endpoint)) {
     if ($Endpoint -match '^https?://') {
         $newUrl = ConvertTo-CanonicalEndpoint $Endpoint
     } else {
-        $curUrl = ''
-        $cfgP = Get-GrokConfigPath
-        if (Test-Path $cfgP) {
-            $bl = Get-Content -LiteralPath $cfgP | Where-Object { $_ -match '^\s*base_url\s*=' } | Select-Object -First 1
-            if ($bl -and $bl -match '["'']([^"'']*)["'']') { $curUrl = $Matches[1] }
-        }
+        $curUrl = Get-CooperStoredGateway
         $newUrl = ''
         if ($curUrl -and (Get-CooperContract ($curUrl -replace '/api/v1$', ''))) {
             $newUrl = Get-CooperEndpointUrl $alias
@@ -468,6 +483,7 @@ if (-not [string]::IsNullOrWhiteSpace($Endpoint)) {
             if ($line -match '^\s*api_key\s*=\s*[''"]([^''"]+)[''"]\s*$') { $identity = $Matches[1]; break }
         }
     }
+    if ([string]::IsNullOrWhiteSpace($identity) -and (Test-CooperPiInstalled)) { $identity = Get-PiStoredKey $PI_MODELS_PATH }
     if ([string]::IsNullOrWhiteSpace($identity)) {
         Write-Host "[!] Tidak menemukan api_key di $cfgPath." -ForegroundColor Red
         Write-Host "Jalankan setup penuh dulu: .\setup.ps1" -ForegroundColor Yellow
@@ -531,7 +547,7 @@ try {
     }
 } catch {}
 
-if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstalled))) {
+if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstalled) -or (Test-CooperPiInstalled))) {
     $CUR_GATEWAY = Get-CooperStoredGateway
     $CUR_TOKEN   = Get-CooperStoredToken
     if ($Token) { $CUR_TOKEN = $Token }
@@ -546,13 +562,15 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
     if (Test-CooperGrokInstalled) { $hl += 'Grok Build' }
     if (Test-CooperOmpInstalled)  { $hl += 'Oh My Pi (omp)' }
     Write-Host "  harness   : $($hl -join ', ')"
+    if (Test-CooperPiInstalled)   { $hl += 'Pi Agent (pi)' }
 
     # Aturan agent OPSIONAL sejak 3 September 2026, jadi keadaannya harus
     # terlihat: dev yang menolaknya perlu tahu ia memang belum terpasang, bukan
     # menduga pemasangannya gagal.
     $RULES_ON = $false
     foreach ($r in @((Join-Path $env:USERPROFILE '.grok\AGENTS.md'),
-                     (Join-Path $env:USERPROFILE '.omp\agent\AGENTS.md'))) {
+                     (Join-Path $env:USERPROFILE '.omp\agent\AGENTS.md'),
+                     (Join-Path $env:USERPROFILE '.pi\agent\AGENTS.md'))) {
         if (Test-Path $r) { $RULES_ON = $true }
     }
     if ($RULES_ON) {
@@ -706,6 +724,19 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
             # perkakas. Melepas yang pertama tidak boleh ikut membawa yang
             # kedua -- dev yang menolak aturan kami tetap berhak atas
             # /cooper-handoff dan /cooper-structure.
+            if ((Test-CooperPiInstalled) -and -not (Test-CooperGrokInstalled) -and -not (Test-CooperOmpInstalled)) {
+                $piSetup = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
+                if (-not (Test-Path $piSetup)) { throw 'scripts\setup-pi.ps1 tidak ditemukan.' }
+                Write-Host ''
+                if ($RULES_ON) {
+                    & $piSetup -RemoveRules
+                } elseif ($CUR_TOKEN) {
+                    & $piSetup -Rules -Token $CUR_TOKEN
+                } else {
+                    & $piSetup -Rules
+                }
+                exit 0
+            }
             $sd5 = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
             if (-not (Test-Path $sd5)) {
                 Write-Host "[x] scripts\setup-dev.ps1 tidak ditemukan." -ForegroundColor Red
@@ -735,6 +766,12 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
                 Write-Host "    permintaan ke gateway akan tetap dijawab 401 sampai pilihan 3 dijalankan." -ForegroundColor Yellow
             }
             Write-Host ""
+            if ((Test-CooperPiInstalled) -and -not (Test-CooperGrokInstalled) -and -not (Test-CooperOmpInstalled)) {
+                $piSetup = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
+                if (-not (Test-Path $piSetup)) { throw 'scripts\setup-pi.ps1 tidak ditemukan.' }
+                if ($CUR_TOKEN) { & $piSetup -Token $CUR_TOKEN } else { & $piSetup }
+                exit 0
+            }
             $sd = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
             if (Test-Path $sd) {
                 # Alamat DITERUSKAN lewat env. setup-dev membacanya dari config
@@ -766,7 +803,8 @@ Write-Host "  1) Grok Build (Fullscreen Rust TUI, Visual Diff Viewer) [Rekomenda
 Write-Host "  2) Oh My Pi / omp (coding agent CLI: 31 tool, LSP, session resume)"
 Write-Host "  3) Keduanya (Grok Build + Oh My Pi)"
 Write-Host "  4) Manual - endpoint gateway saja (pakai coding agent Anda sendiri)"
-$AGENT_CHOICE = Read-Host "Pilihan [1/2/3/4, default: 1]"
+$AGENT_CHOICE = Read-Host "Pilihan [1/2/3/4/5, default: 1]"
+Write-Host "  5) Pi Agent (coding agent Node.js; jalur tambahan, aturan + checkpoint CooperAgent)"
 if ([string]::IsNullOrWhiteSpace($AGENT_CHOICE)) { $AGENT_CHOICE = "1" }
 
 # Apa yang sudah terpasang di mesin ini? Ditanyakan SEBELUM prompt lain, karena
@@ -798,6 +836,9 @@ if (-not $Token) {
     if (Test-Path $cfgTok) {
         $mk = Get-Content $cfgTok | Where-Object { $_ -match "^\s*api_key\s*=\s*['`"](ca_[a-f0-9]+)['`"]" } | Select-Object -First 1
         if ($mk -match "(ca_[a-f0-9]+)") { $existingTok = $Matches[1] }
+    }
+    if ($AGENT_CHOICE -eq '5' -and -not $existingTok) {
+        $existingTok = Get-PiStoredKey $PI_MODELS_PATH
     }
     if ($existingTok) {
         $Token = $existingTok
@@ -832,6 +873,10 @@ if ($Token) {
 }
 
 
+if ($AGENT_CHOICE -eq '5' -and -not $Token) {
+    Write-Host '[x] Pilihan pi membutuhkan token ca_... yang dapat diverifikasi.' -ForegroundColor Red
+    exit 3
+}
 # 3. Alamat gateway — DITENTUKAN SEBELUM identitas
 #
 # Urutannya penting. Probe /api/auth/whoami di bawah membutuhkan alamat, dan
@@ -1235,6 +1280,29 @@ if ($AGENT_CHOICE -eq "2" -or $AGENT_CHOICE -eq "3") {
     Write-Host "    Pilih modelnya saat pertama menjalankan 'omp', atau set di ~/.omp/agent/config.yml" -ForegroundColor Yellow
 }
 
+# 6a. Konfigurasi pi (jalur tambahan, tidak memanggil Grok/omp)
+if ($AGENT_CHOICE -eq '5') {
+    Write-Host ''
+    Write-Host '--- Memasang dan mengonfigurasi Pi Agent ---' -ForegroundColor Cyan
+    $piCommand = Get-Command pi -ErrorAction SilentlyContinue
+    if ($null -eq $piCommand) {
+        $npmCommand = Get-Command npm -ErrorAction SilentlyContinue
+        if ($null -eq $npmCommand) {
+            Write-Host '[x] npm tidak ditemukan - pi tidak dipasang.' -ForegroundColor Red
+            exit 1
+        }
+        Write-Host 'Memasang pi dari npm (@earendil-works/pi-coding-agent)...' -ForegroundColor Yellow
+        & $npmCommand.Source install -g '@earendil-works/pi-coding-agent'
+        if ($LASTEXITCODE -ne 0) { Write-Host '[x] Pemasangan pi gagal.' -ForegroundColor Red; exit 1 }
+        $piCommand = Get-Command pi -ErrorAction SilentlyContinue
+    }
+    if ($null -eq $piCommand) { Write-Host '[x] Biner pi tidak ditemukan setelah pemasangan.' -ForegroundColor Red; exit 1 }
+    $setupPi = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
+    if (-not (Test-Path $setupPi)) { Write-Host '[x] scripts\setup-pi.ps1 tidak ditemukan.' -ForegroundColor Red; exit 1 }
+    & $setupPi -Endpoint $SERVER_URL -Token $Token -Rules
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
 # 6b. Aturan agent, skill, dan penyetelan omp
 #
 # DIDELEGASIKAN ke scripts/setup-dev.ps1, tidak disalin. Skrip itu sudah
@@ -1243,7 +1311,7 @@ if ($AGENT_CHOICE -eq "2" -or $AGENT_CHOICE -eq "3") {
 # Dua salinan yang harus dijaga sinkron dengan tangan adalah kelas kegagalan
 # yang sudah berkali-kali menggigit repo ini.
 $setupDev = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
-if (Test-Path $setupDev) {
+if (($AGENT_CHOICE -ne '5') -and (Test-Path $setupDev)) {
     Write-Host ""
     Write-Host "--- Aturan agent, skill, dan penyetelan omp ---" -ForegroundColor Cyan
     try {
@@ -1268,6 +1336,9 @@ Write-Host "=================================================================" -
 Write-Host "[+] Setup Selesai! Selamat datang di CooperAgent (Windows)!" -ForegroundColor Green
 Write-Host "  - Menjalankan Grok:      Ketik 'grok' di PowerShell folder project Anda."
 Write-Host "  - Menjalankan Oh My Pi:  Ketik 'omp' -- BUKA TERMINAL BARU dulu bila baru dipasang."
+if ($AGENT_CHOICE -eq '5') {
+    Write-Host "  - Menjalankan Pi Agent:  Ketik 'pi' di PowerShell folder project Anda."
+}
 Write-Host "  - Checkpoint sesi:       .cooper/context/ di proyek Anda; /cooper-handoff saat context penuh."
 Write-Host "  - Pantau Dashboard:      Buka $($SERVER_URL -replace '/api/v1$','')/"
 Write-Host "=================================================================" -ForegroundColor Cyan
