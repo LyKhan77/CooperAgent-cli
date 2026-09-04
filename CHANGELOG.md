@@ -10,6 +10,14 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [2.0.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.0.0...v2.0.1) (2026-09-04)
+
+
+### Dokumentasi
+
+* lipat prosa [Unreleased] ke dalam v2.0.0 ([5f30313](https://github.com/LyKhan77/CooperAgent-cli/commit/5f30313865dbcbc8e1f4984251348de507b702ee))
+* lipat prosa [Unreleased] ke dalam v2.0.0 ([13b7068](https://github.com/LyKhan77/CooperAgent-cli/commit/13b70685eead29a400c64f8c9f3c29fe6531ae46))
+
 ## [Unreleased]
 
 _Belum ada perubahan sejak v2.0.0._
