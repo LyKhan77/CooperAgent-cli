@@ -157,7 +157,10 @@ cat > "$T/home/.pi/agent/settings.json" <<'JSON'
   "defaultProvider": "anthropic-saya",
   "defaultModel": "claude-dev",
   "compaction": {"enabled": false, "reserveTokens": 1234, "keepRecentTokens": 4321},
-  "skills": ["~/skills-dev"]
+  "skills": ["~/skills-dev"],
+  "mcpServers": {"punya-dev": {"command": "npx", "args": ["-y", "server-dev"]}},
+  "extensions": ["~/.pi/agent/extensions/milik-dev.ts"],
+  "keybindings": {"submit": "ctrl+enter"}
 }
 JSON
 
@@ -228,6 +231,12 @@ assert settings["compaction"]["reserveTokens"] == 65536
 assert settings["compaction"]["keepRecentTokens"] == 4321
 assert "~/skills-dev" in settings["skills"]
 assert "~/.cooper/skills" in settings["skills"]
+# Yang TIDAK dikelola CooperAgent tidak boleh tersentuh sama sekali: server MCP,
+# extension, dan keybinding milik dev hidup di berkas yang sama.
+assert settings["mcpServers"]["punya-dev"]["command"] == "npx"
+assert settings["mcpServers"]["punya-dev"]["args"] == ["-y", "server-dev"]
+assert settings["extensions"] == ["~/.pi/agent/extensions/milik-dev.ts"]
+assert settings["keybindings"]["submit"] == "ctrl+enter"
 PY
 then
     ok "models.json/settings.json di-merge; provider dan kunci dev utuh"
@@ -298,18 +307,17 @@ menu_before_prompt "$REPO/setup.ps1" 'Pi Agent (pi)' 'harness   :' \
 # pun harness lain yang ada. Syarat lamanya menuntut Grok/omp TIDAK ada, jadi
 # dev dengan ketiganya tidak pernah melihat pi-nya disegarkan.
 #
-# Satu kemunculan syarat sempit masih SAH: cabang 5 (lepas aturan) memakainya,
-# dan itu cacat terpisah yang belum diputuskan. Lebih dari satu berarti jalur
-# "perbarui parameter" ikut memakainya lagi.
+# Syarat sempit tidak boleh tersisa sama sekali: baik "perbarui parameter"
+# maupun "lepas aturan agent" harus memperlakukan pi seperti harness lain.
 # Baris komentar dibuang: penjelasan cacat ini di setup.sh MENGUTIP syarat
 # lamanya, dan pemeriksa yang menghitung dokumentasinya sendiri akan segera
 # dimatikan orang. Jebakan yang sama sudah kena dua kali hari ini.
 sempit=$(grep -v '^[[:space:]]*#' "$REPO/setup.sh" |
          grep -c 'installed_pi && ! installed_grok && ! installed_omp')
-if [ "$sempit" -le 1 ] && grep -q 'if installed_pi; then' "$REPO/setup.sh"; then
-    ok "setup.sh: perbarui parameter menyegarkan pi tanpa syarat harness lain"
+if [ "$sempit" -eq 0 ] && grep -q 'if installed_pi; then' "$REPO/setup.sh"; then
+    ok "setup.sh: perbarui parameter & lepas aturan menyentuh pi tanpa syarat harness lain"
 else
-    bad "setup.sh: perbarui parameter masih melewati pi bila Grok/omp ada (syarat sempit: $sempit)"
+    bad "setup.sh: masih ada jalur yang melewati pi bila Grok/omp ada (syarat sempit: $sempit)"
 fi
 
 grep -q 'PiModels.ps1' "$REPO/scripts/setup-pi.ps1" &&

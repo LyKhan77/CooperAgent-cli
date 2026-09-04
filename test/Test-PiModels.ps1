@@ -57,7 +57,15 @@ try {
 }
 '@
     $existingSettings = Join-Path $tmp 'settings.json'
-    Write-Utf8 $existingSettings '{ "theme": "dracula", "skills": ["~/skill-dev"] }'
+    Write-Utf8 $existingSettings @'
+{
+  "theme": "dracula",
+  "skills": ["~/skill-dev"],
+  "mcpServers": { "punya-dev": { "command": "npx", "args": ["-y", "server-dev"] } },
+  "extensions": ["~/.pi/agent/extensions/milik-dev.ts"],
+  "keybindings": { "submit": "ctrl+enter" }
+}
+'@
 
     # --- models -----------------------------------------------------------
     $merged = Merge-PiModels $existingModels $modelsTplPath
@@ -100,6 +108,18 @@ try {
     if ($ms.compaction.enabled -eq $true -and $ms.compaction.reserveTokens -eq 26215) {
         ok "compaction turunan kontrak terpasang"
     } else { no "compaction tidak terisi" }
+
+    if ((@($ms.skills) -contains '~/skill-dev') -and (@($ms.skills) -contains '~/.cooper/skills')) {
+        ok "skill dev DAN skill CooperAgent hidup berdampingan"
+    } else { no "skill dev tergusur oleh skill CooperAgent" }
+
+    # Yang tidak dikelola CooperAgent tidak boleh tersentuh sama sekali.
+    if ($ms.mcpServers.'punya-dev'.command -eq 'npx' -and
+        (@($ms.mcpServers.'punya-dev'.args) -contains 'server-dev') -and
+        (@($ms.extensions) -contains '~/.pi/agent/extensions/milik-dev.ts') -and
+        $ms.keybindings.submit -eq 'ctrl+enter') {
+        ok "server MCP, extension, dan keybinding milik dev utuh"
+    } else { no "config dev di luar kelolaan CooperAgent hilang" }
 
     # --- lint jalur -------------------------------------------------------
     # Bukan bukti, tapi menangkap bentuk typo yang sudah pernah terjadi:

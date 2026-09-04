@@ -726,7 +726,17 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
             # perkakas. Melepas yang pertama tidak boleh ikut membawa yang
             # kedua -- dev yang menolak aturan kami tetap berhak atas
             # /cooper-handoff dan /cooper-structure.
-            if ((Test-CooperPiInstalled) -and -not (Test-CooperGrokInstalled) -and -not (Test-CooperOmpInstalled)) {
+            # pi diperlakukan seperti harness lain: aturannya diatur BILA pi
+            # terpasang, bukan hanya bila pi satu-satunya. Syarat lama menuntut
+            # Grok/omp TIDAK ada, sehingga dev dengan ketiganya tidak punya
+            # jalan sama sekali untuk memasang atau melepas aturan pi.
+            #
+            # Yang dilepas hanya AGENTS.md yang byte-identik dengan template
+            # kami; aturan yang sudah disunting dev dibiarkan. models.json,
+            # settings.json, server MCP, extension, dan skill milik dev tidak
+            # disentuh jalur ini sama sekali.
+            $piRulesRc = 0
+            if (Test-CooperPiInstalled) {
                 $piSetup = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
                 if (-not (Test-Path $piSetup)) { throw 'scripts\setup-pi.ps1 tidak ditemukan.' }
                 Write-Host ''
@@ -737,7 +747,11 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
                 } else {
                     & $piSetup -Rules
                 }
-                exit 0
+                $piRulesRc = $LASTEXITCODE
+                if ($null -eq $piRulesRc) { $piRulesRc = 0 }
+            }
+            if (-not (Test-CooperGrokInstalled) -and -not (Test-CooperOmpInstalled)) {
+                exit $piRulesRc
             }
             $sd5 = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
             if (-not (Test-Path $sd5)) {
@@ -753,7 +767,7 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
                 }
                 if ($CUR_TOKEN) { & $sd5 -Rules -Token $CUR_TOKEN } else { & $sd5 -Rules }
             }
-            exit 0
+            exit $piRulesRc
         }
         '6' {
             Write-Host "Tidak ada yang diubah." -ForegroundColor Green

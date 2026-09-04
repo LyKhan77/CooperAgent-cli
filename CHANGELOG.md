@@ -14,6 +14,37 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **harness:** pi diperlakukan seperti harness lain di "lepas aturan agent"
+
+  **Konteks.** Cacat berpasangan dengan yang di atas. Pilihan 5 memakai syarat
+  `installed_pi && ! installed_grok && ! installed_omp`, sehingga dev yang punya
+  Grok/omp **dan** pi tidak punya jalan sama sekali untuk memasang atau melepas
+  aturan pi.
+
+  **Perubahan.**
+  - `setup.sh`, `setup.ps1` — aturan pi diatur bila pi terpasang, apa pun
+    harness lain yang ada. Kode keluar setup-pi diteruskan, tidak ditelan.
+  - `test/test-pi-adapter.sh` — pemeriksa syarat sempit kini menuntut **nol**
+    kemunculan di baris non-komentar, bukan "paling banyak satu".
+
+  **Yang TIDAK disentuh — dan sekarang dijaga uji.** Baik "perbarui parameter"
+  maupun "lepas aturan agent" tidak boleh merusak milik dev:
+  - `--remove-rules` hanya menghapus `AGENTS.md` yang **byte-identik** dengan
+    template kami (`cmp -s`), sesudah mencadangkan dan memverifikasi cadangannya
+    tidak kosong. Aturan yang sudah disunting dev dibiarkan, dengan pesan.
+  - `models.json` dan `settings.json` **di-merge**, tidak ditimpa: provider
+    lain, model tambahan, kunci berbayar, dan kunci tingkat atas milik dev
+    dipertahankan. `skills` **disatukan** — skill dev dan `~/.cooper/skills`
+    hidup berdampingan, tidak saling menggusur.
+  - Kunci yang tidak dikelola CooperAgent tidak disentuh sama sekali. Uji kini
+    menegaskan `mcpServers`, `extensions`, dan `keybindings` milik dev lolos
+    utuh melewati merge, di **kedua** jalur: `test/test-pi-adapter.sh` untuk
+    Node, `test/Test-PiModels.ps1` untuk PowerShell.
+
+  **Bukti.** Suite 7 dari 7 hijau; uji PowerShell dijalankan runner Windows.
+
+  **Rollback.** `git revert` commit ini.
+
 * **harness:** pi jadi pilihan 3, opsi "Keduanya" dihapus, header menyebut pi
 
   **Konteks.** Sesudah jalur Windows terbukti, menu masih memperlakukan pi

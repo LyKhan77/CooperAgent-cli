@@ -805,16 +805,29 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp || installed_pi; }
             # perkakas. Melepas yang pertama tidak boleh ikut membawa yang
             # kedua -- dev yang menolak aturan kami tetap berhak atas
             # /cooper-handoff dan /cooper-structure.
-            if installed_pi && ! installed_grok && ! installed_omp; then
+            # pi diperlakukan seperti harness lain: aturannya diatur BILA pi
+            # terpasang, bukan hanya bila pi satu-satunya. Syarat lama menuntut
+            # Grok/omp TIDAK ada, sehingga dev dengan ketiganya tidak punya
+            # jalan sama sekali untuk memasang atau melepas aturan pi.
+            #
+            # Yang dilepas hanya AGENTS.md yang byte-identik dengan template
+            # kami (`cmp -s` di pi_rules_are_ours); aturan yang sudah disunting
+            # dev dibiarkan. models.json, settings.json, server MCP, extension,
+            # dan skill milik dev tidak disentuh jalur ini sama sekali.
+            PI_RULES_RC=0
+            if installed_pi; then
                 echo -e "\n${CYAN}--- Aturan agent pi ---${NC}"
                 if [ "$RULES_ON" = 1 ]; then
-                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --remove-rules
+                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --remove-rules || PI_RULES_RC=$?
                 elif [ -n "$CUR_TOKEN" ]; then
-                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules --token "$CUR_TOKEN"
+                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules --token "$CUR_TOKEN" || PI_RULES_RC=$?
                 else
-                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules
+                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules || PI_RULES_RC=$?
                 fi
-                exit $?
+            fi
+
+            if ! installed_grok && ! installed_omp; then
+                exit $PI_RULES_RC
             fi
 
             if [ ! -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
@@ -829,7 +842,7 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp || installed_pi; }
                     bash "$SCRIPT_DIR/scripts/setup-dev.sh" --rules \
                     ${CUR_TOKEN:+--token "$CUR_TOKEN"}
             fi
-            exit 0 ;;
+            exit $PI_RULES_RC ;;
         6)
             echo -e "${GREEN}Tidak ada yang diubah.${NC}"
             exit 0 ;;
