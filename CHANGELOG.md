@@ -10,6 +10,32 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [2.0.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.4.0...v2.0.0) (2026-09-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* **harness:** menu pemilihan harness diurutkan ulang dan opsi "Keduanya (Grok Build + Oh My Pi)" dihapus. pi kini pilihan 3; Manual tetap 4; pilihan 5 tidak lagi ada. Dev yang terbiasa mengetik `3` untuk memasang Grok + omp kini mendapat pi, dan memasang keduanya menuntut menjalankan setup sekali per harness. Tidak ada config yang rusak dan tidak ada berkas yang perlu disunting -- yang berubah adalah alur interaktifnya, dan pemilik memutuskan kejutan itu cukup besar untuk ditandai MAJOR.
+
+### Fitur
+
+* **harness:** pi jadi pilihan 3, opsi "Keduanya" dihapus, header menyebut pi ([41faca8](https://github.com/LyKhan77/CooperAgent-cli/commit/41faca8adcdc89fb6e127cd90e45feca9adbe2bb))
+
+
+### Perbaikan
+
+* **harness:** merge config pi gagal di Windows, array satu elemen terbongkar ([a728910](https://github.com/LyKhan77/CooperAgent-cli/commit/a728910ca283db2d6f7450f1d80912c671e68376))
+* **harness:** pesan "aturan pi milik dev" mengklaim yang tidak diperiksa ([692066a](https://github.com/LyKhan77/CooperAgent-cli/commit/692066a7ac228ee11fd92f5ecfac8743cb129f26))
+* **harness:** pi diperlakukan seperti harness lain di "lepas aturan agent" ([742d4d0](https://github.com/LyKhan77/CooperAgent-cli/commit/742d4d09366cce0acc3d79686b27fc1c9dfeb048))
+* **harness:** pilihan pi tidak terlihat di menu Windows ([40568f5](https://github.com/LyKhan77/CooperAgent-cli/commit/40568f5e450eefccc7a1193e03c39e335cdffc20))
+* **harness:** setup.ps1 gagal di-parse untuk setiap dev Windows ([22a2282](https://github.com/LyKhan77/CooperAgent-cli/commit/22a228241a8784e2d2ef5cec95a113701890eea9))
+* **harness:** verify() pi di Windows menyalin config ke jalur yang salah ([b4c2a31](https://github.com/LyKhan77/CooperAgent-cli/commit/b4c2a3130a14d062400051d1a5ac1f96c3c91276))
+
+
+### Kinerja
+
+* **harness:** verify() pi memeriksa konfigurasi, bukan menjalankan model ([8a8338e](https://github.com/LyKhan77/CooperAgent-cli/commit/8a8338e56bf2aa110a1fa5c25926d9f9449f569b))
+
 ## [Unreleased]
 
 ### Perbaikan
