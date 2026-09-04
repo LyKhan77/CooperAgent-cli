@@ -14,6 +14,40 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **test:** em dash di dalam string kode `.ps1` memutus parser PowerShell
+
+  **Konteks.** `ps-parse` tetap merah setelah lint dipindah. Parser melaporkan
+  `baris 130: The string is missing the terminator: "` pada baris yang jelas
+  seimbang kutipnya, plus `}` tak tertutup di baris 81 dan 28 — semuanya efek
+  berantai dari satu karakter di baris 82.
+
+  **Sebabnya.** Windows PowerShell 5.1 membaca berkas tanpa BOM memakai code
+  page ANSI. Em dash UTF-8 (`e2 80 94`) terbaca sebagai tiga karakter, dan byte
+  `0x94` menjadi `U+201D` — karakter yang PowerShell **terima sebagai penutup
+  string**. Em dash di dalam string kode karena itu menutup string di tengah
+  baris; sisanya menjadi kode dan kutip berikutnya membuka string baru yang
+  berjalan sampai akhir berkas.
+
+  Di dalam **komentar** ia tak berbahaya: `#` berlaku sampai akhir baris.
+  Seluruh `.ps1` lain di repo ini memang hanya memakainya di komentar —
+  `Test-PiModels.ps1` satu-satunya yang menaruhnya di string kode. Itu sebabnya
+  hanya berkas itu yang gagal, dan itu pula aturan yang sudah tercatat di repo
+  sebagai *Windows PowerShell 5.1 ASCII Hardening*.
+
+  **Perubahan.**
+  - `test/Test-PiModels.ps1` — em dash pada baris 82 diganti tanda hubung ASCII.
+  - `test/test-pi-adapter.sh` — lint baru menolak non-ASCII pada **baris kode**
+    `.ps1` mana pun, dan membiarkannya di komentar sesuai praktik yang berlaku.
+
+  **Bukti.** Lint diuji dua arah: pada berkas sebelum perbaikan ia menyebut
+  `test/Test-PiModels.ps1:82` persis; sesudahnya bersih. Suite 7 dari 7 hijau.
+
+  **Catatan proses.** Tiga hipotesis sebelumnya — `else` yatim, here-string,
+  BOM — semuanya gugur saat diperiksa, dan masing-masing memakan satu putaran
+  CI. Yang akhirnya menyelesaikannya adalah menjalankan parser PowerShell di
+  mesin yang punya PowerShell. Lint ini memindahkan pemeriksaannya ke tempat
+  yang bisa dijalankan tanpa itu.
+
 * **test:** lint jalur dipindah ke bash; uji PowerShell gagal di-parse
 
   **Konteks.** Job `ps-parse` merah pada PR. Kedelapan berkas `.ps1` **produksi**

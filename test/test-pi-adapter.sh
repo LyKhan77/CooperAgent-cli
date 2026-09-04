@@ -324,6 +324,37 @@ else
     bad "setup.sh: masih ada jalur yang melewati pi bila Grok/omp ada (syarat sempit: $sempit)"
 fi
 
+# Non-ASCII di BARIS KODE .ps1 dilarang.
+#
+# Windows PowerShell 5.1 membaca berkas tanpa BOM memakai code page ANSI. Em
+# dash UTF-8 (e2 80 94) terbaca sebagai tiga karakter, dan byte 0x94 menjadi
+# U+201D -- karakter yang PowerShell TERIMA sebagai penutup string. Sebuah em
+# dash di dalam string kode karena itu menutup string di tengah baris, dan sisa
+# berkas berantakan. Terjadi 4 September 2026 di test/Test-PiModels.ps1 dan
+# memakan tiga putaran CI.
+#
+# Di dalam KOMENTAR ia tidak berbahaya -- `#` berlaku sampai akhir baris -- dan
+# seluruh .ps1 lain di repo ini memang hanya memakainya di sana.
+if ps_kode_non_ascii="$(python3 - "$REPO" <<'PYEOF'
+import glob, os, sys
+repo = sys.argv[1]
+buruk = []
+for f in sorted(glob.glob(os.path.join(repo, "**", "*.ps1"), recursive=True)):
+    if os.sep + ".git" + os.sep in f:
+        continue
+    for n, l in enumerate(open(f, encoding="utf-8"), 1):
+        if l.lstrip().startswith("#"):
+            continue
+        if any(ord(c) > 127 for c in l):
+            buruk.append(f"{os.path.relpath(f, repo)}:{n}")
+print(" ".join(buruk))
+PYEOF
+)" && [ -z "$ps_kode_non_ascii" ]; then
+    ok "tidak ada non-ASCII di baris kode .ps1"
+else
+    bad "non-ASCII di baris kode .ps1: $ps_kode_non_ascii"
+fi
+
 # Lint jalur PowerShell — dijalankan DI SINI, bukan di Test-PiModels.ps1.
 #
 # Ia membaca berkas sebagai teks dan tidak butuh PowerShell sama sekali.

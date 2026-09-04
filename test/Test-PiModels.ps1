@@ -79,7 +79,7 @@ try {
         @($modelsProp.Value).Count -ge 1) {
         ok "models tetap array meski hanya satu model"
     } else {
-        no "models bukan array — array satu elemen terbongkar pipeline"
+        no "models bukan array - array satu elemen terbongkar pipeline"
     }
 
     if ((@($modelsProp.Value)[0].contextWindow) -eq 131072 -and
