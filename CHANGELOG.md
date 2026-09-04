@@ -10,6 +10,24 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [1.4.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.3.0...v1.4.0) (2026-09-04)
+
+
+### Fitur
+
+* **harness:** pi sebagai pilihan pemasangan ketiga, tanpa menyentuh Grok/omp ([dde4721](https://github.com/LyKhan77/CooperAgent-cli/commit/dde472130c12cb06986a44016eccfd6d80db523b))
+
+
+### Perbaikan
+
+* **harness:** verify() pi gagal justru ketika polanya ditemukan ([f9abcc4](https://github.com/LyKhan77/CooperAgent-cli/commit/f9abcc474cef259cd14b2284e606691b6579f8de))
+
+
+### Dokumentasi
+
+* luruskan --help, riwayat versi, dan entri changelog kembar ([467dac8](https://github.com/LyKhan77/CooperAgent-cli/commit/467dac84af9f27f063053273d326f5c2c0af3bba))
+* luruskan --help, riwayat versi, dan entri changelog kembar ([205d7b7](https://github.com/LyKhan77/CooperAgent-cli/commit/205d7b7d81d03b8cb1e54aa6b65777c853955701))
+
 ## [1.3.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.2.0...v1.3.0) (2026-09-03)
 
 
