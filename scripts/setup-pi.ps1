@@ -233,5 +233,5 @@ Write-PiJsonAtomic $modelsMerged $ModelsPath
 Write-PiJsonAtomic $settingsMerged $SettingsPath
 
 Write-Host '--- Verify pi ---' -ForegroundColor Cyan
-Invoke-PiVerify $PiAgentDir $ModelsPath $SettingsPath $ContractModelId $Who $PiPath
+Invoke-PiVerify $PiAgentDir $ModelsPath $SettingsPath $ContractModelId $Who $PiPath $Token (Join-Path $TplDir 'agent-rules.md')
 Write-Host '[v] pi terpasang dan seluruh verify() lulus.' -ForegroundColor Green

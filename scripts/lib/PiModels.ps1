@@ -262,9 +262,60 @@ function Invoke-PiPrint([string]$PiPath, [string]$AgentDir, [string]$ProjectDir,
 }
 
 function Invoke-PiVerify([string]$AgentDir, [string]$ModelsPath, [string]$SettingsPath,
-                         [string]$Model, [string]$Who, [string]$PiPath) {
+                         [string]$Model, [string]$Who, [string]$PiPath,
+                         [string]$Token, [string]$RulesTemplate) {
     if (-not (Test-Path -LiteralPath $PiPath)) { throw 'Biner pi tidak ditemukan; verify() tidak dijalankan.' }
     if ($Who -notmatch '@' -or $Who -like 'dev-*') { throw "Identitas gateway tidak sah untuk pi: $Who" }
+
+    # ── Verifikasi KONFIGURASI: murah, tanpa memanggil model ────────────────
+    #
+    # Inilah yang dijalankan secara baku. Ia menjawab pertanyaan yang memang
+    # milik pemasang -- "apakah parameter dan aturan sudah sesuai kontrak?" --
+    # dalam hitungan milidetik.
+    $models = Read-PiJson $ModelsPath
+    $settings = Read-PiJson $SettingsPath
+    $prov = Get-PiPropertyValue (Get-PiPropertyValue $models 'providers') 'cooperagent'
+    if ($null -eq $prov) { throw 'provider cooperagent tidak ada di models.json.' }
+    $baseUrl = [string](Get-PiPropertyValue $prov 'baseUrl')
+    if ([string]::IsNullOrWhiteSpace($baseUrl)) { throw 'baseUrl pi kosong.' }
+    $apiKey = [string](Get-PiPropertyValue $prov 'apiKey')
+    if (-not $apiKey.StartsWith('ca_')) { throw "apiKey pi bukan kredensial 'ca_...'." }
+    if ($Token -and $apiKey -ne $Token) {
+        throw 'apiKey pi bukan token yang baru diverifikasi ke gateway.'
+    }
+    $compaction = Get-PiPropertyValue $settings 'compaction'
+    if ($null -eq $compaction -or (Get-PiPropertyValue $compaction 'enabled') -ne $true) {
+        throw 'compaction pi tidak aktif.'
+    }
+    $wantReserve = Get-PiCompactionReserve
+    $gotReserve = Get-PiPropertyValue $compaction 'reserveTokens'
+    if ($wantReserve -and [int64]$gotReserve -ne [int64]$wantReserve) {
+        throw "reserveTokens pi $gotReserve, seharusnya $wantReserve (turunan kontrak)."
+    }
+    $rulesPathInstalled = Join-Path $AgentDir 'AGENTS.md'
+    if ($RulesTemplate -and (Test-Path -LiteralPath $RulesTemplate)) {
+        $a = [System.IO.File]::ReadAllBytes($RulesTemplate)
+        $b = if (Test-Path -LiteralPath $rulesPathInstalled) {
+                 [System.IO.File]::ReadAllBytes($rulesPathInstalled)
+             } else { @() }
+        if ($a.Length -ne $b.Length -or [System.Convert]::ToBase64String($a) -ne [System.Convert]::ToBase64String($b)) {
+            throw 'AGENTS.md pi bukan salinan penuh templates/agent-rules.md.'
+        }
+    }
+    Write-Host "  [v] konfigurasi pi sesuai kontrak: baseUrl, token, compaction $gotReserve, model $Model."
+    Write-Host '  [v] aturan agent global sesuai templates/agent-rules.md.'
+    Write-Host "  [v] identitas gateway untuk leaderboard: $Who"
+
+    # ── Verifikasi MENDALAM: menjalankan pi sungguhan ───────────────────────
+    #
+    # Tidak dijalankan secara baku. Ia memanggil model DUA kali pada mesin yang
+    # disetel --reasoning-effort xhigh dengan --reasoning-budget 6144, jadi
+    # ongkosnya menit -- bukan detik -- dan naik tiga sampai lima kali lipat
+    # saat mesin sedang melayani dev lain. Terukur 4 September 2026.
+    if ($env:COOPERAGENT_PI_VERIFY_DEEP -ne '1') {
+        Write-Host '  [-] verifikasi mendalam dilewati (setel COOPERAGENT_PI_VERIFY_DEEP=1 untuk menjalankannya).'
+        return
+    }
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('cooperagent-pi-verify-' + [guid]::NewGuid().ToString('N'))
     try {
         # Direktori dibentuk SEKALI lalu dipakai ulang.

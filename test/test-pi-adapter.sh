@@ -197,6 +197,10 @@ export PATH="$T/bin:$PATH"
 export COOPER_PI_TEST_GATEWAY="$GW"
 export COOPER_PI_TEST_TOKEN="$TOK"
 export COOPERAGENT_PI_BIN="$T/bin/pi"
+# Verifikasi mendalam TIDAK berjalan secara baku (ia memanggil model dua kali).
+# Di sini pi adalah stub, jadi menjalankannya gratis -- dan jalur itu tetap
+# harus terjaga uji, bukan menjadi kode yang tidak pernah dieksekusi.
+export COOPERAGENT_PI_VERIFY_DEEP=1
 
 if HOME="$HOME" PATH="$PATH" bash "$REPO/scripts/setup-pi.sh" \
        --endpoint "$GW/api/v1" --token "$TOK" --rules >"$T/setup.out" 2>&1; then

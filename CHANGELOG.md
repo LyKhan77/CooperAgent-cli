@@ -14,6 +14,48 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **harness:** `verify()` pi memeriksa konfigurasi, bukan menjalankan model
+
+  **Konteks.** `setup.ps1`/`setup.sh` pilihan pi memakan **lebih dari lima
+  menit**. Terukur, sebabnya bukan pi: `verify()` memanggil model **dua kali**
+  pada mesin yang disetel `--reasoning-effort xhigh` dengan
+  `--reasoning-budget 6144` — sampai 6.144 token penalaran per jawaban, untuk
+  permintaan sesepele "kembalikan baris ini apa adanya". Journal s1 pada jendela
+  itu menunjukkan sesi dev lain dengan prompt 36.849–90.173 token, dan laju
+  decode turun dari 20–25 ms/token saat lengang menjadi **80–137 ms/token**.
+  Lima menit itu aritmetika, bukan bug.
+
+  **Perubahan.**
+  - `scripts/lib/pi_verify.sh`, `scripts/lib/PiModels.ps1` — verifikasi baku
+    kini **berbasis berkas** dan tidak memanggil model sama sekali. Yang
+    diperiksa: provider `cooperagent` ada, `baseUrl` menunjuk gateway yang sama,
+    `apiKey` adalah token `ca_…` yang barusan diverifikasi, compaction aktif,
+    `reserveTokens` sama dengan turunan kontrak, dan `AGENTS.md` byte-identik
+    dengan `templates/agent-rules.md`.
+  - Verifikasi mendalam — dua panggilan pi sungguhan — kini **opsional**, di
+    balik `COOPERAGENT_PI_VERIFY_DEEP=1`. Ia dipertahankan, bukan dihapus:
+    empat cacat khusus Windows pada 4 September 2026 ketahuan justru karena
+    jalur itu menjalankan sesuatu alih-alih membaca berkas.
+  - `scripts/setup-pi.ps1` — `Invoke-PiVerify` menerima token dan jalur template
+    aturan supaya sisi Windows memeriksa hal yang sama dengan sisi Unix.
+  - `test/test-pi-adapter.sh` — menyalakan `COOPERAGENT_PI_VERIFY_DEEP=1`. pi di
+    sana adalah stub, jadi jalur mendalam gratis diuji dan tidak berubah menjadi
+    kode yang tidak pernah dieksekusi.
+
+  **Bukti.** `setup-pi.sh` lengkap terhadap gateway sungguhan: **0,306 detik**,
+  dari sebelumnya lebih dari lima menit. Suite 7 dari 7 hijau.
+
+  **Dampak.** Pemasangan dan "perbarui parameter" berhenti membayar ongkos
+  inferensi. Yang dijamin tetap sama untuk hal-hal yang memang milik pemasang;
+  yang tidak lagi dijamin secara baku adalah bahwa pi benar-benar MEMBACA aturan
+  itu saat berjalan — untuk itu jalankan verifikasi mendalam.
+
+  **Rollback.** `git revert` commit ini.
+
+  **Diketahui.** Jalur mendalam di PowerShell masih tanpa batas waktu; sisi bash
+  punya `PI_VERIFY_TIMEOUT`. Karena jalur itu kini opsional, paparannya kecil,
+  tetapi kesenjangannya belum ditutup.
+
 * **harness:** pi diperlakukan seperti harness lain di "lepas aturan agent"
 
   **Konteks.** Cacat berpasangan dengan yang di atas. Pilihan 5 memakai syarat
