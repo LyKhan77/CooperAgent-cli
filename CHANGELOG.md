@@ -10,6 +10,10 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [Unreleased]
+
+_Belum ada perubahan sejak v2.0.0._
+
 ## [2.0.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.4.0...v2.0.0) (2026-09-04)
 
 
@@ -36,9 +40,7 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 * **harness:** verify() pi memeriksa konfigurasi, bukan menjalankan model ([8a8338e](https://github.com/LyKhan77/CooperAgent-cli/commit/8a8338e56bf2aa110a1fa5c25926d9f9449f569b))
 
-## [Unreleased]
-
-### Perbaikan
+#### Rincian — Perbaikan
 
 * **test:** em dash di dalam string kode `.ps1` memutus parser PowerShell
 
