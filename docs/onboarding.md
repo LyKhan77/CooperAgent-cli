@@ -57,6 +57,8 @@ Yang ditanyakan, berurutan:
 
 1. **Coding agent mana** — Grok, omp, keduanya, atau **manual** (pakai punya
    Anda sendiri: Cursor, Continue, aider, Cline, …)
+   Pilihan tambahan **5) Pi Agent (`pi`)** memasang harness Node.js dengan
+   adapter dan verifikasi CooperAgent.
 2. **Token** — hanya bila belum diberikan lewat `--token`
 3. **Endpoint** — LAN kantor, VPN, atau localhost
 
@@ -82,7 +84,8 @@ Sebelum aturan ditulis, skrip **bertanya** — dengan default "ya":
 ```
 --- Aturan kerja agent (CooperxHarness) ---
   Aturan global: checkpoint, surgical changes, goal-driven execution.
-  Ukuran: 5980 karakter, dipasang ke ~/.grok/ dan ~/.omp/agent/.
+  Ukuran: 5980 karakter, dipasang ke rumah harness yang dipilih:
+  ~/.grok/, ~/.omp/agent/, atau ~/.pi/agent/.
   Opsional. Anda boleh memakai aturan sendiri, atau tanpa aturan sama sekali.
   Skill CooperAgent tetap dipasang apa pun jawabannya.
 Pasang aturan CooperAgent? [Y/n]:
@@ -173,6 +176,29 @@ dan skill (`/cooper-handoff`, `/cooper-structure`), dan menyetel ambang compacti
 
 ---
 
+
+### Pi Agent sebagai harness tambahan
+
+Pi tidak dipasang atau dipilih secara default. Pilih **5** pada onboarding untuk
+memasang `@earendil-works/pi-coding-agent`; pilihan itu tidak menjalankan
+installer Grok maupun omp. Jalur langsungnya adalah:
+
+```bash
+./scripts/setup-pi.sh --endpoint <gateway> --token ca_... --rules
+```
+
+Adapter menulis `~/.pi/agent/models.json` dan `settings.json` secara merge.
+Provider/kunci berbayar, model tambahan, default provider, tema, dan
+`keepRecentTokens` milik dev dipertahankan. `reserveTokens` dihitung dari
+`context_window - threshold_tokens` yang diumumkan gateway, sehingga compaction
+pi mengikuti ambang CooperAgent tanpa angka server dipatok di klien.
+
+Sebelum konfigurasi ditulis, token diperiksa ke `/api/auth/whoami`; bentuk
+`dev-<nama>@<device>` ditolak. Sesudahnya `verify()` melakukan chat lewat pi,
+membuktikan pi membaca `~/.pi/agent/AGENTS.md`, dan membuat
+`.cooper/context/<slug>.md` pada proyek sementara. Identitas yang diverifikasi
+adalah `devName@device` dari gateway. Repo ini tidak mendefinisikan endpoint
+leaderboard terpisah, jadi `/whoami` adalah bukti identitas gateway yang tersedia.
 ## B. Sudah pernah memasang
 
 Perintah yang **sama persis**:
@@ -183,14 +209,14 @@ git pull
 ```
 
 Mesin yang **sudah terpasang tidak diseret ke onboarding**. Skrip menampilkan
-keadaannya, memeriksa ulang kredensial ke gateway, lalu menawarkan lima pilihan:
+keadaannya, memeriksa ulang kredensial ke gateway, lalu menawarkan enam pilihan:
 
 ```
 =================================================================
    CooperAgent — sudah terpasang di mesin ini
 =================================================================
   gateway   : http://<host>:8987/api/v1
-  harness   : Grok Build, Oh My Pi (omp)
+  harness   : Grok Build, Oh My Pi (omp) (Pi Agent bila dipilih)
   identitas : lee@laptop-tuf (peran: dev)
   kredensial: sah — diverifikasi ke gateway barusan
   kontrak   : context 131.072 · output 12.288 · compact 80% · model intercon-agent
@@ -228,8 +254,9 @@ Saat itu terjadi, tanda `[disarankan]` **berpindah ke pilihan 3** — menyaranka
 "perbarui parameter" kepada dev yang kredensialnya baru ditolak berarti
 menyarankan satu-satunya pilihan yang tidak memperbaiki apa pun.
 
-Semua pilihan bekerja untuk dev yang memasang **omp saja**. Alamat gateway dan
-kredensialnya dibaca dari `models.yml`, dan diteruskan ke pembaru parameter —
+Semua pilihan lama tetap bekerja untuk dev yang memasang **omp saja**. Bila pi
+saja yang terpasang, alamat gateway dan kredensialnya dibaca dari
+`~/.pi/agent/models.json`, dan pembaruan default diarahkan ke adapter pi —
 `~/.grok/config.toml` yang tidak pernah ia punya bukan lagi syarat.
 
 Pilihan **2** dan **3** memverifikasi lebih dulu dan **tidak menulis apa pun**
@@ -263,6 +290,13 @@ sehingga omp tetap menunjuk jaringan lama dan gagal sendirian.
 
 Memperbarui `api_key` di config Grok **dan** `models.yml` omp, lalu memverifikasi
 hasilnya. Dipakai saat admin memutar token Anda.
+
+Untuk pi, gunakan adapter terisolasi agar `models.json` dan `settings.json`
+di-merge serta diverifikasi:
+
+```bash
+./scripts/setup-pi.sh --token ca_... --endpoint <gateway>
+```
 
 ---
 
@@ -309,6 +343,9 @@ Token hilang tidak bisa dibaca ulang: admin mencabut lalu menerbitkan ulang.
 | :-- | :-- |
 | `~/.grok/config.toml` | hanya seksi CooperAgent; sisanya milik Anda |
 | `~/.omp/agent/models.yml` | `apiKey` dan `baseUrl` gateway; provider lain tidak disentuh |
+| `~/.pi/agent/AGENTS.md` | salinan penuh aturan, hanya pada pilihan pi atau `--rules` |
+| `~/.pi/agent/models.json` | provider `cooperagent` dan model kontrak; JSON lain dipertahankan |
+| `~/.pi/agent/settings.json` | compaction kontrak dan sumber skill; setting dev lain dipertahankan |
 | `~/.cooper/skills/` | skill CooperAgent |
 | `AGENTS.md` di proyek | hanya bila Anda memintanya |
 

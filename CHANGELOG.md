@@ -38,6 +38,14 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ## [Unreleased]
 
+### Fitur
+
+* pi ditambahkan sebagai harness opsional pada pilihan 5. Adapter terisolasi
+  menulis `~/.pi/agent/models.json` dan `settings.json` secara merge, memakai
+  token `ca_...`, kontrak `/v1/models`, aturan penuh `~/.pi/agent/AGENTS.md`,
+  compaction turunan kontrak, serta `verify()` untuk chat, identitas gateway,
+  aturan global, dan checkpoint; default Grok/omp tidak berubah.
+
 ## [1.1.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.0.0...v1.1.0) (2026-09-02)
 
 

@@ -1,0 +1,20 @@
+{
+  "providers": {
+    "cooperagent": {
+      "name": "CooperAgent",
+      "baseUrl": "__GATEWAY__/v1",
+      "api": "openai-completions",
+      "authHeader": true,
+      "apiKey": "__API_KEY__",
+      "models": [
+        {
+          "id": "__MODEL_ID__",
+          "name": "CooperAgent (gateway)",
+          "input": ["text"],
+          "contextWindow": __CONTEXT_WINDOW__,
+          "maxTokens": __MAX_TOKENS__
+        }
+      ]
+    }
+  }
+}

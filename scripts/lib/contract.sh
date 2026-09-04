@@ -158,9 +158,10 @@ contract_note() {
 # Bila salah satunya suatu hari dipakai sebagai nilai TOML/YAML, ia harus pindah
 # ke bentuk polos -- `131.072` bukan angka yang sah di kedua format.
 contract_render() { # $1 = path template
-    local peak slack
+    local peak slack reserve
     peak=$(( CONTRACT_COMPACT_TOKENS + CONTRACT_MAX_TOKENS ))
     slack=$(( CONTRACT_CONTEXT_WINDOW - peak ))
+    reserve="$(contract_compaction_reserve)" || return 1
     # Varian `_FMT__` disubstitusi LEBIH DULU: ia lebih panjang dan harus
     # menang sebelum pola pendeknya sempat menyentuh awalannya.
     sed \
@@ -171,6 +172,7 @@ contract_render() { # $1 = path template
         -e "s|__MAX_TOKENS__|${CONTRACT_MAX_TOKENS}|g" \
         -e "s|__COMPACT_PCT__|${CONTRACT_COMPACT_PCT}|g" \
         -e "s|__COMPACT_TOKENS__|$(contract_fmt "$CONTRACT_COMPACT_TOKENS")|g" \
+        -e "s|__PI_COMPACTION_RESERVE__|${reserve}|g" \
         -e "s|__PEAK__|$(contract_fmt "$peak")|g" \
         -e "s|__SLACK__|$(contract_fmt "$slack")|g" \
         "$1"
@@ -187,4 +189,17 @@ contract_assert_rendered() { # $1 = path berkas hasil render
     [ -n "$left" ] || return 0
     printf 'Placeholder belum terisi di %s: %s\n' "$1" "$left" >&2
     return 1
+}
+#
+# Pi memodelkan ambang sebagai jumlah token yang harus disisihkan untuk respons:
+# auto-compaction dipicu ketika contextTokens > contextWindow - reserveTokens.
+# Karena kontrak sudah memberi token ambang secara eksplisit, reserve ini adalah
+# nilai TURUNAN kontrak, bukan default pi yang ditulis tangan.
+contract_compaction_reserve() {
+    local reserve=$(( CONTRACT_CONTEXT_WINDOW - CONTRACT_COMPACT_TOKENS ))
+    [ "$reserve" -gt 0 ] || {
+        printf 'Kontrak compaction tidak valid: threshold_tokens >= context_window\n' >&2
+        return 1
+    }
+    printf '%s' "$reserve"
 }

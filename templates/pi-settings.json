@@ -1,0 +1,9 @@
+{
+  "defaultProvider": "cooperagent",
+  "defaultModel": "__MODEL_ID__",
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": __PI_COMPACTION_RESERVE__
+  },
+  "skills": ["~/.cooper/skills"]
+}
