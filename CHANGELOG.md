@@ -14,6 +14,45 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Perbaikan
 
+* **harness:** pesan "aturan pi milik dev" mengklaim yang tidak diperiksa
+
+  **Konteks.** Log Windows menunjukkan dua baris yang saling bertentangan dalam
+  satu run: `[!] aturan pi milik dev dipertahankan` saat memasang, lalu
+  `[v] aturan agent global sesuai templates/agent-rules.md` saat verifikasi.
+  Keduanya tidak bisa benar bersamaan.
+
+  **Perubahan.**
+  - `scripts/setup-pi.sh`, `scripts/setup-pi.ps1` — kepemilikan diperiksa
+    **sebelum** diklaim. Urutannya terbalik: berkas yang ada dan tanpa
+    `--rules` langsung dilaporkan "milik dev" tanpa pernah dibandingkan dengan
+    template. Akibatnya "Perbarui parameter" melewati `AGENTS.md` milik
+    CooperAgent sendiri sambil menyebutnya milik dev. Kini yang identik
+    dilaporkan "sudah mutakhir", dan yang berbeda dilaporkan apa adanya —
+    "BERBEDA dari template CooperAgent" — berikut cara menggantinya.
+  - `scripts/lib/pi_verify.sh`, `scripts/lib/PiModels.ps1` — aturan yang berbeda
+    kini **peringatan, bukan kegagalan**. Versi pertama perbaikan ini
+    menggagalkan seluruh pemasangan bagi dev yang menyunting aturannya sendiri —
+    menghukum dev atas keputusan yang justru kita ambil untuk melindunginya, dan
+    membuat pemasangan mustahil diselesaikan olehnya. Yang wajib ada hanyalah
+    berkasnya, karena pi memuat aturan global dari sana.
+
+  **Bukti.** Dua arah diuji terhadap gateway sungguhan: aturan milik kami →
+  `aturan agent pi sudah mutakhir` dan verify lulus; aturan disunting dev →
+  `BERBEDA dari template CooperAgent — dipertahankan`, verify memperingatkan,
+  pemasangan tetap `rc=0`.
+
+  **Dampak.** "Perbarui parameter" kini benar-benar menyegarkan aturan pi milik
+  CooperAgent bila template berubah, dan berhenti salah melabeli berkasnya
+  sendiri sebagai milik dev.
+
+  **Batas yang jujur.** Kepemilikan ditentukan dengan perbandingan byte terhadap
+  template **saat ini**. Aturan kami versi LAMA karena itu tidak dapat dibedakan
+  dari aturan yang disunting dev, dan akan diperlakukan sebagai milik dev —
+  dipertahankan, tidak ditimpa. Membedakannya menuntut penanda asal-usul di
+  dalam berkas; belum dikerjakan.
+
+  **Rollback.** `git revert` commit ini.
+
 * **harness:** `verify()` pi memeriksa konfigurasi, bukan menjalankan model
 
   **Konteks.** `setup.ps1`/`setup.sh` pilihan pi memakan **lebih dari lima

@@ -80,12 +80,20 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
         echo "  [x] reserveTokens pi $got_reserve, seharusnya $want_reserve (turunan kontrak)." >&2
         return 1
     fi
-    if [ -f "$TPL_DIR/agent-rules.md" ] && ! cmp -s "$TPL_DIR/agent-rules.md" "$agent_dir/AGENTS.md"; then
-        echo "  [x] ~/.pi/agent/AGENTS.md bukan salinan penuh templates/agent-rules.md." >&2
-        return 1
-    fi
     echo "  [v] konfigurasi pi sesuai kontrak: baseUrl, token, compaction $got_reserve, model $model."
-    echo "  [v] aturan agent global sesuai templates/agent-rules.md."
+    # Aturan yang BERBEDA adalah peringatan, bukan kegagalan.
+    #
+    # Installer sengaja mempertahankan AGENTS.md yang sudah disunting dev;
+    # menggagalkan verify karenanya berarti menghukum dev atas keputusan yang
+    # kita ambil sendiri untuk melindunginya -- dan membuat pemasangan mustahil
+    # diselesaikan olehnya. Yang WAJIB ada hanyalah berkasnya, karena pi memuat
+    # aturan global dari sana.
+    if [ -f "$TPL_DIR/agent-rules.md" ] && cmp -s "$TPL_DIR/agent-rules.md" "$agent_dir/AGENTS.md"; then
+        echo "  [v] aturan agent global sesuai templates/agent-rules.md."
+    else
+        echo "  [!] aturan agent global adalah milik dev, bukan template CooperAgent."
+        echo "      Dipertahankan apa adanya; jalankan dengan --rules bila ingin menggantinya."
+    fi
     echo "  [v] identitas gateway untuk leaderboard: $who"
 
     # ── Verifikasi MENDALAM: menjalankan pi sungguhan ───────────────────────

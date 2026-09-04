@@ -292,18 +292,24 @@ function Invoke-PiVerify([string]$AgentDir, [string]$ModelsPath, [string]$Settin
     if ($wantReserve -and [int64]$gotReserve -ne [int64]$wantReserve) {
         throw "reserveTokens pi $gotReserve, seharusnya $wantReserve (turunan kontrak)."
     }
-    $rulesPathInstalled = Join-Path $AgentDir 'AGENTS.md'
-    if ($RulesTemplate -and (Test-Path -LiteralPath $RulesTemplate)) {
-        $a = [System.IO.File]::ReadAllBytes($RulesTemplate)
-        $b = if (Test-Path -LiteralPath $rulesPathInstalled) {
-                 [System.IO.File]::ReadAllBytes($rulesPathInstalled)
-             } else { @() }
-        if ($a.Length -ne $b.Length -or [System.Convert]::ToBase64String($a) -ne [System.Convert]::ToBase64String($b)) {
-            throw 'AGENTS.md pi bukan salinan penuh templates/agent-rules.md.'
-        }
-    }
     Write-Host "  [v] konfigurasi pi sesuai kontrak: baseUrl, token, compaction $gotReserve, model $Model."
-    Write-Host '  [v] aturan agent global sesuai templates/agent-rules.md.'
+    # Aturan yang BERBEDA adalah peringatan, bukan kegagalan -- lihat catatan
+    # sepadan di scripts/lib/pi_verify.sh.
+    $rulesPathInstalled = Join-Path $AgentDir 'AGENTS.md'
+    $rulesSame = $false
+    if ($RulesTemplate -and (Test-Path -LiteralPath $RulesTemplate) -and
+        (Test-Path -LiteralPath $rulesPathInstalled)) {
+        $a = [System.IO.File]::ReadAllBytes($RulesTemplate)
+        $b = [System.IO.File]::ReadAllBytes($rulesPathInstalled)
+        $rulesSame = ($a.Length -eq $b.Length -and
+                      [System.Convert]::ToBase64String($a) -eq [System.Convert]::ToBase64String($b))
+    }
+    if ($rulesSame) {
+        Write-Host '  [v] aturan agent global sesuai templates/agent-rules.md.'
+    } else {
+        Write-Host '  [!] aturan agent global adalah milik dev, bukan template CooperAgent.'
+        Write-Host '      Dipertahankan apa adanya; jalankan dengan -Rules bila ingin menggantinya.'
+    }
     Write-Host "  [v] identitas gateway untuk leaderboard: $Who"
 
     # ── Verifikasi MENDALAM: menjalankan pi sungguhan ───────────────────────

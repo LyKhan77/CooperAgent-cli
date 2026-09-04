@@ -81,8 +81,21 @@ function Write-PiJsonAtomic([object]$Value, [string]$Path) {
 }
 
 function Install-PiRules {
+    # Kepemilikan diperiksa LEBIH DULU, sebelum apa pun diklaim -- lihat
+    # catatan sepadan di scripts/setup-pi.sh.
+    $tplRules = Join-Path $TplDir 'agent-rules.md'
+    if ((Test-Path -LiteralPath $RulesPath) -and (Test-Path -LiteralPath $tplRules)) {
+        $a = [System.IO.File]::ReadAllBytes($tplRules)
+        $b = [System.IO.File]::ReadAllBytes($RulesPath)
+        if ($a.Length -eq $b.Length -and
+            [System.Convert]::ToBase64String($a) -eq [System.Convert]::ToBase64String($b)) {
+            Write-Host '  [v] aturan agent pi sudah mutakhir.'
+            return
+        }
+    }
     if ((Test-Path -LiteralPath $RulesPath) -and -not $Rules) {
-        Write-Host "  [!] aturan pi milik dev dipertahankan: $RulesPath" -ForegroundColor Yellow
+        Write-Host "  [!] aturan pi BERBEDA dari template CooperAgent - dipertahankan: $RulesPath" -ForegroundColor Yellow
+        Write-Host '     Jalankan dengan -Rules bila memang ingin menggantinya.' -ForegroundColor Yellow
         return
     }
     if ($DryRun) {
