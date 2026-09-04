@@ -5,6 +5,22 @@
 # AGENTS.md milik dev. Panggilan kedua memaksa satu task boundary yang menulis
 # checkpoint ke proyek sementara dan diverifikasi dari filesystem.
 
+# Batas waktu tiap panggilan model di dalam verify(). Bisa ditimpa lewat
+# lingkungan bila mesin inferensi sedang padat.
+PI_VERIFY_TIMEOUT="${PI_VERIFY_TIMEOUT:-240}"
+
+# Saat gagal, direktori sementara berisi salinan config, aturan bertanda, dan
+# keluaran mentah pi. Menghapusnya berarti setiap diagnosis harus mengulang
+# panggilan model dari nol -- mahal, dan bergantung pada beban mesin saat itu.
+# Setel COOPER_PI_KEEP_TMP=1 untuk menyimpannya.
+pi_verify_cleanup() { # $1 = tmp dir
+    if [ "${COOPER_PI_KEEP_TMP:-0}" = 1 ]; then
+        echo "      bukti kegagalan disimpan: $1" >&2
+    else
+        rm -rf "$1"
+    fi
+}
+
 pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
     local agent_dir="$1" models="$2" settings="$3" gateway="$4" token="$5"
     local model="$6" who="$7" pi_bin="${8:-${COOPERAGENT_PI_BIN:-}}"
@@ -45,8 +61,19 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
         return 1
     fi
 
+    # Marker DIBERI LABEL, bukan token telanjang.
+    #
+    # Sebelumnya ia ditempel sebagai baris acak tanpa konteks, lalu model
+    # diminta "the exact verification sentence". Model tidak punya cara
+    # mengenali baris mana yang dimaksud, jadi ia berkelana: terukur 4 giliran
+    # dan 3 tool call -- membaca ~/.grok/AGENTS.md dan ~/.omp/agent/AGENTS.md
+    # lebih dulu -- sebelum akhirnya meng-grep berkas yang benar. Jawabannya
+    # akhirnya betul, tetapi panjangnya membuat gerbang ini rapuh: di bawah
+    # beban, panggilan sepanjang itu putus sebelum selesai dan kegagalannya
+    # terbaca seolah "aturan tidak dibaca".
     marker="COOPER_PI_RULES_GATE_$(date +%s)-$RANDOM"
-    printf '\n%s\n' "$marker" >> "$tmp/agent/AGENTS.md"
+    printf '\n## Verifikasi pemasangan\n\nVERIFICATION SENTENCE: %s\n' \
+        "$marker" >> "$tmp/agent/AGENTS.md"
     checkpoint_marker="COOPER_PI_CHECKPOINT_GATE_$(date +%s)-$RANDOM"
     slug="pi-verify-$RANDOM"
     checkpoint_file="$tmp/project/.cooper/context/$slug.md"
@@ -56,20 +83,51 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
         env PI_CODING_AGENT_DIR="$tmp/agent" PI_TELEMETRY=0 \
             COOPER_PI_VERIFY_CHECKPOINT_FILE="$checkpoint_file" \
             COOPER_PI_VERIFY_CHECKPOINT_MARKER="$checkpoint_marker" \
+            timeout "$PI_VERIFY_TIMEOUT" \
             "$pi_bin" --provider cooperagent --model "$model" --mode json \
             --no-session --print --no-extensions --no-prompt-templates --no-themes \
-            'Read the global work rules. Return only the exact verification sentence appended to that global AGENTS.md.'
+            'The global work rules contain one line that starts with "VERIFICATION SENTENCE:". Reply with that entire line verbatim and nothing else. Do not use any tools.'
     )"; then
         rc=0
     else
         rc=$?
     fi
-    if [ "$rc" -ne 0 ] ||
-       ! printf '%s' "$output" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"message_end"' ||
-       ! printf '%s' "$output" | grep -Eq '"stopReason"[[:space:]]*:[[:space:]]*"stop"' ||
-       ! printf '%s' "$output" | grep -Fq "$marker"; then
-        rm -rf "$tmp"
-        echo "  [x] POST /v1/chat/completions lewat pi tidak terverifikasi 200 atau marker AGENTS.md tidak muncul." >&2
+    # Tiga sebab kegagalan yang berbeda dilaporkan terpisah. Satu pesan gabungan
+    # untuk ketiganya membuat gerbang ini mahal didiagnosis: yang terbaca hanya
+    # "gagal", padahal mesin sibuk, kontrak putus, dan aturan tak terbaca
+    # menuntut tindakan yang sama sekali berbeda.
+    # Keluaran ditulis ke berkas lebih dulu, lalu di-grep dari berkas.
+    #
+    # `printf '%s' "$output" | grep -q PATTERN` TIDAK aman di sini: grep keluar
+    # begitu cocok dan menutup pipa, printf kena SIGPIPE dan keluar 141, dan
+    # `set -o pipefail` di setup-pi.sh menjadikan 141 status pipeline. Akibatnya
+    # assertion gagal PERSIS KETIKA polanya ditemukan, dan hanya bila keluaran
+    # cukup besar sehingga printf belum selesai menulis -- kegagalan yang
+    # tampak acak dan berpindah-pindah titik. Terukur 4 September 2026 pada
+    # keluaran 34 KB. Jebakan yang sama sudah tercatat di repo server.
+    printf '%s' "$output" > "$tmp/call1.jsonl" 2>/dev/null || true
+    if [ "$rc" -eq 124 ]; then
+        pi_verify_cleanup "$tmp"
+        echo "  [x] verify() habis waktu setelah ${PI_VERIFY_TIMEOUT}s -- mesin inferensi kemungkinan sedang penuh." >&2
+        echo "      Ini BUKAN bukti pemasangan salah. Ulangi saat mesin lebih lengang," >&2
+        echo "      atau naikkan PI_VERIFY_TIMEOUT." >&2
+        return 1
+    fi
+    if [ "$rc" -ne 0 ]; then
+        pi_verify_cleanup "$tmp"
+        echo "  [x] pi keluar dengan kode $rc -- panggilan ke gateway tidak selesai." >&2
+        return 1
+    fi
+    if ! grep -Eq '"type"[[:space:]]*:[[:space:]]*"message_end"' "$tmp/call1.jsonl" ||
+       ! grep -Eq '"stopReason"[[:space:]]*:[[:space:]]*"stop"' "$tmp/call1.jsonl"; then
+        pi_verify_cleanup "$tmp"
+        echo "  [x] pi tidak menyelesaikan satu pesan pun (message_end/stop tidak muncul)." >&2
+        return 1
+    fi
+    if ! grep -Fq "$marker" "$tmp/call1.jsonl"; then
+        pi_verify_cleanup "$tmp"
+        echo "  [x] pi TIDAK membaca aturan kerja global: marker di ~/.pi/agent/AGENTS.md tidak muncul." >&2
+        echo "      Gateway dan kredensial sendiri sudah terbukti bekerja pada langkah ini." >&2
         return 1
     fi
     echo "  [v] POST /v1/chat/completions lewat pi selesai (message_end/stop; HTTP 200)."
@@ -81,6 +139,7 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
         env PI_CODING_AGENT_DIR="$tmp/agent" PI_TELEMETRY=0 \
             COOPER_PI_VERIFY_CHECKPOINT_FILE="$checkpoint_file" \
             COOPER_PI_VERIFY_CHECKPOINT_MARKER="$checkpoint_marker" \
+            timeout "$PI_VERIFY_TIMEOUT" \
             "$pi_bin" --provider cooperagent --model "$model" --mode json \
             --no-session --print --no-extensions --no-prompt-templates --no-themes \
             "Read the global work rules. This is a disposable project task boundary. Create .cooper/context/$slug.md using a temporary file and mv. Include the exact line $checkpoint_marker and do not write elsewhere. Reply checkpoint-written."
@@ -89,12 +148,17 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
     else
         rc=$?
     fi
+    printf '%s' "$output" > "$tmp/call2.jsonl" 2>/dev/null || true
     if [ "$rc" -ne 0 ] ||
-       ! printf '%s' "$output" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"message_end"' ||
-       ! printf '%s' "$output" | grep -Eq '"stopReason"[[:space:]]*:[[:space:]]*"stop"' ||
+       ! grep -Eq '"type"[[:space:]]*:[[:space:]]*"message_end"' "$tmp/call2.jsonl" ||
+       ! grep -Eq '"stopReason"[[:space:]]*:[[:space:]]*"stop"' "$tmp/call2.jsonl" ||
        [ ! -s "$checkpoint_file" ] || ! grep -Fq "$checkpoint_marker" "$checkpoint_file"; then
-        rm -rf "$tmp"
-        echo "  [x] task-boundary tidak menghasilkan .cooper/context checkpoint." >&2
+        pi_verify_cleanup "$tmp"
+        if [ "$rc" -eq 124 ]; then
+            echo "  [x] verify() checkpoint habis waktu setelah ${PI_VERIFY_TIMEOUT}s -- mesin kemungkinan penuh." >&2
+        else
+            echo "  [x] task-boundary tidak menghasilkan .cooper/context checkpoint." >&2
+        fi
         return 1
     fi
     echo "  [v] checkpoint task-boundary menghasilkan .cooper/context/$slug.md (marker cocok: $checkpoint_marker)."

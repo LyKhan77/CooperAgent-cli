@@ -173,7 +173,9 @@ curl -fsS -X POST "$COOPER_PI_TEST_GATEWAY/v1/chat/completions" \
   -H "Authorization: Bearer ${COOPER_PI_TEST_TOKEN}" \
   -d "$body" >/dev/null
 
-marker="$(grep -m1 '^COOPER_PI_RULES_GATE_' "$PI_CODING_AGENT_DIR/AGENTS.md" || true)"
+# Marker kini DIBERI LABEL di berkas aturan; stub mengikuti kontrak yang sama
+# seperti model sungguhan -- ia mengembalikan baris berlabel itu apa adanya.
+marker="$(grep -m1 '^VERIFICATION SENTENCE: COOPER_PI_RULES_GATE_' "$PI_CODING_AGENT_DIR/AGENTS.md" || true)"
 [ -n "$marker" ] && printf '%s\n' "$marker"
 printf '%s\n' '{"type":"message_end","message":{"stopReason":"stop"}}'
 if [ -n "${COOPER_PI_VERIFY_CHECKPOINT_FILE:-}" ]; then
