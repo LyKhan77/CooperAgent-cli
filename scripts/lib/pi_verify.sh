@@ -51,6 +51,67 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
         return 1
     }
 
+    # ── Verifikasi KONFIGURASI: murah, tanpa memanggil model ────────────────
+    #
+    # Inilah yang dijalankan secara baku. Ia menjawab pertanyaan yang memang
+    # milik pemasang -- "apakah parameter dan aturan sudah sesuai kontrak?" --
+    # dan menjawabnya dalam hitungan milidetik.
+    local want_base got_base got_key want_reserve got_reserve
+    # `pi_gateway_of` sudah memangkas /v1 dan /api, jadi keduanya dibandingkan
+    # sebagai ASAL (origin) -- bukan sebagai URL lengkap.
+    want_base="$(cooper_gateway_base "$gateway")"
+    got_base="$(pi_gateway_of "$models" 2>/dev/null || true)"
+    [ "$got_base" = "$want_base" ] || {
+        echo "  [x] baseUrl pi menunjuk gateway lain: '$got_base', seharusnya '$want_base'" >&2
+        return 1
+    }
+    got_key="$(pi_api_key_of "$models" 2>/dev/null || true)"
+    [ "$got_key" = "$token" ] || {
+        echo "  [x] apiKey pi bukan token yang baru diverifikasi ke gateway." >&2
+        return 1
+    }
+    case "$got_key" in
+        ca_*) ;;
+        *) echo "  [x] apiKey pi bukan kredensial 'ca_...'." >&2; return 1 ;;
+    esac
+    want_reserve="$(pi_compaction_reserve 2>/dev/null || true)"
+    got_reserve="$(pi_json_get settings "$settings" reserveTokens 2>/dev/null || true)"
+    if [ -n "$want_reserve" ] && [ "$got_reserve" != "$want_reserve" ]; then
+        echo "  [x] reserveTokens pi $got_reserve, seharusnya $want_reserve (turunan kontrak)." >&2
+        return 1
+    fi
+    echo "  [v] konfigurasi pi sesuai kontrak: baseUrl, token, compaction $got_reserve, model $model."
+    # Aturan yang BERBEDA adalah peringatan, bukan kegagalan.
+    #
+    # Installer sengaja mempertahankan AGENTS.md yang sudah disunting dev;
+    # menggagalkan verify karenanya berarti menghukum dev atas keputusan yang
+    # kita ambil sendiri untuk melindunginya -- dan membuat pemasangan mustahil
+    # diselesaikan olehnya. Yang WAJIB ada hanyalah berkasnya, karena pi memuat
+    # aturan global dari sana.
+    if [ -f "$TPL_DIR/agent-rules.md" ] && cmp -s "$TPL_DIR/agent-rules.md" "$agent_dir/AGENTS.md"; then
+        echo "  [v] aturan agent global sesuai templates/agent-rules.md."
+    else
+        echo "  [!] aturan agent global adalah milik dev, bukan template CooperAgent."
+        echo "      Dipertahankan apa adanya; jalankan dengan --rules bila ingin menggantinya."
+    fi
+    echo "  [v] identitas gateway untuk leaderboard: $who"
+
+    # ── Verifikasi MENDALAM: menjalankan pi sungguhan ───────────────────────
+    #
+    # Tidak dijalankan secara baku, dan itu keputusan sadar. Ia memanggil model
+    # DUA kali pada mesin yang disetel --reasoning-effort xhigh dengan
+    # --reasoning-budget 6144, jadi ongkosnya menit -- bukan detik -- dan naik
+    # tiga sampai lima kali lipat saat mesin sedang melayani dev lain.
+    #
+    # Nilainya nyata: empat cacat khusus Windows pada 4 September 2026 ketahuan
+    # justru karena jalur ini MENJALANKAN sesuatu alih-alih membaca berkas. Ia
+    # dipertahankan sebagai gerbang yang dipanggil sengaja, bukan pajak yang
+    # dibayar setiap pemasangan.
+    if [ "${COOPERAGENT_PI_VERIFY_DEEP:-0}" != 1 ]; then
+        echo "  [-] verifikasi mendalam dilewati (setel COOPERAGENT_PI_VERIFY_DEEP=1 untuk menjalankannya)."
+        return 0
+    fi
+
     tmp="$(mktemp -d "${TMPDIR:-/tmp}/cooperagent-pi-verify.XXXXXX")" || return 1
     mkdir -p "$tmp/agent" "$tmp/project"
     if ! cp "$models" "$tmp/agent/models.json" ||

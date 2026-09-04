@@ -69,12 +69,27 @@ function Merge-PiModels([string]$ExistingPath, [string]$TemplatePath) {
     if ($null -eq $provider) { $provider = [pscustomobject]@{} }
     else { Assert-PiObject $provider 'providers.cooperagent' | Out-Null }
 
-    $desiredModels = Get-PiPropertyValue $tplProvider 'models'
-    if ($null -eq $desiredModels -or $desiredModels -isnot [System.Array] -or
-        @($desiredModels).Count -eq 0) {
+    # `Get-PiPropertyValue` TIDAK boleh dipakai untuk nilai bertipe array.
+    #
+    # Ia berakhir dengan `return $p.Value`, dan `return` mengirim nilai ke
+    # pipeline -- pipeline MEMBONGKAR array. Array berisi satu elemen keluar
+    # sebagai elemennya sendiri, bukan sebagai array. Template ini memuat tepat
+    # satu model, sehingga `-isnot [System.Array]` bernilai benar dan gerbang
+    # menuduh template kosong: "Template models pi tidak memuat model" pada
+    # template yang jelas-jelas memuatnya.
+    #
+    # Membaca `.Value` dari objek propertinya langsung mempertahankan tipe --
+    # pola yang memang sudah dipakai Merge-PiSettings untuk `skills`. Terjadi
+    # di Windows 4 September 2026; jalur Unix tidak terpengaruh karena merge-nya
+    # dikerjakan Node, bukan PowerShell.
+    $desiredModelsProperty = Get-PiProperty $tplProvider 'models'
+    if ($null -eq $desiredModelsProperty -or
+        $desiredModelsProperty.Value -isnot [System.Array] -or
+        @($desiredModelsProperty.Value).Count -eq 0) {
         throw 'Template models pi tidak memuat model'
     }
-    $desired = @($desiredModels)[0]
+    $desiredModels = @($desiredModelsProperty.Value)
+    $desired = $desiredModels[0]
     Assert-PiObject $desired 'cooperagent model template' | Out-Null
 
     $oldModels = @()
@@ -215,8 +230,26 @@ function Invoke-PiPrint([string]$PiPath, [string]$AgentDir, [string]$ProjectDir,
         $env:PI_CODING_AGENT_DIR = $AgentDir
         $env:PI_TELEMETRY = '0'
         Push-Location $ProjectDir
-        $out = (& $PiPath --provider cooperagent --model $Model --mode json
-            --no-session --print --no-extensions --no-prompt-templates --no-themes $Prompt 2>&1 | Out-String)
+        # Argumen dikumpulkan ke ARRAY, lalu di-splat.
+        #
+        # PowerShell TIDAK melanjutkan pemanggilan perintah ke baris berikutnya
+        # tanpa backtick: `--no-session` di awal baris dibaca sebagai operator,
+        # dan seluruh berkas gagal di-parse -- bukan hanya fungsi ini. Terjadi
+        # 4 September 2026 dan membuat setup.ps1 mati untuk SETIAP dev Windows,
+        # apa pun harness yang dipilihnya.
+        #
+        # Backtick di akhir baris memperbaiki gejalanya tetapi rapuh sendiri:
+        # satu spasi di belakangnya sudah cukup untuk mematahkannya lagi, dan
+        # spasi itu tidak terlihat di review. Array tidak punya mode gagal itu.
+        $piArgs = @(
+            '--provider', 'cooperagent',
+            '--model', $Model,
+            '--mode', 'json',
+            '--no-session', '--print',
+            '--no-extensions', '--no-prompt-templates', '--no-themes',
+            $Prompt
+        )
+        $out = (& $PiPath @piArgs 2>&1 | Out-String)
         $rc = $LASTEXITCODE
         return [pscustomobject]@{ Output = $out; ExitCode = $rc }
     } finally {
@@ -229,34 +262,114 @@ function Invoke-PiPrint([string]$PiPath, [string]$AgentDir, [string]$ProjectDir,
 }
 
 function Invoke-PiVerify([string]$AgentDir, [string]$ModelsPath, [string]$SettingsPath,
-                         [string]$Model, [string]$Who, [string]$PiPath) {
+                         [string]$Model, [string]$Who, [string]$PiPath,
+                         [string]$Token, [string]$RulesTemplate) {
     if (-not (Test-Path -LiteralPath $PiPath)) { throw 'Biner pi tidak ditemukan; verify() tidak dijalankan.' }
     if ($Who -notmatch '@' -or $Who -like 'dev-*') { throw "Identitas gateway tidak sah untuk pi: $Who" }
+
+    # ── Verifikasi KONFIGURASI: murah, tanpa memanggil model ────────────────
+    #
+    # Inilah yang dijalankan secara baku. Ia menjawab pertanyaan yang memang
+    # milik pemasang -- "apakah parameter dan aturan sudah sesuai kontrak?" --
+    # dalam hitungan milidetik.
+    $models = Read-PiJson $ModelsPath
+    $settings = Read-PiJson $SettingsPath
+    $prov = Get-PiPropertyValue (Get-PiPropertyValue $models 'providers') 'cooperagent'
+    if ($null -eq $prov) { throw 'provider cooperagent tidak ada di models.json.' }
+    $baseUrl = [string](Get-PiPropertyValue $prov 'baseUrl')
+    if ([string]::IsNullOrWhiteSpace($baseUrl)) { throw 'baseUrl pi kosong.' }
+    $apiKey = [string](Get-PiPropertyValue $prov 'apiKey')
+    if (-not $apiKey.StartsWith('ca_')) { throw "apiKey pi bukan kredensial 'ca_...'." }
+    if ($Token -and $apiKey -ne $Token) {
+        throw 'apiKey pi bukan token yang baru diverifikasi ke gateway.'
+    }
+    $compaction = Get-PiPropertyValue $settings 'compaction'
+    if ($null -eq $compaction -or (Get-PiPropertyValue $compaction 'enabled') -ne $true) {
+        throw 'compaction pi tidak aktif.'
+    }
+    $wantReserve = Get-PiCompactionReserve
+    $gotReserve = Get-PiPropertyValue $compaction 'reserveTokens'
+    if ($wantReserve -and [int64]$gotReserve -ne [int64]$wantReserve) {
+        throw "reserveTokens pi $gotReserve, seharusnya $wantReserve (turunan kontrak)."
+    }
+    Write-Host "  [v] konfigurasi pi sesuai kontrak: baseUrl, token, compaction $gotReserve, model $Model."
+    # Aturan yang BERBEDA adalah peringatan, bukan kegagalan -- lihat catatan
+    # sepadan di scripts/lib/pi_verify.sh.
+    $rulesPathInstalled = Join-Path $AgentDir 'AGENTS.md'
+    $rulesSame = $false
+    if ($RulesTemplate -and (Test-Path -LiteralPath $RulesTemplate) -and
+        (Test-Path -LiteralPath $rulesPathInstalled)) {
+        $a = [System.IO.File]::ReadAllBytes($RulesTemplate)
+        $b = [System.IO.File]::ReadAllBytes($rulesPathInstalled)
+        $rulesSame = ($a.Length -eq $b.Length -and
+                      [System.Convert]::ToBase64String($a) -eq [System.Convert]::ToBase64String($b))
+    }
+    if ($rulesSame) {
+        Write-Host '  [v] aturan agent global sesuai templates/agent-rules.md.'
+    } else {
+        Write-Host '  [!] aturan agent global adalah milik dev, bukan template CooperAgent.'
+        Write-Host '      Dipertahankan apa adanya; jalankan dengan -Rules bila ingin menggantinya.'
+    }
+    Write-Host "  [v] identitas gateway untuk leaderboard: $Who"
+
+    # ── Verifikasi MENDALAM: menjalankan pi sungguhan ───────────────────────
+    #
+    # Tidak dijalankan secara baku. Ia memanggil model DUA kali pada mesin yang
+    # disetel --reasoning-effort xhigh dengan --reasoning-budget 6144, jadi
+    # ongkosnya menit -- bukan detik -- dan naik tiga sampai lima kali lipat
+    # saat mesin sedang melayani dev lain. Terukur 4 September 2026.
+    if ($env:COOPERAGENT_PI_VERIFY_DEEP -ne '1') {
+        Write-Host '  [-] verifikasi mendalam dilewati (setel COOPERAGENT_PI_VERIFY_DEEP=1 untuk menjalankannya).'
+        return
+    }
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('cooperagent-pi-verify-' + [guid]::NewGuid().ToString('N'))
     try {
-        New-Item -ItemType Directory -Force -Path (Join-Path $tmp 'agent'), (Join-Path $tmp 'project') | Out-Null
-        Copy-Item $ModelsPath (Join-Path $tmp 'agentmodels.json')
-        Copy-Item $SettingsPath (Join-Path $tmp 'agentsettings.json')
-        Copy-Item (Join-Path $AgentDir 'AGENTS.md') (Join-Path $tmp 'agentAGENTS.md')
+        # Direktori dibentuk SEKALI lalu dipakai ulang.
+        #
+        # Sebelumnya berkas disalin ke `Join-Path $tmp 'agentmodels.json'` --
+        # 'agent' dan 'models.json' disambung TANPA pemisah, sisa terjemahan
+        # harfiah dari "$tmp/agent/models.json" versi bash. Berkasnya mendarat
+        # di akar temp, `PI_CODING_AGENT_DIR` menunjuk direktori `agent` yang
+        # ada tapi kosong, dan pi menjawab `Unknown provider "cooperagent"`
+        # atas config yang baru saja ditulis dengan benar.
+        $agentTmp = Join-Path $tmp 'agent'
+        $projectTmp = Join-Path $tmp 'project'
+        New-Item -ItemType Directory -Force -Path $agentTmp, $projectTmp | Out-Null
+        Copy-Item $ModelsPath (Join-Path $agentTmp 'models.json')
+        Copy-Item $SettingsPath (Join-Path $agentTmp 'settings.json')
+        Copy-Item (Join-Path $AgentDir 'AGENTS.md') (Join-Path $agentTmp 'AGENTS.md')
         $marker = 'COOPER_PI_RULES_GATE_' + (Get-Random)
         $checkpointMarker = 'COOPER_PI_CHECKPOINT_GATE_' + (Get-Random)
-        $rulesPath = Join-Path $tmp 'agentAGENTS.md'
-        [System.IO.File]::AppendAllText($rulesPath, [Environment]::NewLine + $marker + [Environment]::NewLine,
+        $rulesPath = Join-Path $agentTmp 'AGENTS.md'
+        # Marker DIBERI LABEL, sejajar dengan jalur Unix: token telanjang tidak
+        # bisa dikenali model sebagai "the verification sentence", sehingga ia
+        # berkelana beberapa giliran sebelum menemukannya.
+        [System.IO.File]::AppendAllText($rulesPath,
+            [Environment]::NewLine + '## Verifikasi pemasangan' + [Environment]::NewLine +
+            [Environment]::NewLine + 'VERIFICATION SENTENCE: ' + $marker + [Environment]::NewLine,
             (New-Object System.Text.UTF8Encoding($false)))
-        $first = Invoke-PiPrint $PiPath (Join-Path $tmp 'agent') (Join-Path $tmp 'project') $Model `
-            'Read the global work rules. Return only the exact verification sentence appended to that global AGENTS.md.'
-        if ($first.ExitCode -ne 0 -or $first.Output -notmatch '"type"\s*:\s*"message_end"' -or
-            $first.Output -notmatch '"stopReason"\s*:\s*"stop"' -or $first.Output -notmatch [regex]::Escape($marker)) {
-            throw 'POST /v1/chat/completions lewat pi tidak terverifikasi 200 atau marker AGENTS.md tidak muncul.'
+        $first = Invoke-PiPrint $PiPath $agentTmp $projectTmp $Model `
+            'The global work rules contain one line that starts with "VERIFICATION SENTENCE:". Reply with that entire line verbatim and nothing else. Do not use any tools.'
+        # Tiga sebab kegagalan dilaporkan TERPISAH; satu pesan gabungan membuat
+        # gerbang ini mahal didiagnosis, dan ketiganya menuntut tindakan berbeda.
+        if ($first.ExitCode -ne 0) {
+            throw "pi keluar dengan kode $($first.ExitCode) -- panggilan ke gateway tidak selesai."
+        }
+        if ($first.Output -notmatch '"type"\s*:\s*"message_end"' -or
+            $first.Output -notmatch '"stopReason"\s*:\s*"stop"') {
+            throw 'pi tidak menyelesaikan satu pesan pun (message_end/stop tidak muncul).'
+        }
+        if ($first.Output -notmatch [regex]::Escape($marker)) {
+            throw 'pi TIDAK membaca aturan kerja global: marker di AGENTS.md tidak muncul.'
         }
         Write-Host "  [v] POST /v1/chat/completions lewat pi selesai (message_end/stop; HTTP 200)."
         Write-Host "  [v] identitas gateway untuk leaderboard: $Who"
         Write-Host "  [v] pi membaca AGENTS.md global (marker sementara cocok: $marker)."
 
         $slug = 'pi-verify-' + (Get-Random)
-        $checkpoint = Join-Path $tmp ("project\.cooper\context\$slug.md")
+        $checkpoint = Join-Path $projectTmp (".cooper\context\$slug.md")
         $prompt = "Read the global work rules. This is a disposable project task boundary. Create .cooper/context/$slug.md using a temporary file and mv. Include the exact line $checkpointMarker and do not write elsewhere. Reply checkpoint-written."
-        $second = Invoke-PiPrint $PiPath (Join-Path $tmp 'agent') (Join-Path $tmp 'project') $Model $prompt
+        $second = Invoke-PiPrint $PiPath $agentTmp $projectTmp $Model $prompt
         if ($second.ExitCode -ne 0 -or $second.Output -notmatch '"type"\s*:\s*"message_end"' -or
             $second.Output -notmatch '"stopReason"\s*:\s*"stop"' -or
             -not (Test-Path -LiteralPath $checkpoint) -or

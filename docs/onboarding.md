@@ -55,10 +55,11 @@ cd CooperAgent-cli
 
 Yang ditanyakan, berurutan:
 
-1. **Coding agent mana** — Grok, omp, keduanya, atau **manual** (pakai punya
+1. **Coding agent mana** — Grok, omp, **pi**, atau **manual** (pakai punya
    Anda sendiri: Cursor, Continue, aider, Cline, …)
-   Pilihan tambahan **5) Pi Agent (`pi`)** memasang harness Node.js dengan
-   adapter dan verifikasi CooperAgent.
+   **3) Pi Agent (`pi`)** memasang harness Node.js dengan adapter dan
+   verifikasi CooperAgent. Untuk lebih dari satu harness, jalankan skripnya
+   sekali per harness — opsi "keduanya" dihapus pada 4 September 2026.
 2. **Token** — hanya bila belum diberikan lewat `--token`
 3. **Endpoint** — LAN kantor, VPN, atau localhost
 

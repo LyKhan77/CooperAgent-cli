@@ -35,19 +35,19 @@ Skrip menanyakan coding agent mana yang Anda pakai:
 
 1. **Grok Build** — TUI Rust layar penuh
 2. **Oh My Pi (`omp`)** — coding agent CLI
-3. Keduanya
+3. **Pi Agent (`pi`)** — coding agent CLI ringan: 4 tool inti, hemat token,
+   sesi bercabang; membawa aturan, compaction, dan checkpoint CooperAgent
 4. **Manual** — hanya mencetak endpoint, untuk agent pilihan Anda sendiri
    (Cline, Continue, Cursor, SDK OpenAI, `curl`)
 
-5. **Pi Agent (`pi`)** — harness tambahan Node.js dengan aturan, compaction,
-   dan checkpoint CooperAgent
+Untuk memakai lebih dari satu harness, jalankan skripnya sekali per harness.
 Nama dan perangkat **tidak ditanyakan** — keduanya melekat pada token, dan
 gateway yang memberi tahu skrip siapa Anda. Yang muncul di dashboard adalah yang
 tercatat pada token, bukan yang Anda ketik.
 
 Menjalankan ulang skrip ini aman. Ia menggabungkan, bukan menimpa: server MCP,
 seksi `[ui]`, model tambahan, dan kunci berbayar Anda sendiri tidak disentuh.
-Pilihan 5 bersifat tambahan dan eksplisit; bila Anda menekan Enter, default tetap
+Pilihan 3 bersifat tambahan dan eksplisit; bila Anda menekan Enter, default tetap
 Grok Build seperti sebelum pi ditambahkan.
 
 ## Pi Agent (opsi tambahan)

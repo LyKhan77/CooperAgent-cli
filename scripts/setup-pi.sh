@@ -90,15 +90,24 @@ pi_rules_wanted() {
 
 install_pi_rules() {
     local dst="$PI_AGENT_DIR/AGENTS.md" tmp
-    if [ -f "$dst" ] && [ "$RULES_MODE" != yes ]; then
-        echo "  ${YELLOW}${S_WARN}${NC} aturan pi milik dev dipertahankan: $dst"
-        return 0
-    fi
-    mkdir -p "$(dirname "$dst")"
+    # Kepemilikan diperiksa LEBIH DULU, sebelum apa pun diklaim.
+    #
+    # Urutannya dulu terbalik: berkas yang ADA dan tanpa --rules langsung
+    # dilaporkan "milik dev" tanpa pernah dibandingkan. Akibatnya "Perbarui
+    # parameter" melewati AGENTS.md milik KAMI SENDIRI sambil menyebutnya milik
+    # dev -- pesan yang mengklaim sesuatu yang tidak pernah diperiksa. Terlihat
+    # di log Windows 4 September 2026, bersebelahan dengan verify() yang justru
+    # melaporkan berkas itu sesuai template.
     if [ -f "$dst" ] && cmp -s "$TPL_DIR/agent-rules.md" "$dst"; then
         echo "  ${GREEN}${S_OK}${NC} aturan agent pi sudah mutakhir."
         return 0
     fi
+    if [ -f "$dst" ] && [ "$RULES_MODE" != yes ]; then
+        echo "  ${YELLOW}${S_WARN}${NC} aturan pi BERBEDA dari template CooperAgent — dipertahankan: $dst"
+        echo "     Jalankan dengan --rules bila memang ingin menggantinya."
+        return 0
+    fi
+    mkdir -p "$(dirname "$dst")"
     if [ "$DRY_RUN" = 0 ]; then
         if [ -f "$dst" ]; then
             cp "$dst" "$dst.bak.$STAMP"
