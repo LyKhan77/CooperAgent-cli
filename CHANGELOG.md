@@ -10,6 +10,14 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [2.1.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.0.1...v2.1.0) (2026-09-05)
+
+
+### Fitur
+
+* **setup:** retensi cadangan .bak di kedua installer ([5eb9ee7](https://github.com/LyKhan77/CooperAgent-cli/commit/5eb9ee7f819231911f039adc75168b5dda0a147a))
+* **setup:** retensi cadangan .bak di kedua installer ([aed93dd](https://github.com/LyKhan77/CooperAgent-cli/commit/aed93dd8ee5c830cba54b08120d67097c5e6a3a3))
+
 ## [Unreleased]
 
 ### Added · 2026-09-05 — Retensi cadangan `.bak`
