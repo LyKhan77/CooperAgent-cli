@@ -15,7 +15,6 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Dokumentasi
 
-* buang entri kembar di seksi CHANGELOG v2.1.0 ([56584b6](https://github.com/LyKhan77/CooperAgent-cli/commit/56584b65b4d267a6c242902ced7ca653de104571))
 * buang entri kembar di seksi CHANGELOG v2.1.0 ([1777813](https://github.com/LyKhan77/CooperAgent-cli/commit/17778139f7215bbb8bc8a737f9bf371d54c7be11))
 
 ## [2.1.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.0.1...v2.1.0) (2026-09-05)
