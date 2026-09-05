@@ -26,6 +26,27 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ## [Unreleased]
 
+### Changed · 2026-09-05 — PR rilis dibuka sebagai draft
+
+Satu rencana selesai = satu tag. Hari ini PR rilis di-merge lima kali berturut
+untuk lima perubahan kecil — tiga tag di repo ini, dua di repo server, semuanya
+untuk satu rencana yang sama.
+
+Sebabnya bukan salah paham. PR rilis yang terbuka dan terlihat siap merge memang
+**tampak seperti pekerjaan yang belum selesai**, dan respons wajar terhadap itu
+adalah menyelesaikannya.
+
+`draft-pull-request: true` membalik bawaannya. PR rilis tetap muncul dan tetap
+memperbarui dirinya setiap kali ada PR baru masuk `main` — itu memang gunanya,
+ia papan status dari apa yang belum terbit — tetapi dibuka sebagai **draft**,
+dan GitHub mematikan tombol merge-nya.
+
+Mendiamkannya kini keadaan yang benar. Menerbitkan menuntut satu tindakan sadar:
+*Ready for review*, lalu merge.
+
+**Rollback:** buang `draft-pull-request` dari `release-please-config.json`.
+
+
 ### Docs · 2026-09-05 — Buang entri kembar di seksi v2.1.0
 
 Satu perubahan tercatat dua kali: sekali dengan hash commit aslinya (`aed93dd`)

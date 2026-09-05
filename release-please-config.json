@@ -8,6 +8,7 @@
       "include-component-in-tag": false,
       "bump-minor-pre-major": false,
       "draft": false,
+      "draft-pull-request": true,
       "prerelease": false,
       "changelog-sections": [
         {
