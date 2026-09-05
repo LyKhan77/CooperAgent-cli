@@ -1,7 +1,20 @@
 # Rilis otomatis dari Conventional Commits.
 #
 # Setiap push ke main, release-please membuka (atau memperbarui) satu PR rilis
-# berisi CHANGELOG dan kenaikan versi. Merge PR itu = menerbitkan rilis dan tag.
+# berisi CHANGELOG dan kenaikan versi. PR itu DIRANCANG untuk dibiarkan terbuka
+# dan menumpuk: ia memperbarui dirinya sendiri setiap kali ada yang masuk main.
+# Merge PR itu = menerbitkan rilis dan tag.
+#
+# Ia dibuka sebagai DRAFT (`draft-pull-request` di release-please-config.json),
+# jadi tombol merge-nya mati sampai seseorang menekan "Ready for review".
+#
+# KENAPA. Pada 5 September 2026 PR rilis di-merge lima kali berturut-turut untuk
+# lima perubahan kecil, menghasilkan tiga tag di repo ini dan dua di repo server
+# untuk satu rencana yang sama. Sebabnya bukan salah paham: PR rilis yang
+# terlihat siap merge memang tampak seperti pekerjaan yang belum selesai.
+#
+# Draft membalik bawaannya. Diamkan = benar. Menerbitkan menuntut satu tindakan
+# sadar: Ready for review, lalu merge. Itulah cara menyatakan "rencana selesai".
 #
 # GITHUB_TOKEN disediakan otomatis oleh GitHub, jadi tidak ada rahasia yang perlu
 # disimpan -- sejalan dengan aturan repo ini bahwa tidak ada rahasia di sini.
