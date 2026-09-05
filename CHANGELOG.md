@@ -10,6 +10,13 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [2.1.2](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.1.1...v2.1.2) (2026-09-05)
+
+
+### Dokumentasi
+
+* tulis alur git tiga aturan ke AGENTS.md ([19c2642](https://github.com/LyKhan77/CooperAgent-cli/commit/19c26428165369a9ad6497133ecf32f75cd6b6eb))
+
 ## [2.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.1.0...v2.1.1) (2026-09-05)
 
 
