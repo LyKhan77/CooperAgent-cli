@@ -26,7 +26,7 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ## [Unreleased]
 
-### Changed · 2026-09-05 — PR rilis dibuka sebagai draft
+### Changed · 2026-09-05 — Alur git tiga aturan, dan PR rilis dibuka sebagai draft
 
 Satu rencana selesai = satu tag. Hari ini PR rilis di-merge lima kali berturut
 untuk lima perubahan kecil — tiga tag di repo ini, dua di repo server, semuanya
@@ -45,6 +45,18 @@ Mendiamkannya kini keadaan yang benar. Menerbitkan menuntut satu tindakan sadar:
 *Ready for review*, lalu merge.
 
 **Rollback:** buang `draft-pull-request` dari `release-please-config.json`.
+
+Alurnya kini tertulis di `AGENTS.md`: branch → PR → CI hijau → merge, sesering
+perlu; PR rilis mengurus dirinya sendiri sebagai draft; rencana selesai →
+Ready for review → merge → satu tag.
+
+Yang sengaja **tidak** diadopsi dari alur tim yang lebih besar: cabang
+`develop` (pemisahan terbit dari belum-terbit sudah dipegang tag), peer review
+wajib (belum ada reviewer kedua), dan squash merge — squash melipat commit jadi
+satu, dan footer `BREAKING CHANGE:` bisa hilang bersama kenaikan MAJOR.
+
+PR di repo ini memang membeli sesuatu: CI menjalankan parser PowerShell 5.1 di
+runner Windows, satu-satunya cara memeriksa `.ps1` dari sini.
 
 
 ### Docs · 2026-09-05 — Buang entri kembar di seksi v2.1.0

@@ -113,6 +113,50 @@ Perbarui `CHANGELOG.md`. Versi ditentukan prefiks commit — baca
 menjelaskan apa yang mengikat repo ini dengan repo server dan satu janji yang
 belum ditepati (`contract_version` belum dibaca klien mana pun).
 
+## Alur Git — satu rencana selesai, satu tag
+
+Tiga aturan. Tidak ada yang keempat.
+
+```
+1.  Ada perubahan  →  branch  →  PR  →  CI hijau  →  merge ke main
+                      (ulangi sesering perlu; satu rencana boleh berisi
+                       sepuluh PR)
+
+2.  PR rilis mengurus dirinya sendiri
+      muncul otomatis · memperbarui diri tiap ada yang masuk main
+      berstatus DRAFT — tombol merge mati
+
+3.  Rencana selesai  →  Ready for review  →  merge  →  SATU TAG
+```
+
+**Kenapa draft.** Pada 5 September 2026 PR rilis di-merge lima kali berturut
+untuk lima perubahan kecil — tiga tag di repo ini, dua di repo server, semuanya
+untuk satu rencana yang sama. Sebabnya bukan salah paham: PR rilis yang terbuka
+dan terlihat siap merge memang *tampak seperti pekerjaan yang belum selesai*.
+`draft-pull-request` membalik bawaannya — mendiamkannya kini keadaan yang benar.
+
+**Judul PR jangan berawalan prefiks conventional-commit.** GitHub menaruh judul
+PR ke badan merge commit, dan release-please membacanya sebagai commit
+tersendiri — entri yang sama terbit dua kali. Jebakannya: bila branch berisi
+**tepat satu commit**, GitHub mengisi judul dari subjek commit itu, yang tentu
+saja conventional. Baca judulnya sebelum membuat PR. Lihat
+[`docs/versioning.md`](docs/versioning.md).
+
+**Merge commit, bukan squash.** Squash melipat semua commit jadi satu: detail
+CHANGELOG hilang, dan footer `BREAKING CHANGE:` bisa ikut hilang — bersamanya
+kenaikan MAJOR.
+
+**PR di repo ini membeli sesuatu yang nyata**, tidak seperti di sebagian repo:
+CI menjalankan parser PowerShell 5.1 di runner Windows, satu-satunya cara
+memeriksa `.ps1` tanpa mesin Windows. Ia sudah sekali menyelamatkan setiap dev
+Windows — `PiModels.ps1` lolos hitungan kurung tetapi gagal di-parse, dan
+`setup.ps1` mati untuk semua orang sampai v1.4.0 terbit.
+
+**Yang sengaja TIDAK dipakai.** Tidak ada cabang `develop` (pemisahan terbit
+dari belum-terbit sudah dipegang tag) dan tidak ada peer review wajib (belum ada
+reviewer kedua; aturan yang tidak bisa dijalankan hanya melatih orang
+mengabaikan aturan). Pertimbangkan lagi saat repo ini punya dua penulis tetap.
+
 ## Melaporkan hasil dengan jujur
 
 Repo ini punya sejarah panjang berupa kode yang melapor sukses berdasarkan
