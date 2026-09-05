@@ -15,10 +15,22 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Fitur
 
-* **setup:** retensi cadangan .bak di kedua installer ([5eb9ee7](https://github.com/LyKhan77/CooperAgent-cli/commit/5eb9ee7f819231911f039adc75168b5dda0a147a))
 * **setup:** retensi cadangan .bak di kedua installer ([aed93dd](https://github.com/LyKhan77/CooperAgent-cli/commit/aed93dd8ee5c830cba54b08120d67097c5e6a3a3))
 
 ## [Unreleased]
+
+### Docs · 2026-09-05 — Buang entri kembar di seksi v2.1.0
+
+Satu perubahan tercatat dua kali: sekali dengan hash commit aslinya (`aed93dd`)
+dan sekali lagi dengan hash merge commit PR #14 (`5eb9ee7`). Isi tag `v2.1.0`
+tidak bisa diubah; yang dirapikan berkasnya di `main`.
+
+Sebabnya bukan kelalaian judul, dan itu yang membuatnya terus berulang: branch
+ini berisi **tepat satu commit**, sehingga GitHub mengisi judul PR dari subjek
+commit itu — `feat(setup): …`, conventional. PR server yang dibuat berdampingan
+punya dua commit, judulnya terisi dari nama branch, dan CHANGELOG-nya bersih.
+Jebakan itu kini tertulis di `docs/OPS-02-versioning.md` repo server.
+
 
 ### Added · 2026-09-05 — Retensi cadangan `.bak`
 
