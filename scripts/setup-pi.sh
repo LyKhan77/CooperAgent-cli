@@ -60,6 +60,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 
 . "$REPO_ROOT/scripts/lib/contract.sh"
 . "$REPO_ROOT/scripts/lib/credential.sh"
+. "$REPO_ROOT/scripts/lib/backup.sh"
 . "$REPO_ROOT/scripts/lib/pi_models.sh"
 . "$REPO_ROOT/scripts/lib/pi_verify.sh"
 
@@ -112,6 +113,7 @@ install_pi_rules() {
         if [ -f "$dst" ]; then
             cp "$dst" "$dst.bak.$STAMP"
             [ -s "$dst.bak.$STAMP" ] || { echo "${RED}${S_NO}${NC} cadangan aturan pi kosong." >&2; return 1; }
+            bak_prune "$dst"
         fi
         tmp="$(mktemp)"
         cp "$TPL_DIR/agent-rules.md" "$tmp"
@@ -158,6 +160,7 @@ install_pi_json() { # $1 = kind; $2 = target; $3 = rendered merged JSON
             cp "$target" "$bak"
             [ -s "$bak" ] || { echo "${RED}${S_NO}${NC} cadangan $kind kosong." >&2; return 1; }
             echo "  cadangan: $bak"
+            bak_prune "$target"
         fi
         umask 077
         cp "$rendered" "$target.tmp.$$.json"
@@ -173,6 +176,7 @@ if [ "$REMOVE_RULES" = 1 ]; then
         if [ "$DRY_RUN" = 0 ]; then
             cp "$PI_AGENT_DIR/AGENTS.md" "$PI_AGENT_DIR/AGENTS.md.bak.$STAMP"
             [ -s "$PI_AGENT_DIR/AGENTS.md.bak.$STAMP" ] || exit 1
+            bak_prune "$PI_AGENT_DIR/AGENTS.md"
             rm -f "$PI_AGENT_DIR/AGENTS.md"
         fi
         echo "${GREEN}${S_OK}${NC} aturan agent pi dilepas (cadangan dibuat)."

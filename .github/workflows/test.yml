@@ -18,7 +18,7 @@ jobs:
 
       - name: Periksa sintaks bash
         run: |
-          for f in setup.sh scripts/setup-dev.sh scripts/lib/*.sh test/*.sh; do
+          for f in setup.sh scripts/setup-dev.sh scripts/setup-pi.sh scripts/lib/*.sh test/*.sh; do
             bash -n "$f" || exit 1
           done
 
@@ -40,6 +40,9 @@ jobs:
 
       - name: Gerbang kredensial berhenti dengan sebabnya
         run: bash test/test-credential-gate.sh
+
+      - name: Retensi cadangan .bak hanya menyentuh miliknya sendiri
+        run: bash test/test-bak-retention.sh
 
       # test-setup-dev.sh SENGAJA TIDAK dijalankan di sini.
       #

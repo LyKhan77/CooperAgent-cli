@@ -107,6 +107,7 @@ if ([string]::IsNullOrWhiteSpace($SCRIPT_DIR)) { $SCRIPT_DIR = Split-Path -Paren
 # Gerbang kredensial. Ia yang mengubah "setup selesai lalu 401 belakangan"
 # menjadi "setup berhenti sekarang, dengan sebabnya".
 . (Join-Path $SCRIPT_DIR "scripts\lib\Credential.ps1")
+. (Join-Path $SCRIPT_DIR "scripts\lib\Backup.ps1")
 
 # --- membaca kondisi yang sudah terpasang -------------------------------------
 # Seksi yang DIKELOLA CooperAgent. Apa pun di luar daftar ini milik dev --
@@ -329,6 +330,7 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
         } else {
             $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
             Copy-Item $cfg "$cfg.bak.$stamp"
+            Invoke-CooperBakPrune $cfg
             [System.IO.File]::WriteAllLines($cfg, [string[]]$merged, (New-Object System.Text.UTF8Encoding($false)))
             Write-Host "[v] config.toml diperbarui (cadangan: config.toml.bak.$stamp)." -ForegroundColor Green
             Write-Host "    Server MCP, [ui], dan model tambahan Anda dibiarkan utuh." -ForegroundColor Yellow
@@ -337,6 +339,7 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
         # Tulis ulang penuh - hanya bila dev memilihnya secara sadar.
         $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
         Copy-Item $cfg "$cfg.bak.$stamp"
+        Invoke-CooperBakPrune $cfg
         [System.IO.File]::WriteAllLines($cfg, [string[]]$tplLines, (New-Object System.Text.UTF8Encoding($false)))
         Write-Host "[v] config.toml ditulis ulang (cadangan: config.toml.bak.$stamp)." -ForegroundColor Green
         Write-Host "    Seksi di luar kelolaan CooperAgent tidak ikut dibawa - ada di cadangan." -ForegroundColor Yellow
@@ -420,6 +423,7 @@ function Set-CooperAllHarness([string]$NewUrl, [string]$Tok, [string]$Ident) {
     if (Test-CooperOmpInstalled) {
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
         Copy-Item $OMP_YML_PATH "$OMP_YML_PATH.bak.$stamp"
+        Invoke-CooperBakPrune $OMP_YML_PATH
         $newBase = Get-CooperGatewayBase $NewUrl
         $oldBase = Get-OmpStoredGateway $OMP_YML_PATH
         if ($oldBase -and $oldBase -ne $newBase) {
@@ -1123,6 +1127,7 @@ Yang perlu diketahui:
             $dest = Join-Path $rulesDir "AGENTS.md"
             if (Test-Path $dest) {
                 Copy-Item $dest "$dest.bak.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+                Invoke-CooperBakPrune $dest
                 Write-Host "AGENTS.md sudah ada - dicadangkan." -ForegroundColor Yellow
             }
             # Hanya bagian sesudah penanda INTI: header template menjelaskan cara
@@ -1260,6 +1265,7 @@ if ($AGENT_CHOICE -eq "2") {
             "2" {
                 if ($curGw) {
                     Copy-Item $MODELS_YML "$MODELS_YML.bak.$stampOmp"
+                    Invoke-CooperBakPrune $MODELS_YML
                     # HANYA baris yang menunjuk gateway LAMA. Mengganti setiap
                     # baseUrl akan menyeret provider pihak ketiga milik dev
                     # (Anthropic, Ollama) ke gateway kita.
@@ -1276,6 +1282,7 @@ if ($AGENT_CHOICE -eq "2") {
             }
             "3" {
                 Copy-Item $MODELS_YML "$MODELS_YML.bak.$stampOmp"
+                Invoke-CooperBakPrune $MODELS_YML
                 $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', $ompApiKey)
                 if (-not (Assert-CooperRendered $yml 'models.yml')) { exit 1 }
                 [System.IO.File]::WriteAllText($MODELS_YML, $yml, $utf8NoBomOmp)

@@ -144,6 +144,7 @@ if [ "$REMOVE_RULES" = 1 ]; then
         if rules_are_ours "$dst"; then
             if [ "$DRY_RUN" = 0 ]; then
                 cp "$dst" "$dst.bak.$STAMP"
+                bak_prune "$dst"
                 rm -f "$dst"
             fi
             echo "  ${GREEN}${S_OK}${NC} dilepas: $dst"
@@ -201,6 +202,7 @@ mkdir -p "$GROK_HOME/skills"
 . "$REPO_ROOT/scripts/lib/contract.sh"
 # shellcheck source=scripts/lib/omp_models.sh
 . "$REPO_ROOT/scripts/lib/omp_models.sh"
+. "$REPO_ROOT/scripts/lib/backup.sh"
 
 CFG="$GROK_HOME/config.toml"
 
@@ -297,6 +299,7 @@ else
     diff -u "${CFG:-/dev/null}" <(printf '%s\n' "$MERGED") 2>/dev/null | sed -n '4,$p' | sed 's/^/  /' || true
     if [ "$DRY_RUN" = 0 ]; then
         [ -f "$CFG" ] && cp "$CFG" "$CFG.bak.$STAMP" && echo "  cadangan: config.toml.bak.$STAMP"
+        bak_prune "$CFG"
         tmp="$(mktemp)"; printf '%s\n' "$MERGED" > "$tmp"; mv "$tmp" "$CFG"
         echo "${GREEN}${S_OK}${NC} config.toml diperbarui."
     fi
@@ -317,6 +320,7 @@ install_rules() {
     else
         if [ "$DRY_RUN" = 0 ]; then
             [ -f "$dst" ] && cp "$dst" "$dst.bak.$STAMP" && echo "  cadangan: $(basename "$dst").bak.$STAMP"
+            bak_prune "$dst"
             tmp="$(mktemp)"; cp "$TPL_DIR/agent-rules.md" "$tmp"; mv "$tmp" "$dst"
         fi
         echo "${GREEN}${S_OK}${NC} $label dipasang ($(wc -c < "$TPL_DIR/agent-rules.md") karakter, batas 10.000)."
@@ -486,6 +490,7 @@ if [ -z "${SKIP_OMP:-}" ]; then
             echo "  ${GREEN}${S_OK}${NC} models.yml identitas sesuai"
         elif [ "$DRY_RUN" = 0 ]; then
             cp "$MY" "$MY.bak.$STAMP"
+            bak_prune "$MY"
             # Implementasinya di scripts/lib/omp_models.sh -- dipakai juga oleh
             # setup.sh. Dua salinan yang harus dijaga sinkron dengan tangan
             # adalah kelas kegagalan yang sudah berkali-kali menggigit repo ini.
