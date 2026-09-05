@@ -26,6 +26,31 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ## [Unreleased]
 
+### Added · 2026-09-05 — Pagar judul PR
+
+Larangan judul PR berprefiks conventional-commit dilanggar lima kali di dua
+repo: `v2.8.1`, `v2.0.1`, `v2.1.0`, `v3.0.1`, `v2.1.1`. Dua di antaranya adalah
+PR yang sedang memperbaiki akibat pelanggaran sebelumnya.
+
+Pengulangannya bukan kelalaian: judul PR sering **tidak pernah diketik siapa
+pun**. Bila branch berisi tepat satu commit, GitHub mengisinya dari subjek
+commit itu — conventional. Tidak ada yang salah di layar; judulnya sudah
+terisi, tinggal klik.
+
+`.github/workflows/pr-title.yml` menggagalkan PR seperti itu sebelum sempat
+di-merge. PR release-please dikecualikan lewat `head_ref`; tanpa itu pagar ini
+memblokir setiap rilis.
+
+`test/test-pr-title-guard.sh` (13 uji, masuk CI) **mengurai workflow-nya dan
+menjalankan blok `run` apa adanya** — bukan salinan polanya, supaya tidak lahir
+dua kebenaran yang harus dijaga sinkron dengan tangan. Ia memagari juga pemicu
+`edited` dan pengecualian release-please. Judul PR diteruskan lewat `env`,
+bukan `${{ }}` di badan skrip: judul ditulis siapa pun yang bisa membuka PR.
+
+Aturannya kini juga tertulis di `docs/versioning.md`, yang sebelumnya hanya
+membahas squash dan tidak menyebut masalah kembar sama sekali.
+
+
 ### Docs · 2026-09-05 — Buang entri kembar di seksi v2.1.0
 
 Satu perubahan tercatat dua kali: sekali dengan hash commit aslinya (`aed93dd`)

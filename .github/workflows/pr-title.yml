@@ -1,0 +1,73 @@
+# Judul PR tidak boleh berawalan prefiks conventional-commit.
+#
+# KENAPA ADA. Aturan ini sudah tertulis di docs/versioning.md dan tetap
+# dilanggar LIMA kali: v2.8.1 (tiga entri sekaligus), v2.0.1, v2.1.0, v3.0.1,
+# dan v2.1.1 di kedua repo — dua di antaranya justru pada PR yang memperbaiki
+# akibatnya, dan satu pada PR yang menuliskan aturannya.
+#
+# Sebabnya bukan kelalaian. GitHub menyusun pesan merge commit sebagai
+# `Merge pull request #N from <branch>` diikuti JUDUL PR, dan judul itu diisi
+# otomatis: bila branch berisi TEPAT SATU commit, GitHub memakai subjek commit
+# itu — yang tentu saja conventional. release-please lalu membacanya sebagai
+# commit tersendiri, dan entri yang sama terbit dua kali.
+#
+# Jadi jebakannya menyerang PR yang paling rapi, dan menyerang diam-diam: tidak
+# ada yang salah di layar, judulnya sudah terisi, tinggal klik. Dokumentasi
+# tidak bisa menghentikan kegagalan yang tidak terlihat. Cek merah bisa.
+name: judul-pr
+
+on:
+  pull_request:
+    # `edited` WAJIB ada. Tanpanya, judul yang diperbaiki sesudah PR dibuat
+    # tidak pernah diperiksa ulang, dan cek merah menggantung selamanya pada
+    # judul yang sudah benar.
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  periksa:
+    runs-on: ubuntu-latest
+    # PR milik release-please dilewati. Judulnya memang `chore(main): release X`,
+    # dan itu benar: `chore` bertanda hidden di release-please-config.json,
+    # sehingga merge commit-nya tidak menyumbang entri apa pun. Menggagalkannya
+    # justru akan memblokir setiap rilis.
+    if: ${{ !startsWith(github.head_ref, 'release-please--') }}
+    steps:
+      - name: Judul tidak berawalan prefiks conventional-commit
+        env:
+          # Lewat env, BUKAN ${{ }} langsung di dalam skrip. Judul PR ditulis
+          # oleh manusia mana pun yang bisa membuka PR; menempelkannya ke badan
+          # skrip adalah injeksi perintah, bukan pemeriksaan.
+          JUDUL: ${{ github.event.pull_request.title }}
+        run: |
+          set -uo pipefail
+          printf '%s\n' "$JUDUL" > /tmp/judul.txt
+          echo "judul: $JUDUL"
+          # Dicocokkan dari berkas, bukan lewat pipa: `printf | grep -q` di
+          # bawah pipefail mengirim SIGPIPE ke printf dan menghasilkan rc 141
+          # justru KETIKA polanya ketemu. Kelas galat itu sudah menggigit repo
+          # sebelah dan tidak perlu diulang di sini.
+          if grep -qE '^(feat|fix|docs|chore|refactor|perf|test|build|ci|style|revert)(\([^)]*\))?!?:' /tmp/judul.txt; then
+            echo "::error::Judul PR berawalan prefiks conventional-commit."
+            cat <<'PESAN'
+
+          GitHub menaruh judul PR ini ke dalam pesan merge commit, dan
+          release-please akan membacanya sebagai commit tersendiri. Akibatnya
+          perubahan yang sama terbit DUA KALI di CHANGELOG: sekali untuk commit
+          asli, sekali untuk merge commit.
+
+          Ganti judulnya menjadi kalimat deskriptif biasa, tanpa prefiks:
+
+              feat(setup): retensi cadangan .bak      ->  Cadangan .bak tidak lagi menumpuk
+              docs: buang entri kembar di CHANGELOG   ->  Rapikan entri kembar di seksi v2.1.0
+
+          Judul sering terisi SENDIRI oleh GitHub dari subjek commit bila branch
+          hanya berisi satu commit -- periksa, jangan percaya isian otomatis.
+
+          Selengkapnya: docs/versioning.md
+          PESAN
+            exit 1
+          fi
+          echo "OK — merge commit tidak akan menyumbang entri CHANGELOG."

@@ -91,6 +91,32 @@ Pakai **"Create a merge commit"**, bukan squash. Squash membuat judul PR menjadi
 pesan commit, sehingga judul yang tidak berbentuk conventional commit membuat
 release-please tidak melihat perubahan apa pun.
 
+### Judul PR jangan berawalan prefiks conventional-commit
+
+Dengan merge commit, aturannya justru terbalik dari kalimat di atas — dan ini
+yang berkali-kali salah. GitHub menyusun pesan merge commit sebagai `Merge pull
+request #N from <branch>` diikuti **judul PR**. Bila judul itu berbentuk
+`feat: …` atau `docs: …`, release-please membacanya sebagai commit tersendiri,
+dan perubahan yang sama terbit **dua kali** di CHANGELOG.
+
+Sudah terjadi lima kali di dua repo: `v2.8.1`, `v2.0.1`, `v2.1.0`, `v3.0.1`,
+`v2.1.1`.
+
+**Jebakannya: GitHub yang mengisi judulnya, bukan Anda.** Bila branch berisi
+**tepat satu commit**, GitHub memakai subjek commit itu sebagai judul PR — dan
+subjek commit tentu saja conventional. Bila dua atau lebih, ia memakai nama
+branch, yang aman. Jadi jebakan ini menyerang PR yang paling rapi, dan
+menyerang diam-diam: tidak ada yang salah di layar, judulnya sudah terisi.
+
+`.github/workflows/pr-title.yml` sekarang menggagalkan PR seperti itu sebelum
+sempat di-merge. PR release-please dikecualikan — judulnya memang
+`chore(main): release X`, dan `chore` bertanda `hidden`, jadi merge commit-nya
+tidak menyumbang entri.
+
+**Bila terlanjur:** sunting `CHANGELOG.md` di PR rilis sebelum di-merge, buang
+baris yang menunjuk hash merge commit. Sesudah tag terbit, duplikasinya
+permanen dan hanya bisa dirapikan di berkas `main`.
+
 ---
 
 ## Kontrak: yang sebenarnya mengikat kedua repo

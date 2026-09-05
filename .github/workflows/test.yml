@@ -44,6 +44,14 @@ jobs:
       - name: Retensi cadangan .bak hanya menyentuh miliknya sendiri
         run: bash test/test-bak-retention.sh
 
+      # Menguji skrip yang BENAR-BENAR dijalankan pr-title.yml, bukan salinan
+      # polanya: dua kebenaran yang harus dijaga sinkron dengan tangan adalah
+      # persis penyakit yang sedang dijaga pagar itu.
+      - name: Pagar judul PR menolak prefiks conventional-commit
+        run: |
+          python3 -m pip install --quiet pyyaml
+          bash test/test-pr-title-guard.sh
+
       # test-setup-dev.sh SENGAJA TIDAK dijalankan di sini.
       #
       # Ia memilih agent omp, sehingga setup.sh mencoba memasangnya dengan
