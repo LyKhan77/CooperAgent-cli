@@ -10,12 +10,57 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [Unreleased]
+
+### Added · 2026-09-05 — Retensi cadangan `.bak`
+
+Setiap "perbarui parameter" mencadangkan config yang disentuhnya ke
+`<berkas>.bak.<yyyyMMdd-HHmmss>`, dan sampai hari ini tidak ada satu pun yang
+pernah membuangnya — di dua puluh tempat, di empat berkas, di kedua platform.
+Cadangannya kecil, jadi ini bukan soal ruang: ia soal direktori config dev yang
+lama-lama tidak terbaca, dan soal `config.toml.bak.20260812-094431` yang duduk
+di sana tanpa ada yang tahu apakah ia masih berarti.
+
+Kebijakannya satu, dipakai kedua installer: **simpan lima cadangan termuda per
+berkas**, buang sisanya. `COOPERAGENT_BAK_KEEP` mengubah batasnya; `0`
+mematikannya sepenuhnya, supaya dev yang ingin menyimpan seluruh riwayatnya
+tidak perlu menambal skrip. Batas defaultnya diuji **sama di kedua platform** —
+dua dev dengan perkakas yang sama tidak boleh melihat hasil berbeda tanpa tahu
+kenapa.
+
+Yang lebih dijaga daripada pemangkasannya adalah **batasnya**. Ia tidak pernah
+menyentuh berkas yang namanya tidak persis `<basis>.bak.<8 digit>-<6 digit>`.
+Pelajaran itu dibayar di repo server pada hari yang sama: pemilih cadangan di
+sana memakai glob `.bak.*` yang lebar, dan sebuah berkas bernama
+`run-qwen.sh.bak.catatan` terbukti bisa terpilih sebagai sasaran rollback. Pola
+longgar pada perkakas yang MENGHAPUS jauh lebih mahal daripada pada perkakas
+yang membaca — jadi `.bak.catatan`, `.bak.20260101` (cap waktu separuh), dan
+cadangan milik berkas lain semuanya punya ujinya sendiri.
+
+Ia juga tidak pernah menjatuhkan pemanggilnya. Installer berjalan di bawah
+`set -e`, dan membatalkan pemasangan yang sudah berhasil karena gagal
+*merapikan* cadangan adalah pertukaran yang salah arah; argumen kosong,
+direktori hilang, dan batas yang bukan angka semuanya diuji tetap `rc=0`.
+
+Diurutkan dari **nama**, bukan mtime — `yyyyMMdd-HHmmss` membuat urutan
+leksikografis sama dengan urutan waktu, sementara penyalinan bisa membawa serta
+stempel waktu berkas sumbernya.
+
+`test/test-bak-retention.sh` (20 uji) masuk CI. Sekalian: `scripts/setup-pi.sh`
+tidak pernah ikut diperiksa `bash -n` di CI — sekarang ikut.
+
+### Docs · 2026-09-05 — Buang entri kembar di seksi v2.0.1
+
+Satu perubahan tercatat dua kali: sekali dengan hash commit aslinya dan sekali
+lagi dengan hash merge commit PR #12, karena judul PR-nya berawalan
+conventional-commit. Isi tag `v2.0.1` tidak bisa diubah; yang dirapikan
+berkasnya di `main`.
+
 ## [2.0.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.0.0...v2.0.1) (2026-09-04)
 
 
 ### Dokumentasi
 
-* lipat prosa [Unreleased] ke dalam v2.0.0 ([5f30313](https://github.com/LyKhan77/CooperAgent-cli/commit/5f30313865dbcbc8e1f4984251348de507b702ee))
 * lipat prosa [Unreleased] ke dalam v2.0.0 ([13b7068](https://github.com/LyKhan77/CooperAgent-cli/commit/13b70685eead29a400c64f8c9f3c29fe6531ae46))
 
 ## [Unreleased]

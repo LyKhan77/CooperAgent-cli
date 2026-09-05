@@ -136,6 +136,7 @@ OS_TYPE="$(uname -s)"
 # menjadi "setup berhenti sekarang, dengan sebabnya".
 # shellcheck source=scripts/lib/credential.sh
 . "${SCRIPT_DIR}/scripts/lib/credential.sh"
+. "${SCRIPT_DIR}/scripts/lib/backup.sh"
 
 # --- mode ganti endpoint ------------------------------------------------------
 # `setup.sh --endpoint vpn` hanya memindahkan alamat gateway: identitas dev
@@ -442,6 +443,7 @@ EOF
         else
             stamp="$(date +%Y%m%d-%H%M%S)"
             cp "$cfg" "$cfg.bak.$stamp"
+            bak_prune "$cfg"
             printf '%s\n' "$merged" > "$cfg"
             echo -e "${GREEN}${S_OK}${NC} config.toml diperbarui (cadangan: config.toml.bak.$stamp)."
             echo -e "  ${YELLOW}Server MCP, [ui], dan model tambahan Anda dibiarkan utuh.${NC}"
@@ -450,6 +452,7 @@ EOF
         # Tulis ulang penuh — hanya bila dev memilihnya secara sadar.
         stamp="$(date +%Y%m%d-%H%M%S)"
         cp "$cfg" "$cfg.bak.$stamp"
+        bak_prune "$cfg"
         cp "$tpl" "$cfg"
         echo -e "${GREEN}${S_OK}${NC} config.toml ditulis ulang (cadangan: config.toml.bak.$stamp)."
         echo -e "  ${YELLOW}Seksi di luar kelolaan CooperAgent tidak ikut dibawa — ada di cadangan.${NC}"
@@ -536,6 +539,7 @@ apply_to_all_harness() { # $1 = gateway baru  $2 = kredensial  $3 = identitas
     if installed_omp; then
         stamp="$(date +%Y%m%d-%H%M%S)"
         cp "$OMP_YML_PATH" "$OMP_YML_PATH.bak.$stamp"
+        bak_prune "$OMP_YML_PATH"
         old_gw="$(omp_gateway_of "$OMP_YML_PATH" || true)"
         if [ -n "$old_gw" ] && [ "$old_gw" != "$(cooper_gateway_base "$new_url")" ]; then
             omp_set_base_url "$OMP_YML_PATH" "$old_gw" "$(cooper_gateway_base "$new_url")" || true
@@ -1195,6 +1199,7 @@ INFO
                 # kehilangan yang tidak bisa dibatalkan.
                 BAK="${DEST}.bak.$(date +%Y%m%d-%H%M%S)"
                 if cp "$DEST" "$BAK" 2>/dev/null && [ -s "$BAK" ]; then
+                    bak_prune "$DEST"
                     echo -e "${YELLOW}AGENTS.md sudah ada — dicadangkan: $(basename "$BAK")${NC}"
                 else
                     echo -e "${RED}${S_NO} Gagal mencadangkan $DEST — tidak menimpa.${NC}"
@@ -1318,6 +1323,7 @@ if [ "$AGENT_CHOICE" == "2" ]; then
         read -rp "Pilihan [1/2/3, default: 1]: " OMP_MODE
         case "${OMP_MODE:-1}" in
             2)  cp "$OMP_YML" "$OMP_YML.bak.$(date +%Y%m%d-%H%M%S)"
+                bak_prune "$OMP_YML"
                 # HANYA baris yang menunjuk gateway LAMA yang dipindahkan.
                 #
                 # Percobaan pertama mengganti setiap baseUrl non-localhost, dan
@@ -1333,6 +1339,7 @@ if [ "$AGENT_CHOICE" == "2" ]; then
                     echo -e "${YELLOW}! Alamat lama tidak terbaca — tidak ada yang diubah.${NC}"
                 fi ;;
             3)  cp "$OMP_YML" "$OMP_YML.bak.$(date +%Y%m%d-%H%M%S)"
+                bak_prune "$OMP_YML"
                 if render_omp_models; then
                     echo -e "${GREEN}${S_OK} models.yml ditulis ulang dari template${NC} (cadangan dibuat)"
                 else
@@ -1352,6 +1359,7 @@ if [ "$AGENT_CHOICE" == "2" ]; then
             # sudah diubah -- cadangan yang tidak mencadangkan apa pun.
             OMP_BAK="$OMP_YML.bak.$(date +%Y%m%d-%H%M%S)"
             [ -f "$OMP_BAK" ] || cp "$OMP_YML" "$OMP_BAK"
+            bak_prune "$OMP_YML"
             if omp_set_api_key "$OMP_YML" "$OMP_API_KEY" "$OMP_GW" \
                && grep -q "apiKey: *${OMP_API_KEY}" "$OMP_YML"; then
                 echo -e "${GREEN}${S_OK} apiKey diperbarui ke token${NC} (cadangan dibuat)"
