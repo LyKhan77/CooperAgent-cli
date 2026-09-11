@@ -99,6 +99,12 @@ Menambah profil ke template **tidak cukup**. `models.yml` omp hanya ditulis bila
 belum ada, dan merger pi hanya mengenal satu provider; keduanya diam-diam tidak
 mengantarkan apa pun ke dev yang sudah terpasang.
 
+Begitu pula **kedua** jalur pemasangan. Mengganti nama profil di `setup-dev.sh`
+saja meninggalkan `setup.sh` membaca nama baru atas config lama: dev ditanyai
+ulang alamat yang sudah ia jawab, lalu ditinggali seksi yatim berisi `api_key`-
+nya di sebelah seksi baru yang kosong. Setiap perubahan kosakata profil harus
+menyentuh keduanya.
+
 Dijaga: `test/test-harness-profiles.sh`, `test/test-omp-providers.sh`.
 Latar: [`docs/profil-model.md`](docs/profil-model.md).
 

@@ -273,10 +273,21 @@ esac
 # dengan jujur apa yang akan hilang bila ia memilih tulis-ulang penuh.
 MANAGED_SECTIONS="[cli] [features] [session] [memory] [models] [model.cooper-agent] [model.cooper-s1] [model.cooper-s2]"
 
+# Nama baru DULU, nama lama sebagai jalur mundur.
+#
+# Dev yang belum menjalankan setup sejak 12 September 2026 masih memakai
+# `[model.internal-qwen]`. Membaca nama baru saja mengembalikan kosong, dan
+# setup.sh lalu meminta alamat gateway yang sebenarnya sudah ia punya --
+# menanyakan ulang sesuatu yang sudah dijawab adalah cara paling cepat membuat
+# dev mengira pemasangnya rusak.
 read_existing_endpoint() {
-    awk '/^\[model\.cooper-agent\]/{f=1;next} /^\[/{f=0}
-         f && /^base_url/{sub(/.*=[[:space:]]*/,""); gsub(/^["'"'"']|["'"'"']$/,""); print; exit}' \
-        "$HOME/.grok/config.toml" 2>/dev/null
+    local cfg="$HOME/.grok/config.toml" sec ep
+    for sec in cooper-agent internal-qwen; do
+        ep="$(awk -v s="[model.$sec]" '$0==s{f=1;next} /^\[/{f=0}
+             f && /^base_url/{sub(/.*=[[:space:]]*/,""); gsub(/^["'"'"']|["'"'"']$/,""); print; exit}' \
+            "$cfg" 2>/dev/null)"
+        [ -n "$ep" ] && { printf '%s' "$ep"; return 0; }
+    done
 }
 
 read_existing_identity() {
@@ -457,8 +468,43 @@ presence_penalty = 0.0
 api_key = "${api_key_value}"
 EOF
 
+    # Nama profil lama diganti SEBELUM merge, sama seperti scripts/setup-dev.sh.
+    #
+    # Tanpa ini jalur onboarding meninggalkan `[model.internal-qwen]` sebagai
+    # seksi yatim di sebelah `[model.cooper-agent]` yang baru: dua entri untuk
+    # satu hal, yang satu dengan angka basi. `api_key` dev hidup di seksi lama,
+    # dan verifikasi membaca `context_window` PERTAMA yang ditemukan -- jadi
+    # seksi yatim itu menjawab 401 sekaligus mencetak centang untuk angka salah.
+    #
+    # Hasilnya masuk ke berkas SEMENTARA, bukan langsung ke config. Merge di
+    # bawah membandingkan hasilnya dengan config asli, jadi rename ikut terlihat
+    # sebagai perubahan dan cadangan `.bak` menyimpan keadaan SEBELUM migrasi.
+    # Menulis rename lebih dulu akan membuat cadangan itu merekam berkas yang
+    # sudah terlanjur berubah -- cadangan yang tidak bisa dipakai mundur.
+    src="$cfg"
+    if [ -f "$cfg" ] && [ "$mode" != "overwrite" ] &&
+       grep -qE '^\[model\.internal-qwen(\]|-s2\])' "$cfg" 2>/dev/null; then
+        src="$(mktemp)"
+        awk '
+            /^\[model\.internal-qwen\][[:space:]]*$/    { print "[model.cooper-agent]"; next }
+            /^\[model\.internal-qwen-s2\][[:space:]]*$/ { print "[model.cooper-s2]";    next }
+            { print }
+        ' "$cfg" > "$src"
+        echo -e "  ${GREEN}${S_OK}${NC} profil lama diganti nama ke cooper-* (isinya dipertahankan)"
+        # `internal-qwen-localhost` sengaja TIDAK diganti: tidak ada padanannya
+        # sejak alamat menjadi pilihan `--endpoint`. Menghapus config yang masih
+        # bekerja bukan tugas pemasang.
+        if grep -q '^\[model\.internal-qwen-localhost\]' "$cfg" 2>/dev/null; then
+            echo -e "  ${YELLOW}!${NC} [model.internal-qwen-localhost] kini di luar kelolaan CooperAgent."
+            echo -e "    Alamat sekarang dipilih lewat --endpoint local; hapus bila tidak dipakai."
+        fi
+    fi
+
     if [ -f "$cfg" ] && [ "$mode" != "overwrite" ]; then
-        merged="$(merge_toml "$tpl" "$cfg")"
+        merged="$(merge_toml "$tpl" "$src")"
+        # `if`, bukan `[ ... ] && rm` -- `set -e` aktif, dan uji yang gagal
+        # sebagai perintah terakhir akan menghentikan pemasang di tengah jalan.
+        if [ "$src" != "$cfg" ]; then rm -f "$src"; fi
         if [ "$merged" == "$(cat "$cfg")" ]; then
             echo -e "${GREEN}${S_OK}${NC} config.toml sudah sesuai — tidak ada perubahan."
         else

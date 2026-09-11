@@ -74,6 +74,117 @@ grep -q 'cooperagent' "$ROOT/scripts/lib/omp_models.sh" \
     && ok "omp_models.sh masih mengenali cooperagent (token dev lama)" \
     || no "pengenalan omp lama hilang" "token dev lama tidak akan diperbarui"
 
+echo "config lama tetap terbaca oleh KEDUA jalur pemasangan:"
+# Regresi 12 September 2026: `read_existing_endpoint` diganti membaca
+# `[model.cooper-agent]` saja, sehingga dev yang belum bermigrasi kehilangan
+# alamatnya dan pemasang menanyakannya ulang. Config-nya tidak rusak -- yang
+# rusak adalah pemasang yang berpura-pura tidak pernah mengenalnya.
+SBX="$(mktemp -d)"; trap 'rm -rf "$SBX"' EXIT
+mkdir -p "$SBX/.grok"
+printf '[model.internal-qwen]\nbase_url = "http://198.51.100.10:8987/api/v1"\n' > "$SBX/.grok/config.toml"
+FN="$(mktemp)"; awk '/^read_existing_endpoint\(\) \{/,/^\}/' "$ROOT/setup.sh" > "$FN"
+got="$({ cat "$FN"; echo "HOME=$SBX; read_existing_endpoint"; } | bash 2>/dev/null)"
+[ "$got" = "http://198.51.100.10:8987/api/v1" ] \
+    && ok "setup.sh membaca endpoint dari nama LAMA" \
+    || no "setup.sh membaca endpoint dari nama lama" "dapat '${got:-kosong}'"
+
+printf '[model.cooper-agent]\nbase_url = "http://198.51.100.20:8987/api/v1"\n' > "$SBX/.grok/config.toml"
+got="$({ cat "$FN"; echo "HOME=$SBX; read_existing_endpoint"; } | bash 2>/dev/null)"
+[ "$got" = "http://198.51.100.20:8987/api/v1" ] \
+    && ok "setup.sh membaca endpoint dari nama BARU" \
+    || no "setup.sh membaca endpoint dari nama baru" "dapat '${got:-kosong}'"
+rm -f "$FN"
+
+echo "KETIGA jalur pemasangan punya migrasi yang sama:"
+# setup.sh (onboarding Unix), setup.ps1 (onboarding Windows), dan setup-dev.sh
+# (pembaru). Mengganti nama di sebagian saja meninggalkan dev di jalur lain
+# dengan seksi yatim berisi api_key-nya di sebelah seksi baru yang kosong --
+# yang menjawab 401 pada profil yang baru saja dianjurkan pemasang.
+for f in setup.sh setup.ps1 scripts/setup-dev.sh; do
+    grep -qE 'internal-qwen.*cooper-agent' "$ROOT/$f" \
+        && ok "$f mengganti internal-qwen -> cooper-agent" \
+        || no "$f mengganti internal-qwen -> cooper-agent" "jalur ini meninggalkan seksi yatim"
+    grep -qE 'internal-qwen-s2.*cooper-s2' "$ROOT/$f" \
+        && ok "$f mengganti -s2 -> cooper-s2" \
+        || no "$f mengganti -s2 -> cooper-s2" "seksi s2 lama tertinggal"
+done
+grep -q "internal-qwen" "$ROOT/setup.ps1" \
+    && ok "setup.ps1 masih mengenali nama lama" \
+    || no "setup.ps1 masih mengenali nama lama" "dev Windows lama kehilangan alamatnya"
+
+echo "migrasi setup.sh BENAR-BENAR dijalankan, bukan sekadar disebut:"
+# Uji di atas hanya membuktikan teksnya ada. Yang penting adalah hasilnya:
+# seksi lama berganti nama DI TEMPAT dengan isinya terbawa, kunci berbayar dev
+# selamat, dan cadangan merekam keadaan SEBELUM migrasi -- cadangan yang sudah
+# ikut bermigrasi tidak bisa dipakai mundur, dan itu baru ketahuan saat
+# seseorang membutuhkannya.
+mkdir -p "$SBX/run/.grok"
+cat > "$SBX/run/.grok/config.toml" <<'CFG'
+[ui]
+theme = "dracula"
+
+[model.internal-qwen]
+model = "qwen35"
+base_url = "http://198.51.100.10:8987/api/v1"
+api_key = "dev-lee@laptop-tuf"
+
+[model.internal-qwen-s2]
+model = "qwen35"
+
+[model.internal-qwen-localhost]
+model = "qwen35"
+
+[model.claude-saya]
+api_key = "sk-ant-KUNCI-BERBAYAR-DEV"
+CFG
+
+DRV="$SBX/drv.sh"
+{
+    echo 'set -e'
+    echo 'GREEN=""; YELLOW=""; NC=""; S_OK="ok"'
+    echo 'CONTRACT_MODEL_ID=qwen35; CONTRACT_CONTEXT_WINDOW=262144'
+    echo 'CONTRACT_MAX_TOKENS=32768; CONTRACT_COMPACT_PCT=75'
+    echo 'CONTRACT_COMPACT_TOKENS=196608'
+    echo 'contract_fmt(){ printf "%s" "$1"; }'
+    echo 'bak_prune(){ :; }'
+    echo ". '$ROOT/scripts/lib/merge_toml.sh'"
+    awk '/^list_unmanaged_sections\(\) \{/,/^\}/' "$ROOT/setup.sh"
+    awk '/^write_grok_config\(\) \{/,/^\}/'      "$ROOT/setup.sh"
+    echo 'write_grok_config "http://198.51.100.10:8987/api/v1" "lee@laptop-tuf" merge'
+} > "$DRV"
+out="$(HOME="$SBX/run" bash "$DRV" 2>&1)"; rc=$?
+cfg="$SBX/run/.grok/config.toml"
+
+[ $rc -eq 0 ] && ok "write_grok_config selesai tanpa galat" \
+               || no "write_grok_config selesai" "rc=$rc: $(printf '%s' "$out" | tail -3)"
+
+grep -q '^\[model\.internal-qwen\]' "$cfg" \
+    && no "seksi lama diganti nama" "[model.internal-qwen] masih ada sebagai seksi yatim" \
+    || ok "seksi lama tidak lagi tertinggal"
+grep -q '^\[model\.cooper-agent\]' "$cfg" \
+    && ok "[model.cooper-agent] ada" || no "[model.cooper-agent] ada" "tidak ditemukan"
+grep -q 'dev-lee@laptop-tuf' "$cfg" \
+    && ok "api_key dev terbawa oleh rename" || no "api_key dev terbawa" "kunci hilang saat rename"
+grep -q 'sk-ant-KUNCI-BERBAYAR-DEV' "$cfg" \
+    && ok "kunci berbayar dev selamat" || no "kunci berbayar dev selamat" "TERTIMPA"
+grep -q 'theme = "dracula"' "$cfg" \
+    && ok "[ui] milik dev utuh" || no "[ui] milik dev utuh" "hilang"
+grep -q '^\[model\.internal-qwen-localhost\]' "$cfg" \
+    && ok "-localhost dibiarkan (tidak ada padanannya)" \
+    || no "-localhost dibiarkan" "pemasang menghapus config yang masih bekerja"
+printf '%s' "$out" | grep -q 'internal-qwen-localhost' \
+    && ok "dev diberi tahu -localhost kini di luar kelolaan" \
+    || no "dev diberi tahu soal -localhost" "ia tertinggal diam-diam"
+
+bak="$(ls "$cfg".bak.* 2>/dev/null | head -1)"
+if [ -n "$bak" ]; then
+    grep -q '^\[model\.internal-qwen\]' "$bak" \
+        && ok "cadangan merekam keadaan SEBELUM migrasi" \
+        || no "cadangan merekam keadaan sebelum migrasi" "cadangan sudah ikut bermigrasi"
+else
+    no "cadangan dibuat" "config berubah tanpa cadangan"
+fi
+
 echo
 echo "lulus $pass, gagal $fail"
 [[ $fail -eq 0 ]]
