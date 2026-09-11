@@ -10,7 +10,7 @@ dari itu yang boleh masuk ke sini.**
 
 ---
 
-## Lima aturan yang tidak boleh dilanggar
+## Enam aturan yang tidak boleh dilanggar
 
 ### 1. Tidak ada alamat internal
 
@@ -83,6 +83,25 @@ Jangan memakai escape `\uXXXX` di bash: itu menuntut bash 4.2, sedangkan
 
 Dijaga: `test/test-cli-output.sh`.
 
+### 6. Satu kosakata profil untuk semua harness
+
+Grok, omp, dan pi memakai nama yang sama: `cooper-agent`, `cooper-s1`,
+`cooper-s2`. Definisinya hidup di **enam** tempat — tiga template, dua pemasang
+yang memuat salinan inline sendiri, dan pembaru.
+
+Tidak ada satu berkas pun yang salah ketika mereka menyimpang; yang salah adalah
+selisihnya, dan tidak ada uji yang melihat lebih dari satu berkas sampai
+12 September 2026. Akibatnya berjalan berbulan-bulan: pi hanya punya satu dari
+tiga profil, dan tidak ada harness yang bisa menembus langsung ke s1 — sehingga
+perbandingan antar node berat sebelah.
+
+Menambah profil ke template **tidak cukup**. `models.yml` omp hanya ditulis bila
+belum ada, dan merger pi hanya mengenal satu provider; keduanya diam-diam tidak
+mengantarkan apa pun ke dev yang sudah terpasang.
+
+Dijaga: `test/test-harness-profiles.sh`, `test/test-omp-providers.sh`.
+Latar: [`docs/profil-model.md`](docs/profil-model.md).
+
 ---
 
 ## Sebelum menutup pekerjaan
@@ -94,6 +113,8 @@ bash test/test-cli-output.sh                 #  9 pemeriksaan
 bash test/test-setup-preserves-dev-config.sh
 bash test/test-omp-api-key.sh                # models.yml omp membawa token
 bash test/test-credential-gate.sh            # gerbang kredensial + mode "sudah terpasang"
+bash test/test-harness-profiles.sh           # ketiga profil seragam di 5 sumber
+bash test/test-omp-providers.sh              # provider hilang ditambah, milik dev selamat
 ```
 
 Tiga yang pertama hermetis — masing-masing menyalakan gateway tiruannya sendiri

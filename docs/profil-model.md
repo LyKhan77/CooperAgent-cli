@@ -75,3 +75,43 @@ Meninggalkan seksi lama merusak dua hal, dan keduanya diam:
 Tidak perlu menyunting repo ini. `cooperagent.upstreams` pada `GET /v1/models`
 menyebut node yang ada; profil `cooper-s<N>` mengikuti pola yang sama
 (`/api/v1/upstream/s<N>`).
+
+## Apa yang menjaga keseragamannya
+
+Definisi profil hidup di **enam** tempat:
+
+| berkas | perannya |
+| :--- | :--- |
+| `templates/config.toml` | Grok, jalur pembaruan |
+| `templates/omp-models.yml` | omp |
+| `templates/pi-models.json` | pi |
+| `setup.sh` | salinan inline, jalur onboarding Unix |
+| `setup.ps1` | salinan inline, jalur onboarding Windows |
+| `scripts/setup-dev.sh` | migrasi nama lama |
+
+Ketika keenamnya menyimpang, **tidak ada satu berkas pun yang salah** — yang
+salah adalah selisihnya. Itu jenis kegagalan yang tidak pernah muncul sebagai
+galat: ia hanya membuat dev yang berpindah harness menemukan nama yang berbeda,
+atau tidak menemukan profil sama sekali.
+
+`test/test-harness-profiles.sh` membandingkan kelimanya terhadap daftar yang
+sama, lalu memeriksa tiga hal yang gagal secara diam-diam bila terlewat:
+
+- **Profil langsung benar-benar menunjuk `/upstream/sN`.** Yang menyalin
+  endpoint auto-routing bukan alat banding — ia ikut routing, dan hasil
+  bandingnya bohong tanpa ada yang tahu.
+- **Peringatan kehilangan failover ikut tersalin.** Memindahkan konfigurasi
+  tanpa peringatannya berarti memindahkan jebakannya saja.
+- **Tidak ada IPv4 internal di jalur pemasang** (aturan #1 `AGENTS.md`).
+
+`test/test-omp-providers.sh` menjaga sisi yang berlawanan: provider yang hilang
+memang ditambahkan, **dan** kunci berbayar dev tetap selamat. Menambal yang
+pertama dengan cara yang melanggar yang kedua adalah kemunduran, bukan
+perbaikan.
+
+### Yang belum terjaga
+
+Jalur PowerShell tidak dapat dijalankan pada runner Linux — `pwsh` tidak
+terpasang. `scripts/lib/PiModels.ps1` dan `setup.ps1` diubah mengikuti cerminan
+jalur Node, dan `test/Test-PiModels.ps1` sudah menuntut ketiga profil, tetapi
+keduanya menunggu verifikasi di Windows.
