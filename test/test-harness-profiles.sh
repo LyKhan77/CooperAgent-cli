@@ -95,18 +95,23 @@ got="$({ cat "$FN"; echo "HOME=$SBX; read_existing_endpoint"; } | bash 2>/dev/nu
     || no "setup.sh membaca endpoint dari nama baru" "dapat '${got:-kosong}'"
 rm -f "$FN"
 
-echo "KETIGA jalur pemasangan punya migrasi yang sama:"
-# setup.sh (onboarding Unix), setup.ps1 (onboarding Windows), dan setup-dev.sh
-# (pembaru). Mengganti nama di sebagian saja meninggalkan dev di jalur lain
-# dengan seksi yatim berisi api_key-nya di sebelah seksi baru yang kosong --
-# yang menjawab 401 pada profil yang baru saja dianjurkan pemasang.
-for f in setup.sh setup.ps1 scripts/setup-dev.sh; do
-    grep -qE 'internal-qwen.*cooper-agent' "$ROOT/$f" \
-        && ok "$f mengganti internal-qwen -> cooper-agent" \
-        || no "$f mengganti internal-qwen -> cooper-agent" "jalur ini meninggalkan seksi yatim"
-    grep -qE 'internal-qwen-s2.*cooper-s2' "$ROOT/$f" \
-        && ok "$f mengganti -s2 -> cooper-s2" \
-        || no "$f mengganti -s2 -> cooper-s2" "seksi s2 lama tertinggal"
+echo "KEEMPAT jalur pemasangan punya migrasi yang sama:"
+# Dua pemasang (setup.sh, setup.ps1) dan DUA pembaru (scripts/setup-dev.sh,
+# scripts/setup-dev.ps1). Yang terakhir sempat terlewat pada 12 September 2026
+# justru saat jalur lain diperbaiki -- padahal itulah jalur yang dianjurkan
+# docs/dev_setup.md kepada dev Windows yang SUDAH terpasang, yakni satu-satunya
+# populasi yang pasti memegang config lama.
+#
+# Polanya menuntut `[model.cooper-agent]` sebagai literal SESUDAH internal-qwen,
+# bukan sekadar kedua kata di satu baris: `scripts/setup-dev.ps1` punya regex
+# penyuntik token yang menyebut keduanya sekaligus dan tidak mengganti apa pun.
+for f in setup.sh setup.ps1 scripts/setup-dev.sh scripts/setup-dev.ps1; do
+    grep -qE 'internal-qwen.*\[model\.cooper-agent\]' "$ROOT/$f" \
+        && ok "$f: internal-qwen -> [model.cooper-agent]" \
+        || no "$f: internal-qwen -> [model.cooper-agent]" "jalur ini meninggalkan seksi yatim"
+    grep -qE 'internal-qwen-s2.*\[model\.cooper-s2\]' "$ROOT/$f" \
+        && ok "$f: -s2 -> [model.cooper-s2]" \
+        || no "$f: -s2 -> [model.cooper-s2]" "seksi s2 lama tertinggal"
 done
 grep -q "internal-qwen" "$ROOT/setup.ps1" \
     && ok "setup.ps1 masih mengenali nama lama" \

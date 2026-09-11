@@ -115,7 +115,34 @@ $managed = Get-ManagedKeys $TplRendered
 
 if (Test-Path $Cfg) {
     $existing = @(Get-Content -LiteralPath $Cfg)
-    $merged = Merge-Toml $managed $existing
+
+    # Rename profil lama, sama seperti setup.sh, setup.ps1, dan setup-dev.sh.
+    #
+    # Jalur INI yang dianjurkan docs/dev_setup.md kepada dev Windows yang sudah
+    # terpasang -- justru jalur yang paling mungkin bertemu config lama. Tanpa
+    # rename, `[model.internal-qwen]` tertinggal sebagai seksi yatim: `api_key`
+    # dev hidup di sana, dan verifikasi membaca `context_window` PERTAMA yang
+    # ditemukan, sehingga seksi basi itu menjawab 401 sekaligus mencetak centang
+    # untuk angka yang salah.
+    #
+    # Hasilnya ke $source, BUKAN ke $existing: perbandingan dan cadangan `.bak`
+    # harus tetap melihat berkas apa adanya di disk.
+    $source = $existing
+    if (@($existing | Where-Object { $_ -match '^\[model\.internal-qwen(-s2)?\]\s*$' }).Count -gt 0) {
+        $source = @($existing | ForEach-Object {
+            if ($_ -match '^\[model\.internal-qwen\]\s*$')        { '[model.cooper-agent]' }
+            elseif ($_ -match '^\[model\.internal-qwen-s2\]\s*$') { '[model.cooper-s2]' }
+            else { $_ }
+        })
+        Write-Host '  [v] profil lama diganti nama ke cooper-* (isinya dipertahankan)' -ForegroundColor Green
+        # `internal-qwen-localhost` sengaja TIDAK diganti: tidak ada padanannya
+        # sejak alamat menjadi pilihan -Endpoint.
+        if (@($existing | Where-Object { $_ -match '^\[model\.internal-qwen-localhost\]\s*$' }).Count -gt 0) {
+            Write-Host '  !  [model.internal-qwen-localhost] kini di luar kelolaan CooperAgent.' -ForegroundColor Yellow
+        }
+    }
+
+    $merged = Merge-Toml $managed $source
 } else {
     Write-Host 'config.toml belum ada - dibuat dari template.' -ForegroundColor Yellow
     $existing = @()

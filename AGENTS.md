@@ -86,8 +86,8 @@ Dijaga: `test/test-cli-output.sh`.
 ### 6. Satu kosakata profil untuk semua harness
 
 Grok, omp, dan pi memakai nama yang sama: `cooper-agent`, `cooper-s1`,
-`cooper-s2`. Definisinya hidup di **enam** tempat — tiga template, dua pemasang
-yang memuat salinan inline sendiri, dan pembaru.
+`cooper-s2`. Definisinya hidup di **tujuh** tempat — tiga template, dua pemasang
+yang memuat salinan inline sendiri, dan dua pembaru (Unix dan Windows).
 
 Tidak ada satu berkas pun yang salah ketika mereka menyimpang; yang salah adalah
 selisihnya, dan tidak ada uji yang melihat lebih dari satu berkas sampai
@@ -99,11 +99,13 @@ Menambah profil ke template **tidak cukup**. `models.yml` omp hanya ditulis bila
 belum ada, dan merger pi hanya mengenal satu provider; keduanya diam-diam tidak
 mengantarkan apa pun ke dev yang sudah terpasang.
 
-Begitu pula **kedua** jalur pemasangan. Mengganti nama profil di `setup-dev.sh`
-saja meninggalkan `setup.sh` membaca nama baru atas config lama: dev ditanyai
+Begitu pula **keempat** jalur pemasangan: dua pemasang dan dua pembaru.
+Mengganti nama profil di sebagian saja meninggalkan dev di jalur lain ditanyai
 ulang alamat yang sudah ia jawab, lalu ditinggali seksi yatim berisi `api_key`-
-nya di sebelah seksi baru yang kosong. Setiap perubahan kosakata profil harus
-menyentuh keduanya.
+nya di sebelah seksi baru yang kosong. Yang paling mudah terlewat adalah
+`scripts/setup-dev.ps1`, dan justru itu jalur yang dianjurkan kepada dev Windows
+yang **sudah** terpasang — satu-satunya populasi yang pasti memegang config
+lama. Setiap perubahan kosakata profil harus menyentuh keempatnya.
 
 Dijaga: `test/test-harness-profiles.sh`, `test/test-omp-providers.sh`.
 Latar: [`docs/profil-model.md`](docs/profil-model.md).

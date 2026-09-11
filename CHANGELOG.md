@@ -26,6 +26,37 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ## [Unreleased]
 
+### Fixed · 2026-09-12 — Pembaru Windows tidak ikut bermigrasi
+
+**Konteks.** Rename profil `internal-qwen*` → `cooper-*` dipasang di `setup.sh`,
+`setup.ps1`, dan `scripts/setup-dev.sh`, lalu didokumentasikan sebagai "ketiga
+jalur". Jalurnya ada **empat**: `scripts/setup-dev.ps1` terlewat — dan itulah
+jalur yang `docs/dev_setup.md` anjurkan kepada dev Windows yang **sudah**
+terpasang, yakni satu-satunya populasi yang pasti memegang config lama.
+
+**Perubahan.**
+
+- `scripts/setup-dev.ps1` — rename dijalankan sebelum `Merge-Toml`, hasilnya ke
+  `$source` sehingga cadangan `.bak` tetap merekam berkas apa adanya di disk.
+- `test/test-harness-profiles.sh` — kini menuntut **keempat** jalur, dengan pola
+  yang lebih ketat: `[model.cooper-agent]` sebagai literal sesudah
+  `internal-qwen`. Pola longgar sebelumnya diloloskan oleh regex penyuntik token
+  di `setup-dev.ps1` yang menyebut kedua nama pada satu baris dan tidak
+  mengganti apa pun. 31 → 33.
+
+**Bukti.** Dengan `scripts/setup-dev.ps1` dikembalikan ke keadaan lama, uji
+merah 2; dengan perbaikannya, 33/0. Keseimbangan kurung 142/142 (sebelumnya
+134/134).
+
+**Dampak.** Dev Windows yang memakai pembaru tidak lagi ditinggali
+`[model.internal-qwen]` yatim di sebelah `[model.cooper-agent]`.
+
+**Rollback.** Buang blok rename; uji akan kembali merah 2.
+
+**Belum terverifikasi.** Jalur PowerShell tidak dijalankan di runner Linux —
+`pwsh` tidak terpasang. Yang dijalankan hanyalah keseimbangan kurung dan uji
+statis pola rename.
+
 ### Fixed · 2026-09-12 — `--remove-rules` berhenti tepat sebelum menghapus
 
 **Konteks.** `scripts/setup-dev.sh --remove-rules` melaporkan aturan agent

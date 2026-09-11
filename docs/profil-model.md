@@ -43,12 +43,15 @@ lain setiap kali kontrak berubah.
 
 ## Kalau Anda sudah terpasang sebelum 12 September 2026
 
-Jalankan **salah satu** dari tiga jalur — ketiganya bermigrasi dengan cara yang
-sama sejak 12 September 2026:
+Jalankan **salah satu** dari empat jalur — keempatnya bermigrasi dengan cara
+yang sama sejak 12 September 2026:
 
-- `./scripts/setup-dev.sh` — pembaru, untuk dev yang sudah terpasang.
-- `./setup.sh` → **opsi 1 (perbarui parameter)** — onboarding Unix/macOS.
-- `.\setup.ps1` → **opsi 1** — onboarding Windows.
+| jalur | untuk siapa |
+| :--- | :--- |
+| `./scripts/setup-dev.sh` | pembaru, dev Unix/macOS yang sudah terpasang |
+| `.\scripts\setup-dev.ps1` | pembaru, dev Windows yang sudah terpasang |
+| `./setup.sh` → **opsi 1** | onboarding Unix/macOS |
+| `.\setup.ps1` → **opsi 1** | onboarding Windows |
 
 Migrasinya otomatis:
 
@@ -85,7 +88,7 @@ menyebut node yang ada; profil `cooper-s<N>` mengikuti pola yang sama
 
 ## Apa yang menjaga keseragamannya
 
-Definisi profil hidup di **enam** tempat:
+Definisi profil hidup di **tujuh** tempat:
 
 | berkas | perannya |
 | :--- | :--- |
@@ -94,7 +97,8 @@ Definisi profil hidup di **enam** tempat:
 | `templates/pi-models.json` | pi |
 | `setup.sh` | salinan inline + migrasi, jalur onboarding Unix |
 | `setup.ps1` | salinan inline + migrasi, jalur onboarding Windows |
-| `scripts/setup-dev.sh` | salinan inline + migrasi, jalur pembaruan |
+| `scripts/setup-dev.sh` | migrasi, jalur pembaruan Unix |
+| `scripts/setup-dev.ps1` | migrasi, jalur pembaruan Windows |
 
 Ketika keenamnya menyimpang, **tidak ada satu berkas pun yang salah** — yang
 salah adalah selisihnya. Itu jenis kegagalan yang tidak pernah muncul sebagai
@@ -119,7 +123,15 @@ lama di kotak pasir, lalu hasilnya diperiksa. Sampai saat itu hanya
 dan ditanyai ulang alamat yang sebenarnya sudah ia jawab, lalu ditinggali seksi
 yatim di sebelah seksi baru. Jalur pemasangan yang memperlakukan config lama
 secara berbeda adalah perilaku yang harus dijaga sinkron dengan tangan, jadi
-ujinya sekarang menuntut **ketiganya** memuat rename yang sama.
+ujinya sekarang menuntut **keempatnya** memuat rename yang sama.
+
+`scripts/setup-dev.ps1` sempat terlewat justru pada hari jalur lain diperbaiki —
+padahal itulah jalur yang `docs/dev_setup.md` anjurkan kepada dev Windows yang
+**sudah** terpasang, yakni satu-satunya populasi yang pasti memegang config
+lama. Ujinya kini menuntut `[model.cooper-agent]` sebagai literal sesudah
+`internal-qwen`, bukan sekadar kedua kata di satu baris: berkas itu punya regex
+penyuntik token yang menyebut keduanya sekaligus dan tidak mengganti apa pun —
+pola yang longgar akan lulus tanpa ada yang bermigrasi.
 
 Migrasinya menulis ke berkas **sementara** (`$source` pada jalur PowerShell),
 lalu merge membandingkannya dengan config asli. Urutan itu bukan gaya penulisan: menulis rename lebih dulu membuat
