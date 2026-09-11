@@ -250,8 +250,19 @@ t "--no-rules: skill TETAP dipasang"     "$([ -f "$SB/norules/.grok/skills/coope
 HOME="$SB/norules" GROK_HOME="$SB/norules/.grok" $SETUP --rules >/dev/null 2>&1
 t "--rules: aturan dipasang" "$([ -f "$SB/norules/.grok/AGENTS.md" ] && echo ya)" "ya"
 
-HOME="$SB/norules" GROK_HOME="$SB/norules/.grok" $SETUP --remove-rules >/dev/null 2>&1
+# Keluarannya DITANGKAP, bukan dibuang. `--remove-rules` pernah mati di tengah
+# jalan karena `bak_prune` belum di-source pada titik itu -- di bawah `set -e`
+# skrip berhenti TEPAT setelah cadangan dibuat dan TEPAT SEBELUM `rm`. Satu-
+# satunya jejaknya adalah `command not found` di stderr, dan stderr dibuang ke
+# /dev/null; yang tersisa hanyalah satu baris merah tanpa sebab, dan sebuah
+# `.bak` di sebelah berkas yang katanya sudah dilepas.
+rr_out="$(HOME="$SB/norules" GROK_HOME="$SB/norules/.grok" $SETUP --remove-rules 2>&1)"; rr_rc=$?
+t "--remove-rules: keluar bersih"    "$rr_rc" "0"
+t "--remove-rules: tak ada perintah hilang" \
+  "$(printf '%s' "$rr_out" | grep -c 'command not found')" "0"
 t "--remove-rules: aturan dilepas"   "$([ -f "$SB/norules/.grok/AGENTS.md" ] && echo ada || echo tidak)" "tidak"
+t "--remove-rules: aturan omp dilepas" \
+  "$([ -f "$SB/norules/.omp/agent/AGENTS.md" ] && echo ada || echo tidak)" "tidak"
 t "--remove-rules: cadangan dibuat"  "$(ls "$SB/norules/.grok/"AGENTS.md.bak.* >/dev/null 2>&1 && echo ya)" "ya"
 t "--remove-rules: skill utuh"       "$([ -f "$SB/norules/.grok/skills/cooper-handoff/SKILL.md" ] && echo ya)" "ya"
 
