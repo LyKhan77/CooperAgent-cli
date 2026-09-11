@@ -115,3 +115,14 @@ Jalur PowerShell tidak dapat dijalankan pada runner Linux — `pwsh` tidak
 terpasang. `scripts/lib/PiModels.ps1` dan `setup.ps1` diubah mengikuti cerminan
 jalur Node, dan `test/Test-PiModels.ps1` sudah menuntut ketiga profil, tetapi
 keduanya menunggu verifikasi di Windows.
+
+### Penjagaan statis untuk jalur PowerShell
+
+`test/test-credential-gate.sh` memeriksa keseimbangan kurung setiap berkas
+`.ps1`. `PiModels.ps1` dan `Test-PiModels.ps1` ditambahkan ke daftar itu pada
+12 September 2026 — keduanya berkas PowerShell yang paling sering disunting dari
+mesin Linux, tempat `pwsh` tidak terpasang.
+
+Ia tidak membuktikan berkasnya berjalan. Ia hanya menutup penyebab kegagalan
+yang paling mungkin dari suntingan struktural, dan menutupnya di tempat yang
+bisa dijalankan setiap hari alih-alih menunggu seorang dev Windows menemukannya.
