@@ -41,13 +41,24 @@ load_envrc = true
 enabled = true
 
 [models]
-default = "internal-qwen"
+default = "cooper-agent"
 stream_tool_calls = true
 max_tokens = __MAX_TOKENS__
 max_completion_tokens = __MAX_TOKENS__
 max_output_tokens = __MAX_TOKENS__
 
-[model.internal-qwen]
+# TIGA profil, nama yang sama di Grok, omp, dan pi.
+#
+# Sampai 12 September 2026 tiap harness memakai kosakatanya sendiri —
+# `internal-qwen*` di sini, `cooperagent*` di omp, dan pi hanya punya satu dari
+# tiga. Dev yang berpindah harness harus menghafal nama berbeda untuk hal sama.
+#
+# Yang membedakan ketiganya hanya SATU hal: siapa yang memilih server.
+# ALAMAT bukan bagian dari pilihan ini — LAN/VPN/localhost dijawab sekali saat
+# setup lewat `--endpoint`, dan alamatnya datang dari kontrak gateway.
+
+# Sehari-hari. Gateway yang memilih server; failover otomatis.
+[model.cooper-agent]
 model = "__MODEL_ID__"
 # @keep-existing
 # Alamat gateway berbeda per jaringan. Penanda di atas membuat baris ini HANYA
@@ -68,32 +79,31 @@ max_tokens = __MAX_TOKENS__
 max_completion_tokens = __MAX_TOKENS__
 max_output_tokens = __MAX_TOKENS__
 
-# Varian untuk dev yang bekerja langsung di host GPU (gateway di localhost).
-# Kunci di bawah dikelola sama seperti internal-qwen; api_key tetap milik dev.
-[model.internal-qwen-localhost]
+# Menembus routing gateway, langsung ke server 1.
+#
+# ALAT VERIFIKASI, bukan cara kerja sehari-hari. Sesi yang memakai entri ini
+# KEHILANGAN failover: kalau server 1 mati, request-nya gagal alih-alih
+# berpindah. Gunanya membandingkan jawaban kedua node pada prompt yang sama.
+#
+# Sampai 12 September 2026 hanya s2 yang punya entri langsung, sehingga
+# perbandingannya berat sebelah — s2 bisa ditembak, s1 tidak.
+[model.cooper-s1]
 model = "__MODEL_ID__"
-base_url = "http://127.0.0.1:8987/api/v1"
+# @keep-existing
+# Sama seperti cooper-agent: alamat gateway berbeda per jaringan. Tanpa penanda
+# ini, dev yang sedang di VPN akan mendapati entrinya dikembalikan ke alamat LAN
+# dan berhenti bekerja.
+base_url = "__GATEWAY__/api/v1/upstream/s1"
 api_backend = "chat_completions"
 context_window = __CONTEXT_WINDOW__
 max_tokens = __MAX_TOKENS__
 max_completion_tokens = __MAX_TOKENS__
 max_output_tokens = __MAX_TOKENS__
 
-# Menembus routing gateway, langsung ke server 2.
-#
-# ALAT VERIFIKASI, bukan cara kerja sehari-hari. Sesi yang memakai entri ini
-# kehilangan failover otomatis: kalau server 2 mati, request-nya gagal alih-alih
-# berpindah. Gunanya uji handoff H1-H2 dan membandingkan kualitas jawaban antara
-# Q8_0 (server 1) dan UD-Q4_K_XL (server 2) pada prompt yang sama.
-#
-# Sehari-hari tetap `internal-qwen`: satu endpoint, gateway yang memilih server.
-[model.internal-qwen-s2]
+# Pasangan cooper-s1, langsung ke server 2. KEHILANGAN failover, sama alasannya.
+[model.cooper-s2]
 model = "__MODEL_ID__"
 # @keep-existing
-# Sama seperti internal-qwen: alamat gateway berbeda per jaringan. Tanpa penanda
-# ini, dev yang sedang di VPN akan mendapati entri s2-nya dikembalikan ke alamat
-# LAN dan berhenti bekerja. Yang tahu jaringan dev adalah setup.sh/setup.ps1 —
-# skrip ini tidak.
 base_url = "__GATEWAY__/api/v1/upstream/s2"
 api_backend = "chat_completions"
 context_window = __CONTEXT_WINDOW__

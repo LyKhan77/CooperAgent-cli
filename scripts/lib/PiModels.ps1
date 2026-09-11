@@ -59,74 +59,78 @@ function Merge-PiModels([string]$ExistingPath, [string]$TemplatePath) {
         Set-PiProperty $root 'providers' $providers
     } else { Assert-PiObject $providers 'providers' | Out-Null }
 
-    $tplProvider = Get-PiPropertyValue $tpl 'providers' | ForEach-Object {
-        Get-PiPropertyValue $_ 'cooperagent'
-    }
-    if ($null -eq $tplProvider) { throw 'Template models pi tidak memuat providers.cooperagent' }
-    Assert-PiObject $tplProvider 'providers.cooperagent template' | Out-Null
+    $tplProviders = Get-PiPropertyValue $tpl 'providers'
+    if ($null -eq $tplProviders) { throw 'Template models pi tidak memuat providers' }
+    Assert-PiObject $tplProviders 'providers template' | Out-Null
 
-    $provider = Get-PiPropertyValue $providers 'cooperagent'
-    if ($null -eq $provider) { $provider = [pscustomobject]@{} }
-    else { Assert-PiObject $provider 'providers.cooperagent' | Out-Null }
-
-    # `Get-PiPropertyValue` TIDAK boleh dipakai untuk nilai bertipe array.
+    # SETIAP provider di template di-merge, bukan hanya satu.
     #
-    # Ia berakhir dengan `return $p.Value`, dan `return` mengirim nilai ke
-    # pipeline -- pipeline MEMBONGKAR array. Array berisi satu elemen keluar
-    # sebagai elemennya sendiri, bukan sebagai array. Template ini memuat tepat
-    # satu model, sehingga `-isnot [System.Array]` bernilai benar dan gerbang
-    # menuduh template kosong: "Template models pi tidak memuat model" pada
-    # template yang jelas-jelas memuatnya.
-    #
-    # Membaca `.Value` dari objek propertinya langsung mempertahankan tipe --
-    # pola yang memang sudah dipakai Merge-PiSettings untuk `skills`. Terjadi
-    # di Windows 4 September 2026; jalur Unix tidak terpengaruh karena merge-nya
-    # dikerjakan Node, bukan PowerShell.
-    $desiredModelsProperty = Get-PiProperty $tplProvider 'models'
-    if ($null -eq $desiredModelsProperty -or
-        $desiredModelsProperty.Value -isnot [System.Array] -or
-        @($desiredModelsProperty.Value).Count -eq 0) {
-        throw 'Template models pi tidak memuat model'
-    }
-    $desiredModels = @($desiredModelsProperty.Value)
-    $desired = $desiredModels[0]
-    Assert-PiObject $desired 'cooperagent model template' | Out-Null
+    # Cerminan dari perulangan yang sama di scripts/lib/pi_json.mjs. Sampai
+    # 12 September 2026 kedua berkas mengeraskan nama `cooperagent`, sehingga
+    # pi hanya pernah mendapat satu dari tiga profil yang dimiliki Grok dan omp.
+    foreach ($tplProp in $tplProviders.PSObject.Properties) {
+        $pname = $tplProp.Name
+        $tplProvider = $tplProp.Value
+        Assert-PiObject $tplProvider "providers.$pname template" | Out-Null
 
-    $oldModels = @()
-    $oldModelsProperty = Get-PiProperty $provider 'models'
-    if ($null -ne $oldModelsProperty) {
-        if ($oldModelsProperty.Value -isnot [System.Array]) {
-            throw 'Struktur JSON pi tidak valid: cooperagent.models harus berupa array'
+        $provider = Get-PiPropertyValue $providers $pname
+        if ($null -eq $provider) { $provider = [pscustomobject]@{} }
+        else { Assert-PiObject $provider "providers.$pname" | Out-Null }
+
+        # `Get-PiPropertyValue` TIDAK boleh dipakai untuk nilai bertipe array.
+        #
+        # Ia berakhir dengan `return $p.Value`, dan `return` mengirim nilai ke
+        # pipeline -- pipeline MEMBONGKAR array. Array berisi satu elemen keluar
+        # sebagai elemennya sendiri, bukan sebagai array. Tiap provider di
+        # template memuat tepat satu model, sehingga `-isnot [System.Array]`
+        # bernilai benar dan gerbang menuduh template kosong pada template yang
+        # jelas-jelas memuatnya. Terjadi di Windows 4 September 2026.
+        $desiredModelsProperty = Get-PiProperty $tplProvider 'models'
+        if ($null -eq $desiredModelsProperty -or
+            $desiredModelsProperty.Value -isnot [System.Array] -or
+            @($desiredModelsProperty.Value).Count -eq 0) {
+            throw "Template provider $pname tidak memuat model"
         }
-        $oldModels = @($oldModelsProperty.Value)
-    }
+        $desired = @($desiredModelsProperty.Value)[0]
+        Assert-PiObject $desired "$pname model template" | Out-Null
 
-    $oldManaged = $null
-    foreach ($m in $oldModels) {
-        if ($null -eq $m) { continue }
-        Assert-PiObject $m 'cooperagent model' | Out-Null
-        $sameId = ((Get-PiPropertyValue $m 'id') -eq (Get-PiPropertyValue $desired 'id'))
-        $name = [string](Get-PiPropertyValue $m 'name')
-        if ($sameId -or $name.StartsWith('CooperAgent')) {
-            $oldManaged = $m
-            break
+        $oldModels = @()
+        $oldModelsProperty = Get-PiProperty $provider 'models'
+        if ($null -ne $oldModelsProperty) {
+            if ($oldModelsProperty.Value -isnot [System.Array]) {
+                throw "Struktur JSON pi tidak valid: $pname.models harus berupa array"
+            }
+            $oldModels = @($oldModelsProperty.Value)
         }
+
+        $oldManaged = $null
+        foreach ($m in $oldModels) {
+            if ($null -eq $m) { continue }
+            Assert-PiObject $m "$pname model" | Out-Null
+            $sameId = ((Get-PiPropertyValue $m 'id') -eq (Get-PiPropertyValue $desired 'id'))
+            $mName = [string](Get-PiPropertyValue $m 'name')
+            if ($sameId -or $mName.StartsWith('CooperAgent')) {
+                $oldManaged = $m
+                break
+            }
+        }
+
+        $mergedModel = if ($null -ne $oldManaged) { $oldManaged } else { [pscustomobject]@{} }
+        Copy-PiProperties $mergedModel $desired
+        $preserved = @($oldModels | Where-Object {
+            $id = Get-PiPropertyValue $_ 'id'
+            $keepName = [string](Get-PiPropertyValue $_ 'name')
+            ($id -ne (Get-PiPropertyValue $desired 'id')) -and
+                (-not $keepName.StartsWith('CooperAgent'))
+        })
+
+        # Provider template adalah daftar managed keys; property lain pada
+        # provider lama tetap berada di object yang sama.
+        Copy-PiProperties $provider $tplProvider
+        Set-PiProperty $provider 'models' (@($mergedModel) + $preserved)
+        Set-PiProperty $providers $pname $provider
     }
 
-    $mergedModel = if ($null -ne $oldManaged) { $oldManaged } else { [pscustomobject]@{} }
-    Copy-PiProperties $mergedModel $desired
-    $preserved = @($oldModels | Where-Object {
-        $id = Get-PiPropertyValue $_ 'id'
-        $name = [string](Get-PiPropertyValue $_ 'name')
-        ($id -ne (Get-PiPropertyValue $desired 'id')) -and
-            (-not $name.StartsWith('CooperAgent'))
-    })
-
-    # Provider template adalah daftar managed keys; property lain pada provider
-    # lama tetap berada di object yang sama.
-    Copy-PiProperties $provider $tplProvider
-    Set-PiProperty $provider 'models' (@($mergedModel) + $preserved)
-    Set-PiProperty $providers 'cooperagent' $provider
     Set-PiProperty $root 'providers' $providers
     return $root
 }
@@ -145,7 +149,8 @@ function Merge-PiSettings([string]$ExistingPath, [string]$TemplatePath) {
     if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.Value)) {
         Set-PiProperty $root 'defaultModel' $tplModel
     }
-    if ([string](Get-PiPropertyValue $root 'defaultProvider') -eq 'cooperagent') {
+    $dp = [string](Get-PiPropertyValue $root 'defaultProvider')
+    if ($dp -eq 'cooper-agent' -or $dp -eq 'cooperagent') {
         Set-PiProperty $root 'defaultModel' $tplModel
     }
 
@@ -191,7 +196,9 @@ function Merge-PiSettings([string]$ExistingPath, [string]$TemplatePath) {
 function Get-PiStoredKey([string]$Path) {
     try {
         $root = Read-PiJson $Path
-        $provider = Get-PiPropertyValue (Get-PiPropertyValue $root 'providers') 'cooperagent'
+        $allProviders = Get-PiPropertyValue $root 'providers'
+        $provider = Get-PiPropertyValue $allProviders 'cooper-agent'
+        if ($null -eq $provider) { $provider = Get-PiPropertyValue $allProviders 'cooperagent' }
         $value = [string](Get-PiPropertyValue $provider 'apiKey')
         if ($value -like 'ca_*') { return $value }
     } catch { }
@@ -201,7 +208,9 @@ function Get-PiStoredKey([string]$Path) {
 function Get-PiStoredGateway([string]$Path) {
     try {
         $root = Read-PiJson $Path
-        $provider = Get-PiPropertyValue (Get-PiPropertyValue $root 'providers') 'cooperagent'
+        $allProviders = Get-PiPropertyValue $root 'providers'
+        $provider = Get-PiPropertyValue $allProviders 'cooper-agent'
+        if ($null -eq $provider) { $provider = Get-PiPropertyValue $allProviders 'cooperagent' }
         $value = ([string](Get-PiPropertyValue $provider 'baseUrl')).TrimEnd('/')
         $value = $value -replace '/api/v1$', '' -replace '/v1$', '' -replace '/api$', ''
         return $value.TrimEnd('/')
@@ -212,7 +221,8 @@ function Test-PiProvider([string]$Path) {
     try {
         $root = Read-PiJson $Path
         $providers = Get-PiPropertyValue $root 'providers'
-        return ($null -ne (Get-PiProperty $providers 'cooperagent'))
+        return (($null -ne (Get-PiProperty $providers 'cooper-agent')) -or
+                ($null -ne (Get-PiProperty $providers 'cooperagent')))
     } catch { return $false }
 }
 
@@ -242,7 +252,7 @@ function Invoke-PiPrint([string]$PiPath, [string]$AgentDir, [string]$ProjectDir,
         # satu spasi di belakangnya sudah cukup untuk mematahkannya lagi, dan
         # spasi itu tidak terlihat di review. Array tidak punya mode gagal itu.
         $piArgs = @(
-            '--provider', 'cooperagent',
+            '--provider', 'cooper-agent',
             '--model', $Model,
             '--mode', 'json',
             '--no-session', '--print',
@@ -274,7 +284,9 @@ function Invoke-PiVerify([string]$AgentDir, [string]$ModelsPath, [string]$Settin
     # dalam hitungan milidetik.
     $models = Read-PiJson $ModelsPath
     $settings = Read-PiJson $SettingsPath
-    $prov = Get-PiPropertyValue (Get-PiPropertyValue $models 'providers') 'cooperagent'
+    $allProv = Get-PiPropertyValue $models 'providers'
+    $prov = Get-PiPropertyValue $allProv 'cooper-agent'
+    if ($null -eq $prov) { $prov = Get-PiPropertyValue $allProv 'cooperagent' }
     if ($null -eq $prov) { throw 'provider cooperagent tidak ada di models.json.' }
     $baseUrl = [string](Get-PiPropertyValue $prov 'baseUrl')
     if ([string]::IsNullOrWhiteSpace($baseUrl)) { throw 'baseUrl pi kosong.' }

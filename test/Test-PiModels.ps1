@@ -69,8 +69,24 @@ try {
 
     # --- models -----------------------------------------------------------
     $merged = Merge-PiModels $existingModels $modelsTplPath
-    $prov = $merged.providers.cooperagent
-    if ($null -ne $prov) { ok "provider cooperagent ditulis" } else { no "provider cooperagent tidak ada" }
+    $prov = $merged.providers.'cooper-agent'
+    if ($null -ne $prov) { ok "provider cooper-agent ditulis" } else { no "provider cooper-agent tidak ada" }
+
+    # KETIGA profil harus masuk, bukan hanya satu.
+    #
+    # Sampai 12 September 2026 Merge-PiModels mengeraskan satu nama provider,
+    # jadi pi hanya pernah mendapat sepertiga dari yang dimiliki Grok dan omp.
+    # Uji ini yang menahannya kembali ke sana.
+    $wajib = @('cooper-agent', 'cooper-s1', 'cooper-s2')
+    $hilang = @($wajib | Where-Object { $null -eq $merged.providers.PSObject.Properties[$_] })
+    if ($hilang.Count -eq 0) { ok "ketiga profil model masuk" }
+    else { no ("profil hilang: " + ($hilang -join ', ')) }
+
+    # Profil langsung menembus routing; kalau baseUrl-nya sama dengan yang
+    # auto-routing, ia tidak menembus apa pun dan uji banding jadi bohong.
+    $s1 = $merged.providers.'cooper-s1'
+    if ($null -ne $s1 -and $s1.baseUrl -like '*/upstream/s1') { ok "cooper-s1 menunjuk /upstream/s1" }
+    else { no ("cooper-s1 baseUrl salah: " + $s1.baseUrl) }
 
     # Regresi: nilai array yang di-`return` dari fungsi ikut terbongkar
     # pipeline, sehingga template satu model dikira kosong.

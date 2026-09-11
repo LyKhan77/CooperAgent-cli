@@ -198,6 +198,8 @@ mkdir -p "$GROK_HOME/skills"
 # kerja kedua skrip bertolak belakang.
 # shellcheck source=scripts/lib/merge_toml.sh
 . "$REPO_ROOT/scripts/lib/merge_toml.sh"
+# shellcheck source=scripts/lib/merge_providers.sh
+. "$REPO_ROOT/scripts/lib/merge_providers.sh"
 # shellcheck source=scripts/lib/contract.sh
 . "$REPO_ROOT/scripts/lib/contract.sh"
 # shellcheck source=scripts/lib/omp_models.sh
@@ -245,8 +247,50 @@ fi
 contract_render "$TPL_DIR/config.toml" | sed -e "s|__GATEWAY__|${GW_BASE}|g" > "$TPL_CFG"
 contract_assert_rendered "$TPL_CFG" || exit 1
 
+# ── migrasi nama profil lama ──────────────────────────────────────────────────
+#
+# `internal-qwen*` menjadi `cooper-*` pada 12 September 2026, supaya Grok, omp,
+# dan pi memakai satu kosakata. Seksi lama DIGANTI NAMANYA di tempat, bukan
+# ditinggalkan lalu ditimpali yang baru.
+#
+# Kenapa rename, bukan tambah-lalu-biarkan. Dua hal rusak bila seksi lama
+# tertinggal:
+#
+#   1. `api_key` dev hidup di seksi lama. Seksi baru lahir TANPA kunci, dan
+#      tanpa `--token` tidak ada yang mengisinya -- Grok menjawab 401 pada
+#      profil yang baru saja kita anjurkan.
+#   2. Verifikasi mengambil `context_window` PERTAMA yang ditemukan. Seksi lama
+#      berada lebih dulu di berkas, jadi angkanya yang basi yang terbaca, dan
+#      skrip mencetak centang untuk nilai yang salah.
+#
+# Rename mempertahankan segalanya milik dev di dalam seksi itu -- kunci, alamat
+# per-jaringan, kunci tambahan apa pun -- lalu merge memperbarui yang terkelola.
+migrate_legacy_profiles() {
+    awk '
+        /^\[model\.internal-qwen\][[:space:]]*$/    { print "[model.cooper-agent]"; next }
+        /^\[model\.internal-qwen-s2\][[:space:]]*$/ { print "[model.cooper-s2]";    next }
+        { print }
+    ' "$1"
+}
+
 if [ -f "$CFG" ]; then
-    MERGED="$(merge_toml "$TPL_CFG" "$CFG")"
+    LEGACY="$(grep -cE '^\[model\.internal-qwen(\]|-s2\])' "$CFG" 2>/dev/null || true)"
+    if [ "${LEGACY:-0}" -gt 0 ]; then
+        CFG_MIGRATED="$(mktemp)"
+        migrate_legacy_profiles "$CFG" > "$CFG_MIGRATED"
+        echo "  ${GREEN}${S_OK}${NC} $LEGACY profil lama diganti nama ke cooper-* (isinya dipertahankan)"
+        # `internal-qwen-localhost` sengaja TIDAK diganti: tidak ada padanannya
+        # sejak alamat menjadi pilihan `--endpoint`. Ia dibiarkan sebagai milik
+        # dev -- menghapus config yang masih bekerja bukan tugas pembaru.
+        if grep -q '^\[model\.internal-qwen-localhost\]' "$CFG" 2>/dev/null; then
+            echo "  ${YELLOW}!${NC} [model.internal-qwen-localhost] kini di luar kelolaan CooperAgent."
+            echo "    Alamat sekarang dipilih lewat --endpoint local; hapus bila tidak dipakai."
+        fi
+        MERGED="$(merge_toml "$TPL_CFG" "$CFG_MIGRATED")"
+        rm -f "$CFG_MIGRATED"
+    else
+        MERGED="$(merge_toml "$TPL_CFG" "$CFG")"
+    fi
 else
     echo "${YELLOW}config.toml belum ada — dibuat dari template.${NC}"
     MERGED="$(cat "$TPL_CFG")"
@@ -278,7 +322,7 @@ if [ -n "$TOKEN" ]; then
         # api_key di sana berarti menghapus kunci BERBAYAR miliknya dengan token
         # kita. Ditemukan lewat pengujian 1 September 2026 dengan config yang
         # memuat kunci Anthropic: kunci itu hilang tanpa peringatan apa pun.
-        /^\[/ { emit(); ismodel = ($0 ~ /^\[model\.internal-qwen/); buf[++nb] = $0; next }
+        /^\[/ { emit(); ismodel = ($0 ~ /^\[model\.(cooper-agent|cooper-s1|cooper-s2|internal-qwen)/); buf[++nb] = $0; next }
         {
             if (nb == 0) { print; next }
             if (ismodel && $0 ~ /^[[:space:]]*api_key[[:space:]]*=/) {
@@ -503,6 +547,37 @@ if [ -z "${SKIP_OMP:-}" ]; then
         else
             echo "  ${GREEN}${S_OK}${NC} models.yml identitas akan diperbarui (dry-run)"
         fi
+
+        # Provider yang HILANG ditambahkan; yang ada tidak disentuh.
+        #
+        # Sampai 12 September 2026 blok ini berhenti di apiKey, jadi profil baru
+        # tidak pernah menjangkau dev yang sudah terpasang. Menimpa berkasnya
+        # bukan jawabannya -- dev menaruh provider dan kunci berbayar di sana --
+        # tetapi diam juga bukan: armada berakhir dengan dua kosakata model yang
+        # hidup bersamaan tanpa ada yang tahu.
+        tpl_prov="$(mktemp)"
+        contract_render "$TPL_DIR/omp-models.yml" \
+            | sed -e "s|__GATEWAY__|${URL%/api/v1}|g" -e "s|__API_KEY__|$ID|g" > "$tpl_prov"
+        if contract_assert_rendered "$tpl_prov" 2>/dev/null; then
+            missing=""
+            for prov in $(provider_names "$tpl_prov"); do
+                provider_names "$MY" | grep -qx "$prov" || missing="$missing $prov"
+            done
+            if [ -z "$missing" ]; then
+                echo "  ${GREEN}${S_OK}${NC} models.yml memuat seluruh provider CooperAgent"
+            elif [ "$DRY_RUN" = 0 ]; then
+                cp "$MY" "$MY.bak.$STAMP"
+                bak_prune "$MY"
+                merged="$(mktemp)"
+                merge_providers "$tpl_prov" "$MY" > "$merged" && mv "$merged" "$MY"
+                echo "  ${GREEN}${S_OK}${NC} provider ditambahkan:${missing} (cadangan: models.yml.bak.$STAMP)"
+            else
+                echo "  ${GREEN}${S_OK}${NC} provider akan ditambahkan:${missing} (dry-run)"
+            fi
+        else
+            echo "  ${YELLOW}!${NC} template provider tidak terender penuh — penambahan dilewati"
+        fi
+        rm -f "$tpl_prov"
     fi
     echo
 fi

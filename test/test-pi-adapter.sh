@@ -140,7 +140,7 @@ cat > "$T/home/.pi/agent/models.json" <<'JSON'
       "apiKey": "sk-ant-KUNCI-BERBAYAR-DEV",
       "models": [{"id": "claude-dev"}]
     },
-    "cooperagent": {
+    "cooper-agent": {
       "baseUrl": "http://198.51.100.20:8987/v1",
       "api": "openai-completions",
       "apiKey": "dev-lee@pi-uji",
@@ -216,7 +216,7 @@ import sys
 models_path, settings_path, gw, tok = sys.argv[1:]
 models = json.load(open(models_path, encoding="utf-8"))
 settings = json.load(open(settings_path, encoding="utf-8"))
-provider = models["providers"]["cooperagent"]
+provider = models["providers"]["cooper-agent"]
 model = next(m for m in provider["models"] if m["id"] == "pi-contract-model")
 assert provider["baseUrl"] == gw + "/v1"
 assert provider["api"] == "openai-completions"

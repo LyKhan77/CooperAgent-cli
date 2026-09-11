@@ -145,7 +145,7 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
             COOPER_PI_VERIFY_CHECKPOINT_FILE="$checkpoint_file" \
             COOPER_PI_VERIFY_CHECKPOINT_MARKER="$checkpoint_marker" \
             timeout "$PI_VERIFY_TIMEOUT" \
-            "$pi_bin" --provider cooperagent --model "$model" --mode json \
+            "$pi_bin" --provider cooper-agent --model "$model" --mode json \
             --no-session --print --no-extensions --no-prompt-templates --no-themes \
             'The global work rules contain one line that starts with "VERIFICATION SENTENCE:". Reply with that entire line verbatim and nothing else. Do not use any tools.'
     )"; then
@@ -201,7 +201,7 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
             COOPER_PI_VERIFY_CHECKPOINT_FILE="$checkpoint_file" \
             COOPER_PI_VERIFY_CHECKPOINT_MARKER="$checkpoint_marker" \
             timeout "$PI_VERIFY_TIMEOUT" \
-            "$pi_bin" --provider cooperagent --model "$model" --mode json \
+            "$pi_bin" --provider cooper-agent --model "$model" --mode json \
             --no-session --print --no-extensions --no-prompt-templates --no-themes \
             "Read the global work rules. This is a disposable project task boundary. Create .cooper/context/$slug.md using a temporary file and mv. Include the exact line $checkpoint_marker and do not write elsewhere. Reply checkpoint-written."
     )"; then

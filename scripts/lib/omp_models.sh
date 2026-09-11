@@ -63,8 +63,9 @@ omp_set_api_key() { # $1 = models.yml  $2 = kunci  $3 = gateway (tanpa /api/v1)
 
 # apiKey dan alamat provider CooperAgent.
 #
-# Provider dikenali dari NAMANYA (`cooperagent`, `cooperagent-localhost`,
-# `cooperagent-s2` -- persis yang ditulis templates/omp-models.yml), bukan dari
+# Provider dikenali dari NAMANYA (`cooper-agent`, `cooper-s1`, `cooper-s2` --
+# persis yang ditulis templates/omp-models.yml; awalan lama `cooperagent`
+# tetap dikenali supaya token dev yang belum bermigrasi ikut diperbarui), bukan dari
 # bentuk alamatnya. Menebak dari alamat akan salah menyebut Ollama milik dev
 # (`http://localhost:11434`) sebagai provider kita, dan yang terbaca lalu
 # dilaporkan sebagai "kredensial Anda" adalah kunci orang lain.
@@ -74,7 +75,7 @@ omp_api_key_of() { # $1 = models.yml
         /^  [A-Za-z0-9_-]+:[[:space:]]*$/ {
             name = $0
             sub(/^[[:space:]]*/, "", name); sub(/:.*$/, "", name)
-            mine = (name ~ /^cooperagent/)
+            mine = (name ~ /^cooper-(agent|s[0-9]+)$|^cooperagent/)
             next
         }
         mine && /^[[:space:]]*apiKey:/ {
@@ -95,7 +96,7 @@ omp_gateway_of() { # $1 = models.yml
         /^  [A-Za-z0-9_-]+:[[:space:]]*$/ {
             name = $0
             sub(/^[[:space:]]*/, "", name); sub(/:.*$/, "", name)
-            mine = (name ~ /^cooperagent/)
+            mine = (name ~ /^cooper-(agent|s[0-9]+)$|^cooperagent/)
             next
         }
         mine && /^[[:space:]]*baseUrl:/ {
