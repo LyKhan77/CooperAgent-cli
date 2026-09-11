@@ -604,6 +604,26 @@ judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
 rilis mana yang membawanya.
 
 
+### Added · 2026-09-12 — `scripts/pr.sh`: satu langkah membuat PR
+
+Pagar judul PR menangkap kesalahan **sesudah** PR dibuat: cek merah, sunting
+judul, tunggu CI lagi. Yang salah pun bukan kelalaian — GitHub mengisi judul
+sendiri dari subjek commit bila branch berisi tepat satu commit, jadi dev
+melihat kolom yang sudah terisi dan tidak punya alasan mencurigainya.
+
+`./scripts/pr.sh "Judul deskriptif"` memindahkan pemeriksaan itu ke sebelum PR
+ada, lalu push dan mencetak tautan `compare` yang **judulnya sudah terisi** —
+sehingga isian otomatis GitHub tidak pernah terpakai. Empat langkah manual
+(push, salin tautan, buka peramban, ketik judul) menjadi satu.
+
+Polanya **dibaca dari** `.github/workflows/pr-title.yml`, tidak disalin: pagar
+lokal yang menyimpang dari pagar CI memberi lampu hijau pada judul yang ditolak
+di server, dan itu persis penyakit yang pagar ini ada untuk mencegahnya.
+`test/test-pr-title-guard.sh` (13 → 18) menuntutnya, memeriksa penolakan terjadi
+sebelum remote disentuh, dan menjalankan jalur suksesnya di kotak pasir — uji
+yang mem-push branch yang sedang dikerjakan adalah uji yang lama-lama tidak
+dijalankan orang.
+
 ### Added · 2026-09-05 — Pagar judul PR
 
 Larangan judul PR berprefiks conventional-commit dilanggar tiga kali di repo

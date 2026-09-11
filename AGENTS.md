@@ -168,8 +168,18 @@ dan terlihat siap merge memang *tampak seperti pekerjaan yang belum selesai*.
 PR ke badan merge commit, dan release-please membacanya sebagai commit
 tersendiri — entri yang sama terbit dua kali. Jebakannya: bila branch berisi
 **tepat satu commit**, GitHub mengisi judul dari subjek commit itu, yang tentu
-saja conventional. Baca judulnya sebelum membuat PR. Lihat
-[`docs/versioning.md`](docs/versioning.md).
+saja conventional. Lihat [`docs/versioning.md`](docs/versioning.md).
+
+Dua hal menjaganya, dan keduanya membaca pola yang sama dari satu berkas:
+
+```
+./scripts/pr.sh "Judul deskriptif"   # periksa + push + tautan yang sudah terisi
+.github/workflows/pr-title.yml       # jaring pengaman, bila PR dibuat lewat web
+```
+
+Pakai `scripts/pr.sh`. Ia memeriksa judul **sebelum** PR ada, jadi tidak ada
+siklus "cek merah → sunting judul → tunggu CI lagi", dan tautannya membawa judul
+yang sudah benar sehingga isian otomatis GitHub tidak pernah terpakai.
 
 **Merge commit, bukan squash.** Squash melipat semua commit jadi satu: detail
 CHANGELOG hilang, dan footer `BREAKING CHANGE:` bisa ikut hilang — bersamanya

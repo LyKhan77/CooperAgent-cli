@@ -62,6 +62,49 @@ uji "Konvensi merge PR ditulis di OPS-02"                     0
 uji "Perbaikan: cadangan rollback dipilih dari nama"          0
 uji "Fitur baru: retensi cadangan"                            0
 
+echo "scripts/pr.sh memakai pagar yang SAMA, bukan salinannya:"
+# Pemeriksaan lokal yang polanya disalin akan menyimpang dari CI tanpa ada yang
+# tahu, lalu memberi lampu hijau pada judul yang ditolak di server -- persis
+# jenis selisih yang pagar ini ada untuk mencegahnya.
+PR_SH="$REPO/scripts/pr.sh"
+if [ -f "$PR_SH" ]; then
+    grep -q "feat|fix|docs|chore" "$PR_SH" \
+        && no "pr.sh tidak menyalin pola" "polanya dipatok di dalam skrip" \
+        || ok "pr.sh membaca pola dari workflow, tidak menyalinnya"
+
+    out="$("$PR_SH" "fix(setup): sesuatu" 2>&1)"; rc=$?
+    [ "$rc" -ne 0 ] && ok "pr.sh menolak judul conventional sebelum push" \
+                    || no "pr.sh menolak judul conventional" "ia meloloskannya (rc=0)"
+    printf '%s' "$out" | grep -q 'git push' \
+        && no "pr.sh menolak SEBELUM push" "ia sempat push lebih dulu" \
+        || ok "pr.sh menolak SEBELUM menyentuh remote"
+
+    # Judul yang benar dijalankan di KOTAK PASIR, bukan di repo ini.
+    # Menjalankannya di sini akan mem-push branch yang sedang dikerjakan --
+    # sebuah uji yang menyentuh remote adalah uji yang tidak bisa dijalankan
+    # dengan tenang, dan uji yang tidak bisa dijalankan dengan tenang lama-lama
+    # tidak dijalankan sama sekali.
+    SBX="$(mktemp -d)"
+    mkdir -p "$SBX/scripts" "$SBX/.github/workflows"
+    cp "$PR_SH" "$SBX/scripts/pr.sh"
+    cp "$WF" "$SBX/.github/workflows/pr-title.yml"
+    git -C "$SBX" init -q -b main
+    git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --allow-empty -m awal
+    git -C "$SBX" checkout -q -b cabang-uji
+    out="$(cd "$SBX" && bash scripts/pr.sh "Judul deskriptif biasa" 2>&1)"
+    printf '%s' "$out" | grep -q 'prefiks conventional-commit' \
+        && no "pr.sh meloloskan judul deskriptif" "ia menolaknya" \
+        || ok "pr.sh meloloskan judul deskriptif"
+    # Tanpa remote, push gagal -- dan itu memang yang harus terjadi: skrip tidak
+    # boleh mencetak tautan PR untuk branch yang tidak pernah sampai ke origin.
+    printf '%s' "$out" | grep -q 'compare/main' \
+        && no "pr.sh diam saat push gagal" "ia tetap mencetak tautan PR" \
+        || ok "pr.sh tidak mencetak tautan bila push gagal"
+    rm -rf "$SBX"
+else
+    no "scripts/pr.sh ada" "hilang — jalur cepat membuat PR tidak terjaga"
+fi
+
 echo
 echo "lulus $pass, gagal $fail"
 [[ $fail -eq 0 ]]
