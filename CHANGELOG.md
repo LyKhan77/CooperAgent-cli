@@ -27,7 +27,6 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 * **setup-dev:** --remove-rules mati sebelum menghapus apa pun ([aa9699e](https://github.com/LyKhan77/CooperAgent-cli/commit/aa9699e4f1464617b9f0d25d8214d86663dd8b4f))
 * **setup-dev:** pembaru Windows ikut bermigrasi juga ([494d143](https://github.com/LyKhan77/CooperAgent-cli/commit/494d143d93054f885ba57efe0652a369c88dfbed))
 * **setup:** bawa migrasi profil ke KEDUA pemasang, bukan hanya pembaru ([ddb12ae](https://github.com/LyKhan77/CooperAgent-cli/commit/ddb12ae455168c90a9010ec780f8d1bd38dc21a7))
-* **setup:** bawa migrasi profil ke KEDUA pemasang, bukan hanya pembaru ([ba5d5d9](https://github.com/LyKhan77/CooperAgent-cli/commit/ba5d5d99c908fd7130193cce018d2171eac0b863))
 
 
 ### Dokumentasi
@@ -47,161 +46,6 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 ### Fitur
 
 * **setup:** retensi cadangan .bak di kedua installer ([aed93dd](https://github.com/LyKhan77/CooperAgent-cli/commit/aed93dd8ee5c830cba54b08120d67097c5e6a3a3))
-
-## [Unreleased]
-
-### Fixed · 2026-09-12 — Pembaru Windows tidak ikut bermigrasi
-
-**Konteks.** Rename profil `internal-qwen*` → `cooper-*` dipasang di `setup.sh`,
-`setup.ps1`, dan `scripts/setup-dev.sh`, lalu didokumentasikan sebagai "ketiga
-jalur". Jalurnya ada **empat**: `scripts/setup-dev.ps1` terlewat — dan itulah
-jalur yang `docs/dev_setup.md` anjurkan kepada dev Windows yang **sudah**
-terpasang, yakni satu-satunya populasi yang pasti memegang config lama.
-
-**Perubahan.**
-
-- `scripts/setup-dev.ps1` — rename dijalankan sebelum `Merge-Toml`, hasilnya ke
-  `$source` sehingga cadangan `.bak` tetap merekam berkas apa adanya di disk.
-- `test/test-harness-profiles.sh` — kini menuntut **keempat** jalur, dengan pola
-  yang lebih ketat: `[model.cooper-agent]` sebagai literal sesudah
-  `internal-qwen`. Pola longgar sebelumnya diloloskan oleh regex penyuntik token
-  di `setup-dev.ps1` yang menyebut kedua nama pada satu baris dan tidak
-  mengganti apa pun. 31 → 33.
-
-**Bukti.** Dengan `scripts/setup-dev.ps1` dikembalikan ke keadaan lama, uji
-merah 2; dengan perbaikannya, 33/0. Keseimbangan kurung 142/142 (sebelumnya
-134/134).
-
-**Dampak.** Dev Windows yang memakai pembaru tidak lagi ditinggali
-`[model.internal-qwen]` yatim di sebelah `[model.cooper-agent]`.
-
-**Rollback.** Buang blok rename; uji akan kembali merah 2.
-
-**Belum terverifikasi.** Jalur PowerShell tidak dijalankan di runner Linux —
-`pwsh` tidak terpasang. Yang dijalankan hanyalah keseimbangan kurung dan uji
-statis pola rename.
-
-### Fixed · 2026-09-12 — `--remove-rules` berhenti tepat sebelum menghapus
-
-**Konteks.** `scripts/setup-dev.sh --remove-rules` melaporkan aturan agent
-dilepas, tetapi berkasnya masih di tempatnya. Uji `test-setup-dev.sh` sudah
-merah sejak retensi `.bak` masuk (5 September 2026) — merahnya satu baris tanpa
-sebab, `dapat 'ada', harusnya 'tidak'`, dan diperlakukan sebagai kegagalan lama
-yang sudah ada.
-
-**Perubahan.**
-
-- `scripts/setup-dev.sh` — `. scripts/lib/backup.sh` dipindah ke atas blok
-  `--remove-rules`. `bak_prune` dipakai di baris 147, tetapi pustakanya di-source
-  di baris 207 dan blok itu `exit 0` lebih dulu. Di bawah `set -e`:
-  `cp` ke `.bak` jalan → `bak_prune: command not found` → skrip berhenti →
-  `rm -f` tidak pernah jalan. Dev mendapat pesan sukses, berkasnya utuh, dan
-  sebuah `.bak` baru di sebelahnya.
-- `test/test-setup-dev.sh` — keluaran `--remove-rules` kini **ditangkap**, bukan
-  dibuang ke `/dev/null`. Menuntut `rc=0`, tidak ada `command not found`, dan
-  memeriksa sisi omp (`~/.omp/agent/AGENTS.md`) yang selama ini tidak pernah
-  dilihat sama sekali.
-
-**Bukti.** `bash test/test-setup-dev.sh` — 64/1 → **68/0**. Suite penuh 10/10
-hijau untuk pertama kalinya. Reproduksi manual sebelum perbaikan menunjukkan
-`scripts/setup-dev.sh: line 147: bak_prune: command not found` lalu AGENTS.md
-Grok dan omp keduanya masih ada; sesudahnya keduanya terhapus dan skill utuh.
-
-**Dampak.** Hanya jalur `--remove-rules`. Tidak ada config yang berubah bentuk.
-Dev yang pernah menjalankannya punya `AGENTS.md.bak.<stamp>` yatim di
-`~/.grok/` dan `~/.omp/agent/` — aman dihapus.
-
-**Rollback.** Kembalikan urutan `. backup.sh`; kegagalan uji akan kembali.
-
-### Changed · 2026-09-05 — Alur git tiga aturan, dan PR rilis dibuka sebagai draft
-
-Satu rencana selesai = satu tag. Hari ini PR rilis di-merge lima kali berturut
-untuk lima perubahan kecil — tiga tag di repo ini, dua di repo server, semuanya
-untuk satu rencana yang sama.
-
-Sebabnya bukan salah paham. PR rilis yang terbuka dan terlihat siap merge memang
-**tampak seperti pekerjaan yang belum selesai**, dan respons wajar terhadap itu
-adalah menyelesaikannya.
-
-`draft-pull-request: true` membalik bawaannya. PR rilis tetap muncul dan tetap
-memperbarui dirinya setiap kali ada PR baru masuk `main` — itu memang gunanya,
-ia papan status dari apa yang belum terbit — tetapi dibuka sebagai **draft**,
-dan GitHub mematikan tombol merge-nya.
-
-Mendiamkannya kini keadaan yang benar. Menerbitkan menuntut satu tindakan sadar:
-*Ready for review*, lalu merge.
-
-**Rollback:** buang `draft-pull-request` dari `release-please-config.json`.
-
-Alurnya kini tertulis di `AGENTS.md`: branch → PR → CI hijau → merge, sesering
-perlu; PR rilis mengurus dirinya sendiri sebagai draft; rencana selesai →
-Ready for review → merge → satu tag.
-
-Yang sengaja **tidak** diadopsi dari alur tim yang lebih besar: cabang
-`develop` (pemisahan terbit dari belum-terbit sudah dipegang tag), peer review
-wajib (belum ada reviewer kedua), dan squash merge — squash melipat commit jadi
-satu, dan footer `BREAKING CHANGE:` bisa hilang bersama kenaikan MAJOR.
-
-PR di repo ini memang membeli sesuatu: CI menjalankan parser PowerShell 5.1 di
-runner Windows, satu-satunya cara memeriksa `.ps1` dari sini.
-
-
-### Docs · 2026-09-05 — Buang entri kembar di seksi v2.1.0
-
-Satu perubahan tercatat dua kali: sekali dengan hash commit aslinya (`aed93dd`)
-dan sekali lagi dengan hash merge commit PR #14 (`5eb9ee7`). Isi tag `v2.1.0`
-tidak bisa diubah; yang dirapikan berkasnya di `main`.
-
-Sebabnya bukan kelalaian judul, dan itu yang membuatnya terus berulang: branch
-ini berisi **tepat satu commit**, sehingga GitHub mengisi judul PR dari subjek
-commit itu — `feat(setup): …`, conventional. PR server yang dibuat berdampingan
-punya dua commit, judulnya terisi dari nama branch, dan CHANGELOG-nya bersih.
-Jebakan itu kini tertulis di `docs/OPS-02-versioning.md` repo server.
-
-
-### Added · 2026-09-05 — Retensi cadangan `.bak`
-
-Setiap "perbarui parameter" mencadangkan config yang disentuhnya ke
-`<berkas>.bak.<yyyyMMdd-HHmmss>`, dan sampai hari ini tidak ada satu pun yang
-pernah membuangnya — di dua puluh tempat, di empat berkas, di kedua platform.
-Cadangannya kecil, jadi ini bukan soal ruang: ia soal direktori config dev yang
-lama-lama tidak terbaca, dan soal `config.toml.bak.20260812-094431` yang duduk
-di sana tanpa ada yang tahu apakah ia masih berarti.
-
-Kebijakannya satu, dipakai kedua installer: **simpan lima cadangan termuda per
-berkas**, buang sisanya. `COOPERAGENT_BAK_KEEP` mengubah batasnya; `0`
-mematikannya sepenuhnya, supaya dev yang ingin menyimpan seluruh riwayatnya
-tidak perlu menambal skrip. Batas defaultnya diuji **sama di kedua platform** —
-dua dev dengan perkakas yang sama tidak boleh melihat hasil berbeda tanpa tahu
-kenapa.
-
-Yang lebih dijaga daripada pemangkasannya adalah **batasnya**. Ia tidak pernah
-menyentuh berkas yang namanya tidak persis `<basis>.bak.<8 digit>-<6 digit>`.
-Pelajaran itu dibayar di repo server pada hari yang sama: pemilih cadangan di
-sana memakai glob `.bak.*` yang lebar, dan sebuah berkas bernama
-`run-qwen.sh.bak.catatan` terbukti bisa terpilih sebagai sasaran rollback. Pola
-longgar pada perkakas yang MENGHAPUS jauh lebih mahal daripada pada perkakas
-yang membaca — jadi `.bak.catatan`, `.bak.20260101` (cap waktu separuh), dan
-cadangan milik berkas lain semuanya punya ujinya sendiri.
-
-Ia juga tidak pernah menjatuhkan pemanggilnya. Installer berjalan di bawah
-`set -e`, dan membatalkan pemasangan yang sudah berhasil karena gagal
-*merapikan* cadangan adalah pertukaran yang salah arah; argumen kosong,
-direktori hilang, dan batas yang bukan angka semuanya diuji tetap `rc=0`.
-
-Diurutkan dari **nama**, bukan mtime — `yyyyMMdd-HHmmss` membuat urutan
-leksikografis sama dengan urutan waktu, sementara penyalinan bisa membawa serta
-stempel waktu berkas sumbernya.
-
-`test/test-bak-retention.sh` (20 uji) masuk CI. Sekalian: `scripts/setup-pi.sh`
-tidak pernah ikut diperiksa `bash -n` di CI — sekarang ikut.
-
-### Docs · 2026-09-05 — Buang entri kembar di seksi v2.0.1
-
-Satu perubahan tercatat dua kali: sekali dengan hash commit aslinya dan sekali
-lagi dengan hash merge commit PR #12, karena judul PR-nya berawalan
-conventional-commit. Isi tag `v2.0.1` tidak bisa diubah; yang dirapikan
-berkasnya di `main`.
 
 ## [2.0.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.0.0...v2.0.1) (2026-09-04)
 
@@ -747,3 +591,168 @@ lewat pesan commit-nya.
 Nomor versi di sini **terpisah** dari repo server. Yang mengikat keduanya adalah
 `contract_version` pada `/v1/models` — lihat `docs/versioning.md`, termasuk
 catatan bahwa medan itu belum dibaca klien mana pun.
+
+
+---
+
+## Catatan rinci
+
+Seksi di atas ditulis otomatis oleh release-please: satu baris per commit.
+Seksi ini berisi catatan panjangnya — konteks, bukti, dampak, dan cara mundur —
+untuk perubahan yang membutuhkannya. Semuanya **sudah rilis**; tanggal pada tiap
+judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
+rilis mana yang membawanya.
+
+
+### Fixed · 2026-09-12 — Pembaru Windows tidak ikut bermigrasi
+
+**Konteks.** Rename profil `internal-qwen*` → `cooper-*` dipasang di `setup.sh`,
+`setup.ps1`, dan `scripts/setup-dev.sh`, lalu didokumentasikan sebagai "ketiga
+jalur". Jalurnya ada **empat**: `scripts/setup-dev.ps1` terlewat — dan itulah
+jalur yang `docs/dev_setup.md` anjurkan kepada dev Windows yang **sudah**
+terpasang, yakni satu-satunya populasi yang pasti memegang config lama.
+
+**Perubahan.**
+
+- `scripts/setup-dev.ps1` — rename dijalankan sebelum `Merge-Toml`, hasilnya ke
+  `$source` sehingga cadangan `.bak` tetap merekam berkas apa adanya di disk.
+- `test/test-harness-profiles.sh` — kini menuntut **keempat** jalur, dengan pola
+  yang lebih ketat: `[model.cooper-agent]` sebagai literal sesudah
+  `internal-qwen`. Pola longgar sebelumnya diloloskan oleh regex penyuntik token
+  di `setup-dev.ps1` yang menyebut kedua nama pada satu baris dan tidak
+  mengganti apa pun. 31 → 33.
+
+**Bukti.** Dengan `scripts/setup-dev.ps1` dikembalikan ke keadaan lama, uji
+merah 2; dengan perbaikannya, 33/0. Keseimbangan kurung 142/142 (sebelumnya
+134/134).
+
+**Dampak.** Dev Windows yang memakai pembaru tidak lagi ditinggali
+`[model.internal-qwen]` yatim di sebelah `[model.cooper-agent]`.
+
+**Rollback.** Buang blok rename; uji akan kembali merah 2.
+
+**Belum terverifikasi.** Jalur PowerShell tidak dijalankan di runner Linux —
+`pwsh` tidak terpasang. Yang dijalankan hanyalah keseimbangan kurung dan uji
+statis pola rename.
+
+### Fixed · 2026-09-12 — `--remove-rules` berhenti tepat sebelum menghapus
+
+**Konteks.** `scripts/setup-dev.sh --remove-rules` melaporkan aturan agent
+dilepas, tetapi berkasnya masih di tempatnya. Uji `test-setup-dev.sh` sudah
+merah sejak retensi `.bak` masuk (5 September 2026) — merahnya satu baris tanpa
+sebab, `dapat 'ada', harusnya 'tidak'`, dan diperlakukan sebagai kegagalan lama
+yang sudah ada.
+
+**Perubahan.**
+
+- `scripts/setup-dev.sh` — `. scripts/lib/backup.sh` dipindah ke atas blok
+  `--remove-rules`. `bak_prune` dipakai di baris 147, tetapi pustakanya di-source
+  di baris 207 dan blok itu `exit 0` lebih dulu. Di bawah `set -e`:
+  `cp` ke `.bak` jalan → `bak_prune: command not found` → skrip berhenti →
+  `rm -f` tidak pernah jalan. Dev mendapat pesan sukses, berkasnya utuh, dan
+  sebuah `.bak` baru di sebelahnya.
+- `test/test-setup-dev.sh` — keluaran `--remove-rules` kini **ditangkap**, bukan
+  dibuang ke `/dev/null`. Menuntut `rc=0`, tidak ada `command not found`, dan
+  memeriksa sisi omp (`~/.omp/agent/AGENTS.md`) yang selama ini tidak pernah
+  dilihat sama sekali.
+
+**Bukti.** `bash test/test-setup-dev.sh` — 64/1 → **68/0**. Suite penuh 10/10
+hijau untuk pertama kalinya. Reproduksi manual sebelum perbaikan menunjukkan
+`scripts/setup-dev.sh: line 147: bak_prune: command not found` lalu AGENTS.md
+Grok dan omp keduanya masih ada; sesudahnya keduanya terhapus dan skill utuh.
+
+**Dampak.** Hanya jalur `--remove-rules`. Tidak ada config yang berubah bentuk.
+Dev yang pernah menjalankannya punya `AGENTS.md.bak.<stamp>` yatim di
+`~/.grok/` dan `~/.omp/agent/` — aman dihapus.
+
+**Rollback.** Kembalikan urutan `. backup.sh`; kegagalan uji akan kembali.
+
+### Changed · 2026-09-05 — Alur git tiga aturan, dan PR rilis dibuka sebagai draft
+
+Satu rencana selesai = satu tag. Hari ini PR rilis di-merge lima kali berturut
+untuk lima perubahan kecil — tiga tag di repo ini, dua di repo server, semuanya
+untuk satu rencana yang sama.
+
+Sebabnya bukan salah paham. PR rilis yang terbuka dan terlihat siap merge memang
+**tampak seperti pekerjaan yang belum selesai**, dan respons wajar terhadap itu
+adalah menyelesaikannya.
+
+`draft-pull-request: true` membalik bawaannya. PR rilis tetap muncul dan tetap
+memperbarui dirinya setiap kali ada PR baru masuk `main` — itu memang gunanya,
+ia papan status dari apa yang belum terbit — tetapi dibuka sebagai **draft**,
+dan GitHub mematikan tombol merge-nya.
+
+Mendiamkannya kini keadaan yang benar. Menerbitkan menuntut satu tindakan sadar:
+*Ready for review*, lalu merge.
+
+**Rollback:** buang `draft-pull-request` dari `release-please-config.json`.
+
+Alurnya kini tertulis di `AGENTS.md`: branch → PR → CI hijau → merge, sesering
+perlu; PR rilis mengurus dirinya sendiri sebagai draft; rencana selesai →
+Ready for review → merge → satu tag.
+
+Yang sengaja **tidak** diadopsi dari alur tim yang lebih besar: cabang
+`develop` (pemisahan terbit dari belum-terbit sudah dipegang tag), peer review
+wajib (belum ada reviewer kedua), dan squash merge — squash melipat commit jadi
+satu, dan footer `BREAKING CHANGE:` bisa hilang bersama kenaikan MAJOR.
+
+PR di repo ini memang membeli sesuatu: CI menjalankan parser PowerShell 5.1 di
+runner Windows, satu-satunya cara memeriksa `.ps1` dari sini.
+
+
+### Docs · 2026-09-05 — Buang entri kembar di seksi v2.1.0
+
+Satu perubahan tercatat dua kali: sekali dengan hash commit aslinya (`aed93dd`)
+dan sekali lagi dengan hash merge commit PR #14 (`5eb9ee7`). Isi tag `v2.1.0`
+tidak bisa diubah; yang dirapikan berkasnya di `main`.
+
+Sebabnya bukan kelalaian judul, dan itu yang membuatnya terus berulang: branch
+ini berisi **tepat satu commit**, sehingga GitHub mengisi judul PR dari subjek
+commit itu — `feat(setup): …`, conventional. PR server yang dibuat berdampingan
+punya dua commit, judulnya terisi dari nama branch, dan CHANGELOG-nya bersih.
+Jebakan itu kini tertulis di `docs/OPS-02-versioning.md` repo server.
+
+
+### Added · 2026-09-05 — Retensi cadangan `.bak`
+
+Setiap "perbarui parameter" mencadangkan config yang disentuhnya ke
+`<berkas>.bak.<yyyyMMdd-HHmmss>`, dan sampai hari ini tidak ada satu pun yang
+pernah membuangnya — di dua puluh tempat, di empat berkas, di kedua platform.
+Cadangannya kecil, jadi ini bukan soal ruang: ia soal direktori config dev yang
+lama-lama tidak terbaca, dan soal `config.toml.bak.20260812-094431` yang duduk
+di sana tanpa ada yang tahu apakah ia masih berarti.
+
+Kebijakannya satu, dipakai kedua installer: **simpan lima cadangan termuda per
+berkas**, buang sisanya. `COOPERAGENT_BAK_KEEP` mengubah batasnya; `0`
+mematikannya sepenuhnya, supaya dev yang ingin menyimpan seluruh riwayatnya
+tidak perlu menambal skrip. Batas defaultnya diuji **sama di kedua platform** —
+dua dev dengan perkakas yang sama tidak boleh melihat hasil berbeda tanpa tahu
+kenapa.
+
+Yang lebih dijaga daripada pemangkasannya adalah **batasnya**. Ia tidak pernah
+menyentuh berkas yang namanya tidak persis `<basis>.bak.<8 digit>-<6 digit>`.
+Pelajaran itu dibayar di repo server pada hari yang sama: pemilih cadangan di
+sana memakai glob `.bak.*` yang lebar, dan sebuah berkas bernama
+`run-qwen.sh.bak.catatan` terbukti bisa terpilih sebagai sasaran rollback. Pola
+longgar pada perkakas yang MENGHAPUS jauh lebih mahal daripada pada perkakas
+yang membaca — jadi `.bak.catatan`, `.bak.20260101` (cap waktu separuh), dan
+cadangan milik berkas lain semuanya punya ujinya sendiri.
+
+Ia juga tidak pernah menjatuhkan pemanggilnya. Installer berjalan di bawah
+`set -e`, dan membatalkan pemasangan yang sudah berhasil karena gagal
+*merapikan* cadangan adalah pertukaran yang salah arah; argumen kosong,
+direktori hilang, dan batas yang bukan angka semuanya diuji tetap `rc=0`.
+
+Diurutkan dari **nama**, bukan mtime — `yyyyMMdd-HHmmss` membuat urutan
+leksikografis sama dengan urutan waktu, sementara penyalinan bisa membawa serta
+stempel waktu berkas sumbernya.
+
+`test/test-bak-retention.sh` (20 uji) masuk CI. Sekalian: `scripts/setup-pi.sh`
+tidak pernah ikut diperiksa `bash -n` di CI — sekarang ikut.
+
+### Docs · 2026-09-05 — Buang entri kembar di seksi v2.0.1
+
+Satu perubahan tercatat dua kali: sekali dengan hash commit aslinya dan sekali
+lagi dengan hash merge commit PR #12, karena judul PR-nya berawalan
+conventional-commit. Isi tag `v2.0.1` tidak bisa diubah; yang dirapikan
+berkasnya di `main`.

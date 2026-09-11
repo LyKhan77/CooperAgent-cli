@@ -91,6 +91,39 @@ Pakai **"Create a merge commit"**, bukan squash. Squash membuat judul PR menjadi
 pesan commit, sehingga judul yang tidak berbentuk conventional commit membuat
 release-please tidak melihat perubahan apa pun.
 
+### Harganya: entri kembar, dan cara membayarnya
+
+Merge commit punya biaya yang sudah tiga kali menagih — v2.0.1, v2.1.0, dan
+v3.0.0. GitHub mengisi **badan** merge commit dengan judul PR, jadi commit itu
+berbunyi:
+
+```
+Merge pull request #23 from LyKhan77/migrasi-jalur-setup
+
+fix(setup): bawa migrasi profil ke KEDUA pemasang, bukan hanya pembaru
+```
+
+Release-please membaca badan itu sebagai conventional commit kedua, dan satu
+perubahan tercatat dua kali di CHANGELOG — sekali dengan hash commit aslinya,
+sekali dengan hash merge commit. Tag yang sudah terbit tidak bisa diubah; yang
+bisa dirapikan hanya berkas di `main`, sesudahnya.
+
+Dua cara membayarnya:
+
+1. **Kosongkan badan merge commit** saat menekan merge. GitHub mengizinkannya
+   di dialog merge. Gratis, tetapi satu langkah manual yang harus diingat
+   setiap kali — dan tiga kali terlewat adalah bukti bahwa ia akan terlewat
+   lagi.
+2. **Beralih ke squash, setelah judul PR dijaga.** Squash menghasilkan tepat
+   satu commit conventional, jadi tidak ada yang kembar. Keberatan di atas —
+   judul PR yang tidak conventional membuat release-please buta — hilang begitu
+   ada gerbang yang menolak judul PR yang tidak berbentuk conventional commit.
+   Cabang `ci/pagar-judul-pr` berisi gerbang itu dan belum di-merge.
+
+Pilihan kedua memindahkan pengetahuan dari kepala orang ke CI. Sampai ia
+diambil, pilihan pertama yang berlaku, dan CHANGELOG perlu dirapikan sesudah
+tiap rilis.
+
 ---
 
 ## Kontrak: yang sebenarnya mengikat kedua repo
