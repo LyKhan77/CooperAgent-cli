@@ -91,38 +91,40 @@ Pakai **"Create a merge commit"**, bukan squash. Squash membuat judul PR menjadi
 pesan commit, sehingga judul yang tidak berbentuk conventional commit membuat
 release-please tidak melihat perubahan apa pun.
 
-### Harganya: entri kembar, dan cara membayarnya
+### Judul PR jangan berawalan prefiks conventional-commit
 
-Merge commit punya biaya yang sudah tiga kali menagih — v2.0.1, v2.1.0, dan
-v3.0.0. GitHub mengisi **badan** merge commit dengan judul PR, jadi commit itu
-berbunyi:
+Dengan merge commit, aturannya justru terbalik dari kalimat di atas — dan ini
+yang berkali-kali salah. GitHub menyusun pesan merge commit sebagai `Merge pull
+request #N from <branch>` diikuti **judul PR**. Bila judul itu berbentuk
+`feat: …` atau `docs: …`, release-please membacanya sebagai commit tersendiri,
+dan perubahan yang sama terbit **dua kali** di CHANGELOG.
+
+Sudah terjadi tiga kali di repo ini — `v2.0.1`, `v2.1.0`, `v3.0.0` — dan juga
+di repo server. Yang terakhir masih bisa dilihat bentuknya:
 
 ```
+$ git log -1 --format='%s%n%n%b' ddb12ae
 Merge pull request #23 from LyKhan77/migrasi-jalur-setup
 
 fix(setup): bawa migrasi profil ke KEDUA pemasang, bukan hanya pembaru
 ```
 
-Release-please membaca badan itu sebagai conventional commit kedua, dan satu
-perubahan tercatat dua kali di CHANGELOG — sekali dengan hash commit aslinya,
-sekali dengan hash merge commit. Tag yang sudah terbit tidak bisa diubah; yang
-bisa dirapikan hanya berkas di `main`, sesudahnya.
+Baris ketiga itulah yang dibaca release-please sebagai commit kedua.
 
-Dua cara membayarnya:
+**Jebakannya: GitHub yang mengisi judulnya, bukan Anda.** Bila branch berisi
+**tepat satu commit**, GitHub memakai subjek commit itu sebagai judul PR — dan
+subjek commit tentu saja conventional. Bila dua atau lebih, ia memakai nama
+branch, yang aman. Jadi jebakan ini menyerang PR yang paling rapi, dan
+menyerang diam-diam: tidak ada yang salah di layar, judulnya sudah terisi.
 
-1. **Kosongkan badan merge commit** saat menekan merge. GitHub mengizinkannya
-   di dialog merge. Gratis, tetapi satu langkah manual yang harus diingat
-   setiap kali — dan tiga kali terlewat adalah bukti bahwa ia akan terlewat
-   lagi.
-2. **Beralih ke squash, setelah judul PR dijaga.** Squash menghasilkan tepat
-   satu commit conventional, jadi tidak ada yang kembar. Keberatan di atas —
-   judul PR yang tidak conventional membuat release-please buta — hilang begitu
-   ada gerbang yang menolak judul PR yang tidak berbentuk conventional commit.
-   Cabang `ci/pagar-judul-pr` berisi gerbang itu dan belum di-merge.
+`.github/workflows/pr-title.yml` sekarang menggagalkan PR seperti itu sebelum
+sempat di-merge. PR release-please dikecualikan — judulnya memang
+`chore(main): release X`, dan `chore` bertanda `hidden`, jadi merge commit-nya
+tidak menyumbang entri.
 
-Pilihan kedua memindahkan pengetahuan dari kepala orang ke CI. Sampai ia
-diambil, pilihan pertama yang berlaku, dan CHANGELOG perlu dirapikan sesudah
-tiap rilis.
+**Bila terlanjur:** sunting `CHANGELOG.md` di PR rilis sebelum di-merge, buang
+baris yang menunjuk hash merge commit. Sesudah tag terbit, duplikasinya
+permanen dan hanya bisa dirapikan di berkas `main`.
 
 ---
 
