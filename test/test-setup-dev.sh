@@ -69,7 +69,7 @@ out=$(GROK_HOME="$SB/full" $SETUP 2>&1); t "exit code" "$?" "0"
 t "api_key dipertahankan"      "$(grep -c 'api_key = "dev-uji"' "$SB/full/config.toml")" "1"
 t "temperature tidak disentuh" "$(grep -c 'temperature = 1.0' "$SB/full/config.toml")" "1"
 # Diperiksa lewat TOML terurai: `context_window` sengaja ada di dua seksi model
-# (internal-qwen dan internal-qwen-localhost), jadi mencacah baris menyesatkan.
+# (cooper-agent, cooper-s1, cooper-s2), jadi mencacah baris menyesatkan.
 val() { python3 -c "
 import tomllib
 d = tomllib.load(open('$SB/full/config.toml','rb'))
@@ -77,8 +77,8 @@ cur = d
 for k in '$1'.split('.'): cur = cur[k]
 print(cur)" 2>/dev/null; }
 t "ambang jadi 80"             "$(val session.auto_compact_threshold_percent)" "80"
-t "context_window jadi 131072" "$(val model.internal-qwen.context_window)" "131072"
-t "localhost ikut 131072"      "$(val model.internal-qwen-localhost.context_window)" "131072"
+t "context_window jadi 131072" "$(val model.cooper-agent.context_window)" "131072"
+t "cooper-s1 ikut 131072"      "$(val model.cooper-s1.context_window)" "131072"
 t "memory tetap aktif"         "$(val memory.enabled)" "True"
 t "skill lain tidak disentuh"  "$(cat "$SB/full/skills/brainstorming/SKILL.md")" "x"
 t "skill lain dilaporkan"      "$(grep -c '1 skill lain' <<<"$out")" "1"
@@ -104,8 +104,8 @@ d = tomllib.load(open('$SB/vpn/config.toml','rb'))
 cur = d
 for k in '$1'.split('.'): cur = cur[k]
 print(cur)" 2>/dev/null; }
-t "base_url VPN bertahan"   "$(vpn model.internal-qwen.base_url)" "http://198.51.100.20:8987/api/v1"
-t "context_window tetap naik" "$(vpn model.internal-qwen.context_window)" "131072"
+t "base_url VPN bertahan"   "$(vpn model.cooper-agent.base_url)" "http://198.51.100.20:8987/api/v1"
+t "context_window tetap naik" "$(vpn model.cooper-agent.context_window)" "131072"
 
 echo "═══ C3: tanpa alamat gateway, MENOLAK menulis ═══"
 # Janji ini BERUBAH pada 2 September 2026.
@@ -121,7 +121,7 @@ mkdir -p "$SB/newdev"
 GROK_HOME="$SB/newdev" $SETUP >/dev/null 2>&1; t "exit code" "$?" "0"
 t "base_url dari alamat dev" "$(python3 -c "
 import tomllib
-print(tomllib.load(open('$SB/newdev/config.toml','rb'))['model']['internal-qwen']['base_url'])" 2>/dev/null)" "$GW_URL"
+print(tomllib.load(open('$SB/newdev/config.toml','rb'))['model']['cooper-agent']['base_url'])" 2>/dev/null)" "$GW_URL"
 
 mkdir -p "$SB/noaddr"
 out=$(env -u COOPERAGENT_GATEWAY GROK_HOME="$SB/noaddr" $SETUP 2>&1); rc=$?

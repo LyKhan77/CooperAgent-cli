@@ -114,7 +114,7 @@ if ([string]::IsNullOrWhiteSpace($SCRIPT_DIR)) { $SCRIPT_DIR = Split-Path -Paren
 # server MCP, preferensi [ui], model tambahan -- dan dipakai untuk memberi tahu
 # dengan jujur apa yang akan hilang bila ia memilih tulis-ulang penuh.
 $MANAGED_SECTIONS = @('[cli]','[features]','[session]','[memory]','[models]',
-                      '[model.internal-qwen]','[model.internal-qwen-s2]')
+                      '[model.cooper-agent]','[model.cooper-s1]','[model.cooper-s2]')
 
 function Get-GrokConfigPath { Join-Path (Join-Path $env:USERPROFILE '.grok') 'config.toml' }
 
@@ -186,7 +186,7 @@ function Read-ExistingEndpoint {
     if (-not (Test-Path $cfg)) { return '' }
     $inSection = $false
     foreach ($line in (Get-Content -LiteralPath $cfg)) {
-        if ($line -match '^\[model\.internal-qwen\]\s*$') { $inSection = $true; continue }
+        if ($line -match '^\[model\.cooper-agent\]\s*$') { $inSection = $true; continue }
         if ($line -match '^\[') { $inSection = $false; continue }
         if ($inSection -and $line -match "^\s*base_url\s*=\s*['`"](.+)['`"]\s*$") { return $Matches[1] }
     }
@@ -285,14 +285,14 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
         "load_envrc = true", "",
         "[memory]", "enabled = true", "",
         "[models]",
-        "default = `"internal-qwen`"",
+        "default = `"cooper-agent`"",
         "stream_tool_calls = true",
         "temperature = 1.0", "top_p = 0.95", "min_p = 0.0", "repeat_penalty = 1.0",
         "max_completion_tokens = $ContractMaxTokens", "max_tokens = $ContractMaxTokens", "max_output_tokens = $ContractMaxTokens", "",
-        "[model.internal-qwen]",
+        "[model.cooper-agent]",
         "model = `"$DEFAULT_MODEL_NAME`"",
         "base_url = `"$ServerUrl`"",
-        "name = `"CooperAgent Qwen3.8-27B (routing otomatis)`"",
+        "name = `"CooperAgent (routing otomatis)`"",
         "description = `"Gateway memilih server; header X-Upstream menyebut mana yang menjawab`"",
         "api_backend = `"chat_completions`"",
         "# Plafon SATU slot llama-server, ditanyakan ke gateway saat setup;",
@@ -302,14 +302,25 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
         "temperature = 1.0", "top_p = 0.95", "min_p = 0.0",
         "repeat_penalty = 1.0", "presence_penalty = 0.0",
         "api_key = `"$apiKeyValue`"", "",
-        "# Menembus routing, langsung ke server 2 (bobot UD-Q4_K_XL).",
+        "# Menembus routing, langsung ke satu node.",
         "# ALAT PEMBANDING, bukan cara kerja sehari-hari: sesi yang memakainya",
-        "# kehilangan failover otomatis.",
-        "[model.internal-qwen-s2]",
+        "# kehilangan failover otomatis -- kalau node itu mati, request gagal.",
+        "[model.cooper-s1]",
+        "model = `"$DEFAULT_MODEL_NAME`"",
+        "base_url = `"$gw/api/v1/upstream/s1`"",
+        "name = `"CooperAgent @ server 1 (langsung)`"",
+        "description = `"Langsung ke server 1, menembus routing -- tanpa failover`"",
+        "api_backend = `"chat_completions`"",
+        "context_window = $ContractContextWindow",
+        "max_completion_tokens = $ContractMaxTokens", "max_tokens = $ContractMaxTokens", "max_output_tokens = $ContractMaxTokens",
+        "temperature = 1.0", "top_p = 0.95", "min_p = 0.0",
+        "repeat_penalty = 1.0", "presence_penalty = 0.0",
+        "api_key = `"$apiKeyValue`"", "",
+        "[model.cooper-s2]",
         "model = `"$DEFAULT_MODEL_NAME`"",
         "base_url = `"$gw/api/v1/upstream/s2`"",
-        "name = `"CooperAgent Qwen3.8-27B @ server 2 (UD-Q4_K_XL)`"",
-        "description = `"Langsung ke server 2, menembus routing gateway`"",
+        "name = `"CooperAgent @ server 2 (langsung)`"",
+        "description = `"Langsung ke server 2, menembus routing -- tanpa failover`"",
         "api_backend = `"chat_completions`"",
         "context_window = $ContractContextWindow",
         "max_completion_tokens = $ContractMaxTokens", "max_tokens = $ContractMaxTokens", "max_output_tokens = $ContractMaxTokens",
@@ -373,7 +384,7 @@ function Test-CooperPiInstalled {
 
 function Test-CooperGrokInstalled {
     return ((Test-Path $GROK_CFG_PATH) -and
-            ((Get-Content $GROK_CFG_PATH) -match '^\[model\.internal-qwen'))
+            ((Get-Content $GROK_CFG_PATH) -match '^\[model\.(cooper-agent|internal-qwen)'))
 }
 function Test-CooperOmpInstalled {
     return ((Test-Path $OMP_YML_PATH) -and

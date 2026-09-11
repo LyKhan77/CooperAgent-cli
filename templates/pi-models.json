@@ -1,7 +1,7 @@
 {
   "providers": {
-    "cooperagent": {
-      "name": "CooperAgent",
+    "cooper-agent": {
+      "name": "CooperAgent (routing otomatis)",
       "baseUrl": "__GATEWAY__/v1",
       "api": "openai-completions",
       "authHeader": true,
@@ -9,7 +9,39 @@
       "models": [
         {
           "id": "__MODEL_ID__",
-          "name": "CooperAgent (gateway)",
+          "name": "CooperAgent — routing otomatis",
+          "input": ["text"],
+          "contextWindow": __CONTEXT_WINDOW__,
+          "maxTokens": __MAX_TOKENS__
+        }
+      ]
+    },
+    "cooper-s1": {
+      "name": "CooperAgent server 1 (langsung)",
+      "baseUrl": "__GATEWAY__/v1/upstream/s1",
+      "api": "openai-completions",
+      "authHeader": true,
+      "apiKey": "__API_KEY__",
+      "models": [
+        {
+          "id": "__MODEL_ID__",
+          "name": "CooperAgent @ s1 — tanpa failover",
+          "input": ["text"],
+          "contextWindow": __CONTEXT_WINDOW__,
+          "maxTokens": __MAX_TOKENS__
+        }
+      ]
+    },
+    "cooper-s2": {
+      "name": "CooperAgent server 2 (langsung)",
+      "baseUrl": "__GATEWAY__/v1/upstream/s2",
+      "api": "openai-completions",
+      "authHeader": true,
+      "apiKey": "__API_KEY__",
+      "models": [
+        {
+          "id": "__MODEL_ID__",
+          "name": "CooperAgent @ s2 — tanpa failover",
           "input": ["text"],
           "contextWindow": __CONTEXT_WINDOW__,
           "maxTokens": __MAX_TOKENS__

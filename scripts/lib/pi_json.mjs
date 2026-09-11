@@ -33,32 +33,46 @@ function mergeModels(existingPath, templatePath) {
   const root = object(readJson(existingPath), existingPath || "models.json");
   const tpl = template(templatePath);
   const providers = root.providers === undefined ? {} : object(root.providers, "providers");
-  const tplProvider = object(tpl.providers?.cooperagent, "providers.cooperagent template");
-  const oldProvider = providers.cooperagent === undefined
-    ? {}
-    : object(providers.cooperagent, "providers.cooperagent");
-  const desired = Array.isArray(tplProvider.models) && tplProvider.models.length > 0
-    ? object(tplProvider.models[0], "cooperagent model template")
-    : fail("Template models pi tidak memuat model");
+  const tplProviders = object(tpl.providers, "providers template");
+  const names = Object.keys(tplProviders);
+  if (names.length === 0) fail("Template models pi tidak memuat provider");
 
-  const oldModels = oldProvider.models === undefined
-    ? []
-    : Array.isArray(oldProvider.models)
-      ? oldProvider.models
-      : fail("Struktur JSON pi tidak valid: cooperagent.models harus berupa array");
-  const oldManaged = oldModels.find((model) =>
-    model && typeof model === "object" &&
-    (model.id === desired.id || String(model.name ?? "").startsWith("CooperAgent")));
-  const preservedModels = oldModels.filter((model) =>
-    !(model && typeof model === "object" &&
-      (model.id === desired.id || String(model.name ?? "").startsWith("CooperAgent"))));
+  // SETIAP provider di template di-merge, bukan hanya satu.
+  //
+  // Sampai 12 September 2026 fungsi ini mengeraskan nama `cooperagent` di
+  // sembilan tempat, jadi pi hanya pernah mendapat satu dari tiga profil yang
+  // dimiliki Grok dan omp. Menambah profil ke template tidak mengubah apa pun
+  // sampai perulangan ini ada.
+  const merged = { ...providers };
+  for (const name of names) {
+    const tplProvider = object(tplProviders[name], `providers.${name} template`);
+    const oldProvider = providers[name] === undefined
+      ? {}
+      : object(providers[name], `providers.${name}`);
+    const desired = Array.isArray(tplProvider.models) && tplProvider.models.length > 0
+      ? object(tplProvider.models[0], `${name} model template`)
+      : fail(`Template provider ${name} tidak memuat model`);
 
-  const provider = {
-    ...oldProvider,
-    ...tplProvider,
-    models: [{ ...(oldManaged ?? {}), ...desired }, ...preservedModels],
-  };
-  root.providers = { ...providers, cooperagent: provider };
+    const oldModels = oldProvider.models === undefined
+      ? []
+      : Array.isArray(oldProvider.models)
+        ? oldProvider.models
+        : fail(`Struktur JSON pi tidak valid: ${name}.models harus berupa array`);
+    // Model yang DIKELOLA dikenali dari id kontrak atau nama berawalan
+    // CooperAgent; sisanya milik dev dan dipertahankan apa adanya.
+    const isManaged = (model) =>
+      model && typeof model === "object" &&
+      (model.id === desired.id || String(model.name ?? "").startsWith("CooperAgent"));
+    const oldManaged = oldModels.find(isManaged);
+    const preservedModels = oldModels.filter((model) => !isManaged(model));
+
+    merged[name] = {
+      ...oldProvider,
+      ...tplProvider,
+      models: [{ ...(oldManaged ?? {}), ...desired }, ...preservedModels],
+    };
+  }
+  root.providers = merged;
   return root;
 }
 
@@ -72,7 +86,7 @@ function mergeSettings(existingPath, templatePath) {
   if (root.defaultModel === undefined || root.defaultModel === "") {
     root.defaultModel = tpl.defaultModel;
   }
-  if (root.defaultProvider === "cooperagent") {
+  if (root.defaultProvider === "cooper-agent" || root.defaultProvider === "cooperagent") {
     root.defaultModel = tpl.defaultModel;
   }
 
@@ -96,7 +110,10 @@ function mergeSettings(existingPath, templatePath) {
 function getValue(kind, path, field) {
   const root = object(readJson(path), path);
   if (kind === "models") {
-    const provider = root.providers?.cooperagent;
+    // Nama baru dulu, nama lama sebagai jalur mundur: dev yang belum
+    // menjalankan setup sejak 12 September 2026 masih memakai `cooperagent`,
+    // dan pembaca ini dipakai justru untuk MENDETEKSI keadaan itu.
+    const provider = root.providers?.["cooper-agent"] ?? root.providers?.cooperagent;
     if (!provider || typeof provider !== "object" || Array.isArray(provider)) return;
     if (field === "present") {
       process.stdout.write("yes\n");

@@ -271,10 +271,10 @@ esac
 # Seksi yang DIKELOLA CooperAgent. Apa pun di luar daftar ini milik dev --
 # server MCP, preferensi [ui], model tambahan -- dan dipakai untuk memberi tahu
 # dengan jujur apa yang akan hilang bila ia memilih tulis-ulang penuh.
-MANAGED_SECTIONS="[cli] [features] [session] [memory] [models] [model.internal-qwen] [model.internal-qwen-s2]"
+MANAGED_SECTIONS="[cli] [features] [session] [memory] [models] [model.cooper-agent] [model.cooper-s1] [model.cooper-s2]"
 
 read_existing_endpoint() {
-    awk '/^\[model\.internal-qwen\]/{f=1;next} /^\[/{f=0}
+    awk '/^\[model\.cooper-agent\]/{f=1;next} /^\[/{f=0}
          f && /^base_url/{sub(/.*=[[:space:]]*/,""); gsub(/^["'"'"']|["'"'"']$/,""); print; exit}' \
         "$HOME/.grok/config.toml" 2>/dev/null
 }
@@ -385,7 +385,7 @@ load_envrc = true
 enabled = true
 
 [models]
-default = "internal-qwen"
+default = "cooper-agent"
 stream_tool_calls = true
 temperature = 1.0
 top_p = 0.95
@@ -395,10 +395,10 @@ max_completion_tokens = ${CONTRACT_MAX_TOKENS}
 max_tokens = ${CONTRACT_MAX_TOKENS}
 max_output_tokens = ${CONTRACT_MAX_TOKENS}
 
-[model.internal-qwen]
+[model.cooper-agent]
 model = "${DEFAULT_MODEL_NAME}"
 base_url = "${server_url}"
-name = "CooperAgent Qwen3.8-27B (routing otomatis)"
+name = "CooperAgent (routing otomatis)"
 description = "Gateway memilih server; header X-Upstream menyebut mana yang menjawab"
 api_backend = "chat_completions"
 # Plafon SATU slot llama-server (--ctx-size / --parallel), sama di kedua server.
@@ -415,14 +415,35 @@ repeat_penalty = 1.0
 presence_penalty = 0.0
 api_key = "${api_key_value}"
 
-# Menembus routing, langsung ke server 2 (bobot UD-Q4_K_XL).
+# Menembus routing, langsung ke satu node.
+#
 # ALAT PEMBANDING, bukan cara kerja sehari-hari: sesi yang memakainya kehilangan
-# failover otomatis -- kalau server 2 mati, request-nya gagal, tidak berpindah.
-[model.internal-qwen-s2]
+# failover otomatis -- kalau node itu mati, request-nya gagal, tidak berpindah.
+#
+# Sampai 12 September 2026 hanya s2 yang punya entri langsung, sehingga
+# perbandingan antar node berat sebelah: s2 bisa ditembak, s1 tidak.
+[model.cooper-s1]
+model = "${DEFAULT_MODEL_NAME}"
+base_url = "${gw}/api/v1/upstream/s1"
+name = "CooperAgent @ server 1 (langsung)"
+description = "Langsung ke server 1, menembus routing gateway -- tanpa failover"
+api_backend = "chat_completions"
+context_window = ${CONTRACT_CONTEXT_WINDOW}
+max_completion_tokens = ${CONTRACT_MAX_TOKENS}
+max_tokens = ${CONTRACT_MAX_TOKENS}
+max_output_tokens = ${CONTRACT_MAX_TOKENS}
+temperature = 1.0
+top_p = 0.95
+min_p = 0.0
+repeat_penalty = 1.0
+presence_penalty = 0.0
+api_key = "${api_key_value}"
+
+[model.cooper-s2]
 model = "${DEFAULT_MODEL_NAME}"
 base_url = "${gw}/api/v1/upstream/s2"
-name = "CooperAgent Qwen3.8-27B @ server 2 (UD-Q4_K_XL)"
-description = "Langsung ke server 2, menembus routing gateway"
+name = "CooperAgent @ server 2 (langsung)"
+description = "Langsung ke server 2, menembus routing gateway -- tanpa failover"
 api_backend = "chat_completions"
 context_window = ${CONTRACT_CONTEXT_WINDOW}
 max_completion_tokens = ${CONTRACT_MAX_TOKENS}
@@ -484,10 +505,10 @@ installed_pi() {
 
 
 installed_grok() {
-    [ -f "$GROK_CFG" ] && grep -q '^\[model\.internal-qwen' "$GROK_CFG" 2>/dev/null
+    [ -f "$GROK_CFG" ] && grep -qE '^\[model\.(cooper-agent|internal-qwen)' "$GROK_CFG" 2>/dev/null
 }
 installed_omp() {
-    [ -f "$OMP_YML_PATH" ] && grep -qE '^  cooperagent:' "$OMP_YML_PATH" 2>/dev/null
+    [ -f "$OMP_YML_PATH" ] && grep -qE '^  (cooper-agent|cooperagent):' "$OMP_YML_PATH" 2>/dev/null
 }
 
 # Alamat dan token dibaca dari MANA PUN yang ada. Dev yang memilih omp saja
