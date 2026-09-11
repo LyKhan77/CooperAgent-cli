@@ -10,6 +10,30 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [3.0.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.1.1...v3.0.0) (2026-09-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* nama profil model berubah dari `internal-qwen*`/`cooperagent*` menjadi `cooper-agent`/`cooper-s1`/`cooper-s2`. Config bermigrasi otomatis saat setup dijalankan, tetapi dev yang menyimpan pilihan model di UI harness-nya perlu memilih ulang sekali.
+
+### Fitur
+
+* satukan tiga profil model di semua harness ([3aaf052](https://github.com/LyKhan77/CooperAgent-cli/commit/3aaf052ccc35b1e1ff2dc55c5b6732f3b2d9ccc7))
+
+
+### Perbaikan
+
+* **setup-dev:** --remove-rules mati sebelum menghapus apa pun ([aa9699e](https://github.com/LyKhan77/CooperAgent-cli/commit/aa9699e4f1464617b9f0d25d8214d86663dd8b4f))
+* **setup-dev:** pembaru Windows ikut bermigrasi juga ([494d143](https://github.com/LyKhan77/CooperAgent-cli/commit/494d143d93054f885ba57efe0652a369c88dfbed))
+* **setup:** bawa migrasi profil ke KEDUA pemasang, bukan hanya pembaru ([ddb12ae](https://github.com/LyKhan77/CooperAgent-cli/commit/ddb12ae455168c90a9010ec780f8d1bd38dc21a7))
+* **setup:** bawa migrasi profil ke KEDUA pemasang, bukan hanya pembaru ([ba5d5d9](https://github.com/LyKhan77/CooperAgent-cli/commit/ba5d5d99c908fd7130193cce018d2171eac0b863))
+
+
+### Dokumentasi
+
+* tulis alur git tiga aturan ke AGENTS.md ([19c2642](https://github.com/LyKhan77/CooperAgent-cli/commit/19c26428165369a9ad6497133ecf32f75cd6b6eb))
+
 ## [2.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.1.0...v2.1.1) (2026-09-05)
 
 
