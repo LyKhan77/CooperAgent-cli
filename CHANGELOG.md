@@ -26,6 +26,38 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ## [Unreleased]
 
+### Fixed · 2026-09-12 — `--remove-rules` berhenti tepat sebelum menghapus
+
+**Konteks.** `scripts/setup-dev.sh --remove-rules` melaporkan aturan agent
+dilepas, tetapi berkasnya masih di tempatnya. Uji `test-setup-dev.sh` sudah
+merah sejak retensi `.bak` masuk (5 September 2026) — merahnya satu baris tanpa
+sebab, `dapat 'ada', harusnya 'tidak'`, dan diperlakukan sebagai kegagalan lama
+yang sudah ada.
+
+**Perubahan.**
+
+- `scripts/setup-dev.sh` — `. scripts/lib/backup.sh` dipindah ke atas blok
+  `--remove-rules`. `bak_prune` dipakai di baris 147, tetapi pustakanya di-source
+  di baris 207 dan blok itu `exit 0` lebih dulu. Di bawah `set -e`:
+  `cp` ke `.bak` jalan → `bak_prune: command not found` → skrip berhenti →
+  `rm -f` tidak pernah jalan. Dev mendapat pesan sukses, berkasnya utuh, dan
+  sebuah `.bak` baru di sebelahnya.
+- `test/test-setup-dev.sh` — keluaran `--remove-rules` kini **ditangkap**, bukan
+  dibuang ke `/dev/null`. Menuntut `rc=0`, tidak ada `command not found`, dan
+  memeriksa sisi omp (`~/.omp/agent/AGENTS.md`) yang selama ini tidak pernah
+  dilihat sama sekali.
+
+**Bukti.** `bash test/test-setup-dev.sh` — 64/1 → **68/0**. Suite penuh 10/10
+hijau untuk pertama kalinya. Reproduksi manual sebelum perbaikan menunjukkan
+`scripts/setup-dev.sh: line 147: bak_prune: command not found` lalu AGENTS.md
+Grok dan omp keduanya masih ada; sesudahnya keduanya terhapus dan skill utuh.
+
+**Dampak.** Hanya jalur `--remove-rules`. Tidak ada config yang berubah bentuk.
+Dev yang pernah menjalankannya punya `AGENTS.md.bak.<stamp>` yatim di
+`~/.grok/` dan `~/.omp/agent/` — aman dihapus.
+
+**Rollback.** Kembalikan urutan `. backup.sh`; kegagalan uji akan kembali.
+
 ### Changed · 2026-09-05 — Alur git tiga aturan, dan PR rilis dibuka sebagai draft
 
 Satu rencana selesai = satu tag. Hari ini PR rilis di-merge lima kali berturut
@@ -122,10 +154,6 @@ berkasnya di `main`.
 ### Dokumentasi
 
 * lipat prosa [Unreleased] ke dalam v2.0.0 ([13b7068](https://github.com/LyKhan77/CooperAgent-cli/commit/13b70685eead29a400c64f8c9f3c29fe6531ae46))
-
-## [Unreleased]
-
-_Belum ada perubahan sejak v2.0.0._
 
 ## [2.0.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v1.4.0...v2.0.0) (2026-09-04)
 

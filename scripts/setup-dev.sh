@@ -112,6 +112,17 @@ echo "${BOLD}Template CooperAgent -> $GROK_HOME${NC}"
 [ "$DRY_RUN" = 1 ] && echo "${YELLOW}Mode dry-run: tidak ada berkas yang ditulis.${NC}"
 echo
 
+# Retensi cadangan di-source DI SINI, bukan bersama pustaka lain di bawah.
+#
+# `--remove-rules` memakai `bak_prune` lalu `exit 0` -- keduanya terjadi jauh
+# sebelum blok source yang lama. Di bawah `set -e`, `bak_prune: command not
+# found` menghentikan skrip TEPAT setelah cadangan dibuat dan TEPAT SEBELUM
+# `rm`: dev diberi tahu aturannya dilepas, aturannya masih di sana, dan sekarang
+# ada salinan `.bak` di sebelahnya. Urutan source adalah perilaku, bukan tata
+# letak.
+# shellcheck source=scripts/lib/backup.sh
+. "$REPO_ROOT/scripts/lib/backup.sh"
+
 # Dua tujuan, satu sumber: Grok membaca ~/.grok/AGENTS.md, omp membaca
 # ~/.omp/agent/AGENTS.md.
 RULES_PATHS="$GROK_HOME/AGENTS.md $HOME/.omp/agent/AGENTS.md"
@@ -204,7 +215,6 @@ mkdir -p "$GROK_HOME/skills"
 . "$REPO_ROOT/scripts/lib/contract.sh"
 # shellcheck source=scripts/lib/omp_models.sh
 . "$REPO_ROOT/scripts/lib/omp_models.sh"
-. "$REPO_ROOT/scripts/lib/backup.sh"
 
 CFG="$GROK_HOME/config.toml"
 
