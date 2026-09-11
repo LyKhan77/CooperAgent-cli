@@ -43,7 +43,14 @@ lain setiap kali kontrak berubah.
 
 ## Kalau Anda sudah terpasang sebelum 12 September 2026
 
-Jalankan `./scripts/setup-dev.sh`. Migrasinya otomatis:
+Jalankan **salah satu** dari tiga jalur — ketiganya bermigrasi dengan cara yang
+sama sejak 12 September 2026:
+
+- `./scripts/setup-dev.sh` — pembaru, untuk dev yang sudah terpasang.
+- `./setup.sh` → **opsi 1 (perbarui parameter)** — onboarding Unix/macOS.
+- `.\setup.ps1` → **opsi 1** — onboarding Windows.
+
+Migrasinya otomatis:
 
 - **Grok** — `[model.internal-qwen]` diganti nama menjadi `[model.cooper-agent]`
   **di tempat**, dan `-s2` menjadi `[model.cooper-s2]`. Isinya ikut terbawa:
@@ -85,9 +92,9 @@ Definisi profil hidup di **enam** tempat:
 | `templates/config.toml` | Grok, jalur pembaruan |
 | `templates/omp-models.yml` | omp |
 | `templates/pi-models.json` | pi |
-| `setup.sh` | salinan inline, jalur onboarding Unix |
-| `setup.ps1` | salinan inline, jalur onboarding Windows |
-| `scripts/setup-dev.sh` | migrasi nama lama |
+| `setup.sh` | salinan inline + migrasi, jalur onboarding Unix |
+| `setup.ps1` | salinan inline + migrasi, jalur onboarding Windows |
+| `scripts/setup-dev.sh` | salinan inline + migrasi, jalur pembaruan |
 
 Ketika keenamnya menyimpang, **tidak ada satu berkas pun yang salah** — yang
 salah adalah selisihnya. Itu jenis kegagalan yang tidak pernah muncul sebagai
@@ -103,6 +110,21 @@ sama, lalu memeriksa tiga hal yang gagal secara diam-diam bila terlewat:
 - **Peringatan kehilangan failover ikut tersalin.** Memindahkan konfigurasi
   tanpa peringatannya berarti memindahkan jebakannya saja.
 - **Tidak ada IPv4 internal di jalur pemasang** (aturan #1 `AGENTS.md`).
+
+Sejak 12 September 2026 ia juga **menjalankan** migrasi `setup.sh`, bukan
+sekadar memeriksa bahwa kodenya ada: `write_grok_config` dijalankan atas config
+lama di kotak pasir, lalu hasilnya diperiksa. Sampai saat itu hanya
+`scripts/setup-dev.sh` yang bermigrasi — kedua pemasang membaca
+`[model.cooper-agent]` saja, jadi dev yang belum bermigrasi kehilangan alamatnya
+dan ditanyai ulang alamat yang sebenarnya sudah ia jawab, lalu ditinggali seksi
+yatim di sebelah seksi baru. Jalur pemasangan yang memperlakukan config lama
+secara berbeda adalah perilaku yang harus dijaga sinkron dengan tangan, jadi
+ujinya sekarang menuntut **ketiganya** memuat rename yang sama.
+
+Migrasinya menulis ke berkas **sementara** (`$source` pada jalur PowerShell),
+lalu merge membandingkannya dengan config asli. Urutan itu bukan gaya penulisan: menulis rename lebih dulu membuat
+cadangan `.bak` merekam berkas yang sudah terlanjur berubah — cadangan yang
+tidak bisa dipakai mundur, dan itu baru ketahuan saat seseorang membutuhkannya.
 
 `test/test-omp-providers.sh` menjaga sisi yang berlawanan: provider yang hilang
 memang ditambahkan, **dan** kunci berbayar dev tetap selamat. Menambal yang

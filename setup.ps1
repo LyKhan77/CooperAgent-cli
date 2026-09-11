@@ -181,14 +181,21 @@ Catatan yang perlu diketahui sebelum memakai alat lain:
     exit 0
 }
 
+# Nama baru DULU, nama lama sebagai jalur mundur.
+#
+# Dev yang belum menjalankan setup sejak 12 September 2026 masih memakai
+# `[model.internal-qwen]`. Membaca nama baru saja mengembalikan kosong, dan
+# pemasang lalu meminta alamat gateway yang sebenarnya sudah ia punya.
 function Read-ExistingEndpoint {
     $cfg = Get-GrokConfigPath
     if (-not (Test-Path $cfg)) { return '' }
-    $inSection = $false
-    foreach ($line in (Get-Content -LiteralPath $cfg)) {
-        if ($line -match '^\[model\.cooper-agent\]\s*$') { $inSection = $true; continue }
-        if ($line -match '^\[') { $inSection = $false; continue }
-        if ($inSection -and $line -match "^\s*base_url\s*=\s*['`"](.+)['`"]\s*$") { return $Matches[1] }
+    foreach ($section in @('cooper-agent', 'internal-qwen')) {
+        $inSection = $false
+        foreach ($line in (Get-Content -LiteralPath $cfg)) {
+            if ($line -match ('^\[model\.' + [regex]::Escape($section) + '\]\s*$')) { $inSection = $true; continue }
+            if ($line -match '^\[') { $inSection = $false; continue }
+            if ($inSection -and $line -match "^\s*base_url\s*=\s*['`"](.+)['`"]\s*$") { return $Matches[1] }
+        }
     }
     return ''
 }
@@ -335,7 +342,37 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
 
     if ((Test-Path $cfg) -and $Mode -ne 'overwrite') {
         $existing = @(Get-Content -LiteralPath $cfg)
-        $merged = Merge-Toml $managed $existing
+
+        # Nama profil lama diganti SEBELUM merge, sama seperti setup.sh dan
+        # scripts/setup-dev.sh. Tanpa ini jalur Windows meninggalkan
+        # `[model.internal-qwen]` sebagai seksi yatim di sebelah
+        # `[model.cooper-agent]` yang baru: `api_key` dev hidup di seksi lama,
+        # dan verifikasi membaca `context_window` PERTAMA yang ditemukan -- jadi
+        # seksi yatim itu menjawab 401 sekaligus mencetak centang untuk angka
+        # yang basi.
+        #
+        # Hasilnya masuk ke $source, BUKAN ke $existing: perbandingan di bawah
+        # dan cadangan `.bak` harus tetap melihat berkas apa adanya di disk,
+        # supaya cadangan merekam keadaan SEBELUM migrasi. Cadangan yang sudah
+        # ikut bermigrasi tidak bisa dipakai mundur.
+        $source = $existing
+        if (@($existing | Where-Object { $_ -match '^\[model\.internal-qwen(-s2)?\]\s*$' }).Count -gt 0) {
+            $source = @($existing | ForEach-Object {
+                if ($_ -match '^\[model\.internal-qwen\]\s*$')         { '[model.cooper-agent]' }
+                elseif ($_ -match '^\[model\.internal-qwen-s2\]\s*$')  { '[model.cooper-s2]' }
+                else { $_ }
+            })
+            Write-Host "  [v] profil lama diganti nama ke cooper-* (isinya dipertahankan)" -ForegroundColor Green
+            # `internal-qwen-localhost` sengaja TIDAK diganti: tidak ada
+            # padanannya sejak alamat menjadi pilihan -Endpoint. Menghapus
+            # config yang masih bekerja bukan tugas pemasang.
+            if (@($existing | Where-Object { $_ -match '^\[model\.internal-qwen-localhost\]\s*$' }).Count -gt 0) {
+                Write-Host "  !  [model.internal-qwen-localhost] kini di luar kelolaan CooperAgent." -ForegroundColor Yellow
+                Write-Host "     Alamat sekarang dipilih lewat -Endpoint local; hapus bila tidak dipakai." -ForegroundColor Yellow
+            }
+        }
+
+        $merged = Merge-Toml $managed $source
         if ((($existing -join "`n")) -eq (($merged -join "`n"))) {
             Write-Host "[v] config.toml sudah sesuai - tidak ada perubahan." -ForegroundColor Green
         } else {
