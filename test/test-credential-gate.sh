@@ -268,7 +268,12 @@ done
 # Kurung tidak seimbang adalah satu-satunya kerusakan PowerShell yang bisa
 # ditangkap tanpa PowerShell. Ia tidak membuktikan skripnya benar; ia menangkap
 # suntingan yang terpotong.
-for f in setup.ps1 scripts/setup-dev.ps1 scripts/lib/OmpModels.ps1 scripts/lib/Credential.ps1; do
+# PiModels.ps1 ditambahkan 12 September 2026: ia berkas .ps1 terbesar dan
+# paling sering disunting dari mesin Linux, tempat pwsh tidak terpasang.
+# Kurung yang tidak seimbang di sana tidak akan ketahuan sampai seorang dev
+# Windows menjalankannya.
+for f in setup.ps1 scripts/setup-dev.ps1 scripts/lib/OmpModels.ps1 \
+         scripts/lib/Credential.ps1 scripts/lib/PiModels.ps1 test/Test-PiModels.ps1; do
     nl="$(tr -cd '{' < "$REPO/$f" | wc -c)"; nr="$(tr -cd '}' < "$REPO/$f" | wc -c)"
     [ "$nl" = "$nr" ] && ok "$f: kurung kurawal seimbang ($nl)" \
         || bad "$f: kurung kurawal TIDAK seimbang ($nl buka, $nr tutup)"
