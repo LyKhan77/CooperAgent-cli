@@ -584,6 +584,26 @@ if [ -z "${SKIP_OMP:-}" ]; then
             else
                 echo "  ${GREEN}${S_OK}${NC} provider akan ditambahkan:${missing} (dry-run)"
             fi
+
+            # Dijalankan TERPISAH dari penambahan provider, dan tanpa syarat.
+            #
+            # `merge_providers` hanya menambah provider yang HILANG; dev yang
+            # sudah punya ketiganya tidak tersentuh sama sekali. Padahal justru
+            # merekalah yang memegang `supportsImages` yang hilang -- kunci itu
+            # baru ada di template pada 12 September 2026. Menggantungkannya
+            # pada cabang `$missing` berarti tidak seorang pun yang sudah
+            # terpasang akan pernah mendapatkannya.
+            if [ "$DRY_RUN" = 0 ]; then
+                upg="$(mktemp)"
+                if omp_ensure_supports_images "$MY" > "$upg" && [ -s "$upg" ]; then
+                    if ! cmp -s "$upg" "$MY"; then
+                        [ -f "$MY.bak.$STAMP" ] || { cp "$MY" "$MY.bak.$STAMP"; bak_prune "$MY"; }
+                        mv "$upg" "$MY"
+                        echo "  ${GREEN}${S_OK}${NC} supportsImages: true ditambahkan — omp kini mengirim gambar"
+                    fi
+                fi
+                rm -f "$upg"
+            fi
         else
             echo "  ${YELLOW}!${NC} template provider tidak terender penuh — penambahan dilewati"
         fi

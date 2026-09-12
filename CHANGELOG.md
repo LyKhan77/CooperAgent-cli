@@ -604,6 +604,44 @@ judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
 rilis mana yang membawanya.
 
 
+### Fixed · 2026-09-12 — omp juga tidak tahu modelnya bisa melihat
+
+**Konteks.** Perbaikan pi di bawah sempat disertai klaim bahwa "Grok dan omp
+tidak terpengaruh". Klaim itu berdasar `grep`, bukan pemeriksaan. Ditanya ulang
+apakah SEMUA harness sudah dipastikan, jawabannya ternyata belum — dan omp
+punya cacat yang sama.
+
+omp membaca `c.supportsImages === true`. Perbandingannya ketat dan **tidak ada
+nilai bawaan**: kunci yang hilang berarti model dianggap teks saja.
+`templates/omp-models.yml` tidak pernah menyetelnya.
+
+Grok memang bersih: binernya tidak punya deklarasi modalitas per-model sama
+sekali, jadi ia selalu mengirim gambar apa adanya.
+
+**Perubahan.**
+
+- `templates/omp-models.yml` — `supportsImages: true` pada ketiga provider.
+- `scripts/lib/omp_models.sh` — `omp_ensure_supports_images()`, jalur naik untuk
+  pemasangan yang sudah ada.
+- `scripts/setup-dev.sh` — memanggilnya **tanpa syarat**, terpisah dari
+  penambahan provider.
+
+Yang ketiga itu intinya. `merge_providers` bersifat **tambah-saja**: provider
+yang sudah ada tidak pernah disentuh, supaya endpoint suntingan dev dan kunci
+berbayarnya selamat. Konsekuensinya, memperbaiki template saja tidak menjangkau
+seorang pun yang sudah memasang — dan merekalah semua dev kita. Menggantungkan
+jalur naik ini pada cabang `$missing` akan membuatnya tidak pernah berjalan.
+
+Jalur naik hanya **menambah kunci yang hilang**, hanya pada provider milik kita.
+`supportsImages: false` yang ditulis dev tetap dihormati: itu pilihan sadar,
+bukan kelalaian.
+
+**Bukti.** `test-omp-providers.sh` 11 → 16: template menyatakan `true`,
+pemasangan lama ikut naik, `false` dev dihormati, provider dev utuh, dan
+idempoten. Suite penuh 11/11.
+
+**Dampak.** Dev omp menjalankan `./scripts/setup-dev.sh` sekali.
+
 ### Fixed · 2026-09-12 — pi diberi tahu bahwa modelnya bisa melihat
 
 **Konteks.** Di pi, meminta agent membaca gambar menghasilkan catatan di blok

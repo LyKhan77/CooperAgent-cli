@@ -41,6 +41,9 @@ providers:
         name: CooperAgent — routing otomatis
         contextWindow: __CONTEXT_WINDOW__
         maxTokens: __MAX_TOKENS__
+        # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini
+        # sebagai teks saja (`supportsImages === true`, dan tidak ada bawaan).
+        supportsImages: true
 
   # ALAT PEMBANDING, bukan jalur harian. Menembus routing langsung ke server 1.
   #
@@ -56,6 +59,9 @@ providers:
         name: CooperAgent @ s1 — tanpa failover
         contextWindow: __CONTEXT_WINDOW__
         maxTokens: __MAX_TOKENS__
+        # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini
+        # sebagai teks saja (`supportsImages === true`, dan tidak ada bawaan).
+        supportsImages: true
 
   # Pasangan cooper-s1. Gunanya membandingkan jawaban kedua node pada prompt
   # yang sama — kuantisasi dan drafter keduanya boleh berbeda.
@@ -71,3 +77,6 @@ providers:
         name: CooperAgent @ s2 — tanpa failover
         contextWindow: __CONTEXT_WINDOW__
         maxTokens: __MAX_TOKENS__
+        # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini
+        # sebagai teks saja (`supportsImages === true`, dan tidak ada bawaan).
+        supportsImages: true

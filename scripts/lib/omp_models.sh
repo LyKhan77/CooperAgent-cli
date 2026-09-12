@@ -123,3 +123,60 @@ omp_set_base_url() { # $1 = models.yml  $2 = gateway lama  $3 = gateway baru
     sed -i.bak_tmp -E "/127\.0\.0\.1/! s|baseUrl: ${esc}|baseUrl: ${new}|" "$file" || return 1
     rm -f "$file.bak_tmp"
 }
+
+# omp_ensure_supports_images <models.yml> -> menulis hasil ke stdout
+#
+# KENAPA ADA. `merge_providers` bersifat TAMBAH-SAJA: provider yang sudah ada di
+# berkas dev tidak pernah disentuh, supaya endpoint suntingannya dan kunci
+# berbayarnya selamat. Konsekuensinya, memperbaiki template TIDAK menjangkau
+# siapa pun yang sudah memasang -- dan justru merekalah semua dev kita.
+#
+# omp memeriksa `c.supportsImages === true`. Tidak ada nilai bawaan: kunci yang
+# hilang berarti model dianggap teks saja, dan omp tidak akan pernah mengirim
+# gambar ke model yang sebenarnya memuat mmproj. Tidak ada galat; gambarnya
+# hanya tidak pernah sampai.
+#
+# Hanya provider MILIK KAMI yang disentuh, dan hanya dengan MENAMBAH kunci yang
+# hilang. Provider dev tidak dilihat sama sekali, dan `supportsImages: false`
+# yang ia tulis sendiri di provider kami tetap dihormati -- itu pilihan sadar,
+# bukan kelalaian.
+OMP_MANAGED_PROVIDERS="${OMP_MANAGED_PROVIDERS:-cooper-agent cooper-s1 cooper-s2 cooperagent}"
+
+omp_ensure_supports_images() { # $1 = models.yml
+    awk -v managed="$OMP_MANAGED_PROVIDERS" '
+        BEGIN { split(managed, m, " "); for (i in m) ours[m[i]] = 1 }
+
+        # Item model disangga sampai batasnya terlihat, lalu ditulis sekaligus.
+        # Menyisipkan saat baris `- id:` lewat akan salah bila dev sudah punya
+        # kuncinya di baris bawah -- kita hanya boleh tahu setelah item selesai.
+        function flush(   i) {
+            if (n == 0) return
+            for (i = 1; i <= n; i++) print buf[i]
+            if (in_ours && !has_key) print indent "supportsImages: true"
+            n = 0; has_key = 0
+        }
+
+        /^  [A-Za-z0-9_-]+:[[:space:]]*$/ {
+            flush()
+            name = $1; sub(/:$/, "", name)
+            in_ours = (name in ours) ? 1 : 0
+            in_models = 0
+            print; next
+        }
+        /^    models:[[:space:]]*$/ { flush(); in_models = 1; print; next }
+
+        # Awal item model baru: `      - id: ...`
+        in_models && /^      - / {
+            flush()
+            indent = "        "
+            buf[++n] = $0; next
+        }
+        # Lanjutan item: lebih dalam dari penanda daftar.
+        n > 0 && /^        / {
+            if ($0 ~ /^[[:space:]]*supportsImages[[:space:]]*:/) has_key = 1
+            buf[++n] = $0; next
+        }
+        { flush(); print }
+        END { flush() }
+    ' "$1"
+}
