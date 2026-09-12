@@ -115,5 +115,74 @@ else
 fi
 
 echo
+echo "vision: omp harus diberi tahu modelnya bisa melihat"
+# omp memeriksa `c.supportsImages === true` dan TIDAK punya nilai bawaan.
+# Kunci yang hilang = model dianggap teks saja, dan gambar tidak pernah dikirim
+# ke model yang sebenarnya memuat mmproj. Tidak ada galat sama sekali.
+kurang=""
+for prov in cooper-agent cooper-s1 cooper-s2; do
+    blok="$(awk -v p="  $prov:" '$0==p{f=1;next} /^  [A-Za-z0-9_-]+:[[:space:]]*$/{f=0} f' \
+            "$ROOT/templates/omp-models.yml")"
+    printf '%s' "$blok" | grep -qE 'supportsImages:[[:space:]]*true' || kurang="$kurang $prov"
+done
+[ -z "$kurang" ] && ok "ketiga provider template menyatakan supportsImages: true" \
+                 || no "template TANPA supportsImages:$kurang" "omp tidak akan mengirim gambar"
+
+# Yang menentukan: dev yang SUDAH memasang. merge_providers bersifat tambah-saja,
+# jadi template yang benar tidak menjangkau mereka tanpa jalur naik tersendiri.
+SBX="$(mktemp -d)"
+cat > "$SBX/lama.yml" <<'YML'
+providers:
+  cooper-agent:
+    name: CooperAgent (routing otomatis)
+    baseUrl: http://x:8987/v1
+    apiKey: kunci-dev
+    models:
+      - id: intercon-agent
+        name: CooperAgent — routing otomatis
+        maxTokens: 12288
+
+  cooper-s2:
+    name: CooperAgent server 2
+    models:
+      - id: intercon-agent
+        name: CooperAgent @ s2
+        supportsImages: false
+        maxTokens: 12288
+
+  anthropic-saya:
+    name: Punya dev
+    apiKey: sk-ant-BERBAYAR
+    models:
+      - id: claude
+        maxTokens: 8192
+YML
+( . "$ROOT/scripts/lib/omp_models.sh"
+  omp_ensure_supports_images "$SBX/lama.yml" > "$SBX/baru.yml" ) 2>/dev/null
+
+awk '/^  cooper-agent:/{f=1;next} /^  [A-Za-z0-9_-]+:[[:space:]]*$/{f=0} f' "$SBX/baru.yml" \
+    | grep -qE 'supportsImages:[[:space:]]*true' \
+    && ok "pemasangan lama ikut dinaikkan (kunci hilang ditambahkan)" \
+    || no "pemasangan lama dinaikkan" "dev yang sudah pasang tetap tanpa vision"
+
+# `false` yang ditulis dev adalah pilihan sadar, bukan kelalaian.
+awk '/^  cooper-s2:/{f=1;next} /^  [A-Za-z0-9_-]+:[[:space:]]*$/{f=0} f' "$SBX/baru.yml" \
+    | grep -qE 'supportsImages:[[:space:]]*false' \
+    && ok "supportsImages: false milik dev dihormati" \
+    || no "supportsImages: false dihormati" "pilihan sadar dev ditimpa"
+
+grep -q 'sk-ant-BERBAYAR' "$SBX/baru.yml" \
+    && ok "provider dev tidak tersentuh" || no "provider dev tidak tersentuh" "hilang/berubah"
+
+# Dijalankan dua kali tidak boleh menggandakan kunci.
+( . "$ROOT/scripts/lib/omp_models.sh"
+  omp_ensure_supports_images "$SBX/baru.yml" > "$SBX/ketiga.yml" ) 2>/dev/null
+if cmp -s "$SBX/baru.yml" "$SBX/ketiga.yml"; then
+    ok "idempoten — dijalankan ulang tidak mengubah apa pun"
+else
+    no "idempoten" "jalan kedua mengubah berkas lagi"
+fi
+rm -rf "$SBX"
+
 echo "lulus $pass, gagal $fail"
 [[ $fail -eq 0 ]]

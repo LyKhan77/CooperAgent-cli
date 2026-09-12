@@ -616,6 +616,80 @@ judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
 rilis mana yang membawanya.
 
 
+### Fixed · 2026-09-12 — omp juga tidak tahu modelnya bisa melihat
+
+**Konteks.** Perbaikan pi di bawah sempat disertai klaim bahwa "Grok dan omp
+tidak terpengaruh". Klaim itu berdasar `grep`, bukan pemeriksaan. Ditanya ulang
+apakah SEMUA harness sudah dipastikan, jawabannya ternyata belum — dan omp
+punya cacat yang sama.
+
+omp membaca `c.supportsImages === true`. Perbandingannya ketat dan **tidak ada
+nilai bawaan**: kunci yang hilang berarti model dianggap teks saja.
+`templates/omp-models.yml` tidak pernah menyetelnya.
+
+Grok memang bersih: binernya tidak punya deklarasi modalitas per-model sama
+sekali, jadi ia selalu mengirim gambar apa adanya.
+
+**Perubahan.**
+
+- `templates/omp-models.yml` — `supportsImages: true` pada ketiga provider.
+- `scripts/lib/omp_models.sh` — `omp_ensure_supports_images()`, jalur naik untuk
+  pemasangan yang sudah ada.
+- `scripts/setup-dev.sh` — memanggilnya **tanpa syarat**, terpisah dari
+  penambahan provider.
+
+Yang ketiga itu intinya. `merge_providers` bersifat **tambah-saja**: provider
+yang sudah ada tidak pernah disentuh, supaya endpoint suntingan dev dan kunci
+berbayarnya selamat. Konsekuensinya, memperbaiki template saja tidak menjangkau
+seorang pun yang sudah memasang — dan merekalah semua dev kita. Menggantungkan
+jalur naik ini pada cabang `$missing` akan membuatnya tidak pernah berjalan.
+
+Jalur naik hanya **menambah kunci yang hilang**, hanya pada provider milik kita.
+`supportsImages: false` yang ditulis dev tetap dihormati: itu pilihan sadar,
+bukan kelalaian.
+
+**Bukti.** `test-omp-providers.sh` 11 → 16: template menyatakan `true`,
+pemasangan lama ikut naik, `false` dev dihormati, provider dev utuh, dan
+idempoten. Suite penuh 11/11.
+
+**Dampak.** Dev omp menjalankan `./scripts/setup-dev.sh` sekali.
+
+### Fixed · 2026-09-12 — pi diberi tahu bahwa modelnya bisa melihat
+
+**Konteks.** Di pi, meminta agent membaca gambar menghasilkan catatan di blok
+thinking-nya: *"my model can't see images directly — description came from
+vision subagent."* Jawabannya tetap datang, hanya saja dari model lain.
+
+Modelnya sendiri bisa melihat. Kedua node memuat `mmproj` (889 MB, BF16) dan
+presetnya menyatakan `capabilities = ["chat", "tools", "vision"]`. Diuji
+langsung lewat gateway dengan PNG 64×64 separuh merah separuh biru: `s1`, `s2`,
+dan `cooper-agent` ketiganya menjawab "Kiri: merah, kanan: biru".
+
+Yang keliru ada di pihak kita: `templates/pi-models.json` menyatakan
+`"input": ["text"]` untuk ketiga provider. pi mempercayainya, menolak mengirim
+gambar ke model, lalu memanggil subagent vision. Tidak ada yang galat — kelas
+kegagalan yang paling mahal, karena ia terlihat seperti berhasil.
+
+**Perubahan.**
+
+- `templates/pi-models.json` — `"input": ["text", "image"]` untuk `cooper-agent`,
+  `cooper-s1`, dan `cooper-s2`.
+- `test/test-pi-adapter.sh` — dua pemeriksaan baru: ketiga provider menyatakan
+  `image`, **dan** merge benar-benar menimpa `["text"]` milik pemasangan lama.
+  Yang kedua yang menentukan: template yang benar tidak menolong siapa pun bila
+  merge memperlakukan provider yang sudah ada sebagai milik dev dan melewatinya.
+
+**Bukti.** Dengan template dikembalikan ke `["text"]`, kedua pemeriksaan merah.
+Suite penuh 11/11.
+
+**Dampak.** Dev pi menjalankan `./scripts/setup-dev.sh` sekali; nilai lamanya
+ditimpa. Grok dan omp tidak terpengaruh — keduanya tidak mendeklarasikan modalitas.
+
+**Yang belum dibereskan.** Kemampuan ini **dipatok di klien**, melanggar aturan
+#2. Gateway tidak mengumumkan `capabilities` pada `/v1/models` sama sekali,
+sehingga template tidak punya sumber untuk menurunkannya. Selama itu, preset
+yang mencabut vision tidak akan pernah sampai ke pi.
+
 ### Added · 2026-09-12 — `scripts/pr.sh`: satu langkah membuat PR
 
 Pagar judul PR menangkap kesalahan **sesudah** PR dibuat: cek merah, sunting
