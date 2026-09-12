@@ -20,7 +20,6 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ### Dokumentasi
 
-* rapikan CHANGELOG sesudah v3.0.0, dan tulis harga merge commit ([ca8be3b](https://github.com/LyKhan77/CooperAgent-cli/commit/ca8be3b51f173b978b36f5aeb2c43adec63f4540))
 * rapikan CHANGELOG sesudah v3.0.0, dan tulis harga merge commit ([e7c7cb5](https://github.com/LyKhan77/CooperAgent-cli/commit/e7c7cb558fe317f6c04feabd6ce35eb017e3f805))
 
 ## [3.0.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v2.1.1...v3.0.0) (2026-09-11)
