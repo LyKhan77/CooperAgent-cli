@@ -604,6 +604,50 @@ judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
 rilis mana yang membawanya.
 
 
+### Added · 2026-09-12 — `scripts/pr.sh`: satu langkah membuat PR
+
+Pagar judul PR menangkap kesalahan **sesudah** PR dibuat: cek merah, sunting
+judul, tunggu CI lagi. Yang salah pun bukan kelalaian — GitHub mengisi judul
+sendiri dari subjek commit bila branch berisi tepat satu commit, jadi dev
+melihat kolom yang sudah terisi dan tidak punya alasan mencurigainya.
+
+`./scripts/pr.sh "Judul deskriptif"` memindahkan pemeriksaan itu ke sebelum PR
+ada, lalu push dan mencetak tautan `compare` yang **judulnya sudah terisi** —
+sehingga isian otomatis GitHub tidak pernah terpakai. Empat langkah manual
+(push, salin tautan, buka peramban, ketik judul) menjadi satu.
+
+Polanya **dibaca dari** `.github/workflows/pr-title.yml`, tidak disalin: pagar
+lokal yang menyimpang dari pagar CI memberi lampu hijau pada judul yang ditolak
+di server, dan itu persis penyakit yang pagar ini ada untuk mencegahnya.
+`test/test-pr-title-guard.sh` (13 → 18) menuntutnya, memeriksa penolakan terjadi
+sebelum remote disentuh, dan menjalankan jalur suksesnya di kotak pasir — uji
+yang mem-push branch yang sedang dikerjakan adalah uji yang lama-lama tidak
+dijalankan orang.
+
+### Added · 2026-09-05 — Pagar judul PR
+
+Larangan judul PR berprefiks conventional-commit dilanggar tiga kali di repo
+ini — `v2.0.1`, `v2.1.0`, `v3.0.0` — dan juga di repo server. Dua di antaranya
+adalah PR yang sedang memperbaiki akibat pelanggaran sebelumnya.
+
+Pengulangannya bukan kelalaian: judul PR sering **tidak pernah diketik siapa
+pun**. Bila branch berisi tepat satu commit, GitHub mengisinya dari subjek
+commit itu — conventional. Tidak ada yang salah di layar; judulnya sudah
+terisi, tinggal klik.
+
+`.github/workflows/pr-title.yml` menggagalkan PR seperti itu sebelum sempat
+di-merge. PR release-please dikecualikan lewat `head_ref`; tanpa itu pagar ini
+memblokir setiap rilis.
+
+`test/test-pr-title-guard.sh` (13 uji, masuk CI) **mengurai workflow-nya dan
+menjalankan blok `run` apa adanya** — bukan salinan polanya, supaya tidak lahir
+dua kebenaran yang harus dijaga sinkron dengan tangan. Ia memagari juga pemicu
+`edited` dan pengecualian release-please. Judul PR diteruskan lewat `env`,
+bukan `${{ }}` di badan skrip: judul ditulis siapa pun yang bisa membuka PR.
+
+Aturannya kini juga tertulis di `docs/versioning.md`, yang sebelumnya hanya
+membahas squash dan tidak menyebut masalah kembar sama sekali.
+
 ### Fixed · 2026-09-12 — Pembaru Windows tidak ikut bermigrasi
 
 **Konteks.** Rename profil `internal-qwen*` → `cooper-*` dipasang di `setup.sh`,
