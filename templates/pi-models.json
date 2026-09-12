@@ -10,7 +10,7 @@
         {
           "id": "__MODEL_ID__",
           "name": "CooperAgent — routing otomatis",
-          "input": ["text"],
+          "input": ["text", "image"],
           "contextWindow": __CONTEXT_WINDOW__,
           "maxTokens": __MAX_TOKENS__
         }
@@ -26,7 +26,7 @@
         {
           "id": "__MODEL_ID__",
           "name": "CooperAgent @ s1 — tanpa failover",
-          "input": ["text"],
+          "input": ["text", "image"],
           "contextWindow": __CONTEXT_WINDOW__,
           "maxTokens": __MAX_TOKENS__
         }
@@ -42,7 +42,7 @@
         {
           "id": "__MODEL_ID__",
           "name": "CooperAgent @ s2 — tanpa failover",
-          "input": ["text"],
+          "input": ["text", "image"],
           "contextWindow": __CONTEXT_WINDOW__,
           "maxTokens": __MAX_TOKENS__
         }

@@ -378,6 +378,65 @@ grep -q 'models.json' "$REPO/scripts/setup-pi.ps1" \
     && ok "jalur PowerShell pi tersedia" \
     || bad "jalur PowerShell pi belum paralel"
 
+# ── vision harus diumumkan ke pi ─────────────────────────────────────────────
+#
+# Kedua node memuat mmproj dan preset-nya menyatakan capabilities "vision";
+# gambar terbukti tembus lewat gateway ke s1 maupun s2. Tetapi template pi
+# sempat menyatakan `"input": ["text"]`, dan pi mempercayainya: ia menolak
+# mengirim gambar ke model, lalu diam-diam memanggil subagent vision dan
+# menuliskan "my model can't see images directly" di blok thinking-nya.
+#
+# Tidak ada yang galat. Jawabannya tetap datang, hanya saja dari model lain --
+# kelas kegagalan yang paling mahal, karena ia terlihat seperti berhasil.
+echo "vision diumumkan ke pi:"
+render_pi() {
+    sed -e 's|__GATEWAY__|http://x:8987|g; s|__API_KEY__|k|g; s|__MODEL_ID__|m|g' \
+        -e 's|__CONTEXT_WINDOW__|131072|g; s|__MAX_TOKENS__|12288|g' \
+        "$REPO/templates/pi-models.json"
+}
+kurang="$(render_pi | python3 -c '
+import json,sys
+d = json.load(sys.stdin)
+print(" ".join(n for n, p in d["providers"].items()
+                if "image" not in p["models"][0].get("input", [])))
+' 2>/dev/null)"
+if [ -z "$kurang" ]; then
+    ok "ketiga provider pi menyatakan input image"
+else
+    bad "provider pi TANPA input image: $kurang — pi akan memakai subagent vision"
+fi
+
+# Pembaruan harus MENIMPA nilai lama. Dev yang sudah memasang punya
+# `["text"]` di berkasnya; template yang benar tidak menolong bila merge
+# memperlakukan provider yang sudah ada sebagai milik dev dan melewatinya.
+if command -v node >/dev/null 2>&1; then
+    SBX="$(mktemp -d)"
+    render_pi > "$SBX/tpl.json"
+    python3 - "$SBX/lama.json" <<'LAMA'
+import json, sys
+json.dump({"providers": {"cooper-agent": {
+    "name": "CooperAgent (routing otomatis)", "baseUrl": "http://x:8987/v1",
+    "apiKey": "kunci-dev-lama",
+    "models": [{"id": "m", "name": "CooperAgent — routing otomatis",
+                "input": ["text"], "contextWindow": 131072, "maxTokens": 12288}]}}},
+          open(sys.argv[1], "w"))
+LAMA
+    node "$REPO/scripts/lib/pi_json.mjs" merge-models "$SBX/lama.json" "$SBX/tpl.json" > "$SBX/hasil.json" 2>/dev/null
+    got="$(python3 -c '
+import json,sys
+d = json.load(open(sys.argv[1]))
+print(",".join(d["providers"]["cooper-agent"]["models"][0].get("input", [])))
+' "$SBX/hasil.json" 2>/dev/null)"
+    case "$got" in
+        *image*) ok "merge menimpa input lama [\"text\"] menjadi text+image" ;;
+        "")      bad "merge pi gagal dijalankan — input lama tidak terperiksa" ;;
+        *)       bad "merge MEMPERTAHANKAN input lama ($got) — dev lama tetap tanpa vision" ;;
+    esac
+    rm -rf "$SBX"
+else
+    printf "  \033[33m—\033[0m node tidak ada; merge input tidak diuji\n"
+fi
+
 echo
 if [ "$FAIL" -eq 0 ]; then
     printf "  \033[32mLULUS\033[0m — adapter pi mengikuti kontrak dan aturan CooperAgent\n"
