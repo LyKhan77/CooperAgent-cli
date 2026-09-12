@@ -10,6 +10,14 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [3.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.0...v3.1.1) (2026-09-12)
+
+
+### Perbaikan
+
+* **omp:** umumkan supportsImages, dan naikkan pemasangan yang sudah ada ([66cc338](https://github.com/LyKhan77/CooperAgent-cli/commit/66cc338a63527452aa3db3bc714937b0bb250eb2))
+* **pi:** umumkan input image, jangan biarkan pi memakai subagent vision ([4bb0dff](https://github.com/LyKhan77/CooperAgent-cli/commit/4bb0dffe79ea41d8c9d6a8e71d82187f7e3234fa))
+
 ## [3.1.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.0.0...v3.1.0) (2026-09-12)
 
 
