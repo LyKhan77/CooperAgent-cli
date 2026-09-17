@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Suite uji dijalankan DI SINI, bukan di CI.
+# Suite uji dijalankan DI SINI, bukan di GitHub.
 #
-# KENAPA ADA. Sejak 17 September 2026 CI tidak lagi menjalankan suite: ia hanya
-# memeriksa yang tidak bisa dipastikan dari mesin lokal (PowerShell, penguraian
-# pohon yang terkirim, kelengkapan checklist). Yang menahan kode rusak sampai ke
-# origin karena itu hook ini -- bukan permintaan di AGENTS.md, karena permintaan
-# bukan penjaga.
+# KENAPA ADA. Sejak 17 September 2026 satu-satunya yang berjalan di GitHub
+# adalah parser PowerShell -- tidak ada gerbang lain. Yang menahan kode rusak
+# sampai ke origin karena itu hook ini, bukan permintaan di AGENTS.md, karena
+# permintaan bukan penjaga.
 #
 # Batasnya jujur: `git push --no-verify` melewatinya. Hook ini menahan
 # kecelakaan, bukan niat.

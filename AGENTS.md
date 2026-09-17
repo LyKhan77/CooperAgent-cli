@@ -118,10 +118,9 @@ Latar: [`docs/profil-model.md`](docs/profil-model.md).
 ./scripts/pr.sh
 ```
 
-Satu perintah: ia menjalankan **seluruh** suite, menanam hasilnya sebagai
-checklist ke pesan commit, mem-push, lalu mencetak tautan PR. Tidak ada lagi
-daftar uji yang disalin dengan tangan ke berkas ini — daftarnya adalah isi
-`test/`, dan yang membacanya `scripts/lib/uji_lokal.sh`.
+Satu perintah: ia menjalankan **seluruh** suite, mem-push, lalu mencetak tautan
+PR. Tidak ada daftar uji yang disalin dengan tangan ke berkas ini — daftarnya
+adalah isi `test/`, dan yang membacanya `scripts/lib/uji_lokal.sh`.
 
 Menjalankan satu uji saja tetap boleh saat sedang mengerjakannya:
 
@@ -129,10 +128,10 @@ Menjalankan satu uji saja tetap boleh saat sedang mengerjakannya:
 bash test/test-credential-gate.sh
 ```
 
-**Suite tidak lagi dijalankan CI.** Sejak 17 September 2026 ia dijalankan di
-sini, dan `scripts/hooks/pre-push` menahan push bila ada yang merah. Yang
-tersisa di CI hanya yang tidak bisa dipastikan dari mesin ini: penguraian pohon
-yang benar-benar terkirim, kelengkapan checklist, dan PowerShell.
+**Suite tidak dijalankan di GitHub.** Ia dijalankan di sini, dan
+`scripts/hooks/pre-push` menahan push bila ada yang merah. Satu-satunya yang
+berjalan di GitHub adalah parser PowerShell — karena itu yang tidak ada di mesin
+ini.
 
 Uji hermetis — masing-masing menyalakan gateway tiruannya sendiri
 (`test/fixtures/fake-gateway.py`) dan bekerja di `HOME` sekali pakai. **Tidak ada
@@ -141,76 +140,54 @@ server bukan uji, melainkan pemantauan. Satu uji pernah melakukannya tanpa
 disengaja, lewat fixture beralamat LAN sungguhan.
 
 `test-setup-dev.sh` adalah pengecualian: ia memilih agent `omp`, sehingga
-`setup.sh` mencoba memasangnya dari internet. Runner otomatis **melewatinya**,
-dan ia tetap muncul di checklist sebagai `[ ]` beserta sebabnya — checklist yang
-boleh menghilangkan baris adalah checklist yang tidak membuktikan kelengkapan.
-Jalankan dengan tangan bila menyentuh jalur pemasangan. Perbaikan yang layak
+`setup.sh` mencoba memasangnya dari internet. Runner otomatis **melewatinya**
+dan menyebutkan sebabnya. Jalankan dengan tangan bila menyentuh jalur
+pemasangan. Perbaikan yang layak
 dikerjakan: penjaga lingkungan `COOPERAGENT_NO_INSTALL=1` yang melewati
 pemasangan agent dan hanya menulis config.
 
 
-Perbarui `CHANGELOG.md`. Versi ditentukan prefiks commit — baca
-[`docs/versioning.md`](docs/versioning.md), terutama bagian **Kontrak**, yang
-menjelaskan apa yang mengikat repo ini dengan repo server dan satu janji yang
-belum ditepati (`contract_version` belum dibaca klien mana pun).
+Perbarui `CHANGELOG.md` — ia **tidak** lagi terisi sendiri. Bagian bernomor satu
+baris per perubahan; prosa panjangnya (konteks, bukti, dampak, cara mundur) ke
+bagian **Catatan rinci**. Baca [`docs/versioning.md`](docs/versioning.md),
+terutama bagian **Kontrak**, yang menjelaskan apa yang mengikat repo ini dengan
+repo server dan satu janji yang belum ditepati (`contract_version` belum dibaca
+klien mana pun).
 
 ## Alur Git — satu rencana selesai, satu tag
 
 Tiga aturan. Tidak ada yang keempat.
 
 ```
-1.  Ada perubahan  →  branch  →  PR  →  CI hijau  →  merge ke main
+1.  Ada perubahan  →  branch  →  ./scripts/pr.sh  →  PR  →  merge ke main
                       (ulangi sesering perlu; satu rencana boleh berisi
                        sepuluh PR)
 
-2.  PR rilis mengurus dirinya sendiri
-      muncul otomatis · memperbarui diri tiap ada yang masuk main
-      berstatus DRAFT — tombol merge mati
+2.  Rencana selesai  →  CHANGELOG + version.txt  →  commit
 
-3.  Rencana selesai  →  Ready for review  →  merge  →  SATU TAG
+3.  git tag -a vX.Y.Z  →  git push origin main --follow-tags  →  SATU TAG
 ```
 
-**Kenapa draft.** Pada 5 September 2026 PR rilis di-merge lima kali berturut
-untuk lima perubahan kecil — tiga tag di repo ini, dua di repo server, semuanya
-untuk satu rencana yang sama. Sebabnya bukan salah paham: PR rilis yang terbuka
-dan terlihat siap merge memang *tampak seperti pekerjaan yang belum selesai*.
-`draft-pull-request` membalik bawaannya — mendiamkannya kini keadaan yang benar.
+**Tidak ada aturan bentuk judul PR, dan tidak ada bentuk pesan commit yang
+wajib.** Pada 17 September 2026 release-please dilepas; versi kini dinaikkan
+dengan tangan. Tidak ada mesin yang membaca judul PR atau pesan commit, jadi
+tidak ada yang bisa dipatahkan olehnya. Tulis yang jelas bagi manusia.
 
-**Judul PR HARUS berawalan prefiks conventional-commit.** Repo ini memakai
-squash merge, jadi judul PR menjadi subjek satu-satunya commit di `main` — dan
-itulah satu-satunya yang dibaca release-please. Judul tanpa prefiks berarti
-perubahan terbit tanpa entri CHANGELOG dan tanpa kenaikan versi, tanpa satu pun
-cek merah. Aturan ini dibalik pada 17 September 2026; sebelumnya repo memakai
-merge commit dan larangannya terbalik. Lihat
-[`docs/versioning.md`](docs/versioning.md).
+Tiga lapis aturan sempat ada untuk menambal satu kepekaan release-please —
+larangan prefiks di judul PR, lalu kewajiban prefiks, lalu skrip penjaga
+sinkronnya. Semuanya lenyap bersama sebabnya. Kalau Anda menemukan sisa aturan
+itu di suatu berkas, itu peninggalan: buang, jangan patuhi.
 
-**Satu commit per branch.** Dengan satu commit, GitHub mengisi judul PR dari
-subjek commit itu dan body PR dari badannya — keduanya sudah benar, dan tidak ada
-yang perlu diketik. Dua commit atau lebih membuat GitHub memakai **nama branch**
-sebagai judul, yang tidak conventional dan karena itu ditolak.
-
-**MAJOR ditandai `!` di subjek** (`feat(setup)!: …`), bukan hanya footer
-`BREAKING CHANGE:`. Footer hidup di body PR, yang bisa disunting sebelum merge;
-subjek tidak.
-
-Dua hal menjaganya, dan keduanya membaca pola yang sama dari satu berkas:
+**Satu commit per branch dianjurkan**, bukan diwajibkan: GitHub lalu mengisi
+judul dan body PR dari commit itu, jadi tidak ada yang perlu diketik.
 
 ```
-./scripts/pr.sh                      # suite + checklist + push + tautan
-.github/workflows/pr-title.yml       # jaring pengaman, bila PR dibuat lewat web
+./scripts/pr.sh                      # suite + push + tautan PR
 ```
 
-`pr.sh` **tidak menerima judul sebagai argumen**, dan itu disengaja: yang
-menentukan judul PR adalah subjek commit, dan pemeriksaan yang memeriksa hal
-lain dari yang berlaku lebih buruk daripada tidak ada pemeriksaan. Ganti judul =
-`git commit --amend`.
+**Yang berjalan di GitHub hanya satu job: parser PowerShell.** Suite bash
+dijalankan sebelum push oleh `scripts/hooks/pre-push`.
 
-**Squash and merge, bukan merge commit.** Dibalik pada 17 September 2026. Merge
-commit menyelundupkan judul PR ke badannya sebagai commit kedua — entri CHANGELOG
-kembar, lima kali. Keberatan asli terhadap squash (footer `BREAKING CHANGE:` bisa
-hilang bersama kenaikan MAJOR) dijawab dengan memindahkan penanda MAJOR ke `!` di
-subjek, yang tidak bisa hilang, dan dengan setelan repo "Pull request title and
-description" supaya body commit tetap ada.
 
 **PR di repo ini membeli sesuatu yang nyata**, tidak seperti di sebagian repo:
 CI menjalankan parser PowerShell 5.1 di runner Windows, satu-satunya cara

@@ -1,7 +1,6 @@
 # Versioning & Rilis — CooperAgent CLI
 
-Semantic Versioning, otomatis dari Conventional Commits lewat
-[release-please](https://github.com/googleapis/release-please).
+Semantic Versioning, dinaikkan dan diberi tag dengan tangan.
 
 Repo ini berversi **sendiri**, terpisah dari `CooperAgent-server`. Keduanya
 memang berjalan pada laju berbeda: server berubah saat mesin atau gateway
@@ -15,12 +14,10 @@ bukan nomor versi, melainkan **kontrak** — lihat bagian terakhir.
 > mundur — keduanya menghitung hal yang berbeda.
 
 > **Kenapa rilis pertama bernomor 1.1.0, bukan 1.0.0?**
-> `.release-please-manifest.json` diisi `1.0.0` sejak awal, yang berarti "1.0.0
-> dianggap sudah terbit" — bukan "mulailah dari 1.0.0". Commit `feat:` pertama
-> karena itu menaikkannya ke 1.1.0, dan tag `v1.0.0` tidak pernah ada.
->
-> Untuk repo berikutnya: isi garis dasarnya `0.0.0`, atau pakai footer
-> `Release-As: 1.0.0` pada commit pertama.
+> Peninggalan release-please, yang dipakai sampai 17 September 2026: garis
+> dasarnya diisi `1.0.0`, yang baginya berarti "1.0.0 dianggap sudah terbit" —
+> bukan "mulailah dari 1.0.0". Kenaikan pertama karena itu mendarat di 1.1.0,
+> dan tag `v1.0.0` tidak pernah ada.
 
 ---
 
@@ -60,126 +57,89 @@ tanpa diberi tahu apa pun, itu bukan MAJOR.**
 
 ## Bagaimana versinya ditentukan
 
-Dari prefiks commit, bukan dari penilaian manusia:
+**Oleh Anda, bukan oleh mesin.** Sampai 17 September 2026 versi dinaikkan
+otomatis oleh release-please dari prefiks commit. Itu dilepas; alasannya di
+bawah.
 
-| Commit | Naik ke |
+Aturannya tetap SemVer, dan tabel di atas tetap berlaku — yang berubah hanya
+siapa yang menerapkannya:
+
+| Perubahannya | Naik ke |
 | :-- | :-- |
-| `fix: ...` | PATCH |
-| `feat: ...` | MINOR |
-| `feat!: ...` atau footer `BREAKING CHANGE:` | MAJOR |
+| perbaikan bug, tanpa mengubah cara memakainya | PATCH |
+| kemampuan baru yang tidak memaksa siapa pun berubah | MINOR |
+| dev harus melakukan sesuatu, atau sesuatu yang dulu jalan kini tidak | MAJOR |
 
-`docs:`, `test:`, `chore:` tidak menaikkan versi. Kalau sebuah commit hanya
-menyentuh dokumen tapi **mengubah instruksi yang dijalankan dev**, ia `fix:` —
+Dokumen yang **mengubah instruksi yang dijalankan dev** ikut menaikkan PATCH —
 petunjuk yang salah memutus orang sama nyatanya dengan kode yang salah.
-
-Untuk memaksa versi tertentu:
-
-```
-Release-As: 2.0.0
-```
 
 ## Alurnya
 
-1. Push ke `main` → release-please membuka/memperbarui **satu PR rilis**
-2. PR itu memuat CHANGELOG dan kenaikan versi — belum ada yang dirilis
-3. **Merge PR itu** = menerbitkan tag `vX.Y.Z` dan GitHub Release
-
-Tidak ada yang dirilis tanpa seseorang menekan merge. Rilis adalah keputusan,
-bukan efek samping dari push.
-
-Pakai **"Squash and merge"**, bukan merge commit. Squash membuat judul PR
-menjadi subjek satu-satunya commit yang mendarat di `main`, dan itulah yang
-dibaca release-please.
-
-### Judul PR HARUS berawalan prefiks conventional-commit
-
-Aturan ini **dibalik pada 17 September 2026**. Sebelumnya repo memakai merge
-commit, dan judul conventional justru dilarang. Yang berubah bukan pendiriannya
-soal CHANGELOG, melainkan pengakuan bahwa kebijakan lama menuntut pengetikan
-ulang pada setiap PR — dan menuntutnya justru pada PR yang paling rapi.
-
-**Kenapa dulu dilarang.** GitHub menyusun pesan merge commit sebagai `Merge pull
-request #N from <branch>` diikuti **judul PR**. Bila judul itu berbentuk
-`feat: …`, release-please membacanya sebagai commit tersendiri, dan perubahan
-yang sama terbit **dua kali** di CHANGELOG. Terjadi lima kali — `v2.0.1`,
-`v2.1.0`, `v2.1.1`, `v3.0.0`, `v3.0.1` — dan bentuknya masih bisa dilihat:
-
-```
-$ git log -1 --format='%s%n%n%b' ddb12ae
-Merge pull request #23 from LyKhan77/migrasi-jalur-setup
-
-fix(setup): bawa migrasi profil ke KEDUA pemasang, bukan hanya pembaru
-```
-
-Baris ketiga itulah yang dibaca release-please sebagai commit kedua.
-
-**Kenapa kebijakan itu tidak bisa dipertahankan.** Bila branch berisi **tepat
-satu commit** — bentuk normal di repo ini — GitHub mengisi judul PR dari subjek
-commit itu, yang tentu conventional. Jadi di bawah merge commit, isian otomatis
-GitHub **selalu** melanggar aturannya sendiri, dan setiap PR menuntut judulnya
-diketik ulang dengan tangan. Pagar yang menuntut pekerjaan manual pada setiap
-PR adalah pagar yang akhirnya dimatikan orang.
-
-**Di bawah squash, polaritasnya berbalik ke arah yang menguntungkan.** Judul PR
-menjadi subjek commit, jadi ia HARUS conventional — dan isian otomatis GitHub
-sudah memenuhinya. Tidak ada merge commit yang menyelundupkan judul sebagai
-commit kedua, jadi tidak ada duplikasi. Satu commit per branch berarti: buat PR,
-tekan **Squash and merge**, tanpa mengetik apa pun.
-
-**Jebakan yang tersisa satu.** Bila branch berisi **dua commit atau lebih**,
-GitHub mengisi judul dari **nama branch**, yang tidak conventional — dan
-release-please lalu tidak melihat perubahan apa pun: tidak ada entri, tidak ada
-kenaikan versi, tidak ada yang merah. `.github/workflows/pr-title.yml`
-menggagalkan PR seperti itu sebelum sempat di-merge, dan `scripts/pr.sh`
-memeriksanya lebih awal lagi — sebelum PR dibuat.
-
-### Alur sehari-hari
+### Sehari-hari
 
 ```bash
 git checkout -b <nama>
-# ... kerjakan, lalu satu commit dengan subjek conventional
+# ... kerjakan, commit
 ./scripts/pr.sh
 ```
 
-`pr.sh` menjalankan seluruh suite, menanam hasilnya sebagai checklist ke pesan
-commit, mem-push, lalu mencetak tautan `compare`. Buka tautan itu: judul dan body
-PR sudah terisi oleh GitHub dari commit tersebut. *Create pull request* → CI hijau
-→ *Squash and merge*. Tidak ada yang perlu diketik.
+`pr.sh` menjalankan seluruh suite, mem-push, lalu mencetak tautan `compare`.
+Buka tautan itu → *Create pull request* → merge. Satu commit per branch berarti
+GitHub mengisi judul dan body PR dari commit itu, jadi tidak ada yang perlu
+diketik; lebih dari satu commit berarti Anda menulis judulnya sendiri. Keduanya
+boleh.
 
-CI tidak menjalankan suite. Ia memeriksa tiga hal yang tidak bisa dipastikan dari
-mesin dev: bahwa pohon yang terkirim mengurai, bahwa checklist ujinya menyebut
-setiap berkas uji di repo, dan PowerShell. Yang menahan kode merah sampai ke
-origin adalah `scripts/hooks/pre-push`.
+**Tidak ada aturan bentuk judul PR.** Tidak ada yang membacanya selain manusia.
 
-**Perubahan MAJOR: pakai `!` di subjek, bukan hanya footer.** Inilah satu-satunya
-hal yang squash betul-betul membahayakan, dan keberatan yang sah saat squash
-ditolak pada 5 September 2026: footer `BREAKING CHANGE:` hidup di BADAN commit,
-dan badan commit squash diambil dari **body PR** — yang bisa disunting atau
-dikosongkan siapa pun sebelum merge. Kenaikan MAJOR yang hilang tidak
-menggagalkan apa pun; ia hanya terbit sebagai patch.
+Yang berjalan di GitHub hanya satu job: parser PowerShell. Suite bash dijalankan
+sebelum push oleh `scripts/hooks/pre-push`, yang menolak push bila ada yang
+merah.
 
-Tanda `!` menutup lubang itu karena ia hidup di **subjek**, dan subjek selalu
-menjadi subjek commit:
+### Merilis
 
+Rilis adalah keputusan, dan kini benar-benar berupa keputusan — bukan efek
+samping dari sebuah prefiks.
+
+```bash
+git checkout main && git pull
+
+# 1. Tulis entrinya di CHANGELOG.md, dan naikkan version.txt
+#    (bagian "Catatan rinci" untuk prosa panjangnya)
+$EDITOR CHANGELOG.md version.txt
+git commit -am "Rilis 3.2.0"
+
+# 2. Beri tag, lalu dorong keduanya
+git tag -a v3.2.0 -m "v3.2.0 — ringkasan satu baris"
+git push origin main --follow-tags
+
+# 3. Terbitkan GitHub Release dari tag itu (opsional, lewat peramban)
 ```
-feat(setup)!: satu profil model untuk ketiga harness
-fix!: tolak identitas lama dev-<nama>@<device>
-```
 
-Footer `BREAKING CHANGE:` tetap boleh ditulis sebagai penjelasan, tetapi yang
-MENENTUKAN kenaikan MAJOR adalah `!`. Setelan repo juga wajib "Pull request
-title and description" supaya body commit tidak hilang sama sekali.
+`version.txt` adalah sumber kebenarannya; tag hanya menandai commit-nya. Keduanya
+harus cocok — bila berbeda, `version.txt` yang benar dan tagnya salah tempel.
 
-PR release-please dikecualikan. Judulnya memang `chore(main): release X`,
-sehingga pagar ini meloloskannya; pengecualiannya dipertahankan supaya tidak ada
-versi pagar ini yang pernah bisa memblokir sebuah rilis.
+### Kenapa release-please dilepas
 
-**Bila terlanjur:** judul tanpa prefiks yang sudah di-merge tidak menyumbang
-entri apa pun. Tambahkan entrinya dengan tangan di "Catatan rinci", atau
-terbitkan commit susulan berprefiks yang menyebut perubahan itu. Sesudah tag
-terbit, yang hilang hanya bisa ditambahkan di berkas `main`.
+Ia menentukan rilis dari pesan commit, dan itu menuntut pesan commit berbentuk
+tertentu **selamanya**, di setiap tempat pesan itu muncul. GitHub menaruh judul
+PR ke badan merge commit, jadi judul PR ikut terbaca sebagai commit — satu
+perubahan tercatat dua kali. Menambalnya berarti mengatur judul PR, dan setiap
+tambalan melahirkan tambalan berikutnya:
 
----
+- larangan prefiks di judul PR (karena merge commit menggandakan),
+- lalu kewajiban prefiks (karena squash membuat judul menjadi commit),
+- lalu skrip yang menjaga keduanya tetap sinkron dengan workflow-nya.
+
+Tiga lapis aturan untuk satu masalah yang tidak pernah dimiliki siapa pun yang
+memberi tag dengan tangan. Repo ini punya satu penulis tetap dan merilis
+beberapa kali sebulan; ongkos mengetik `git tag` jauh lebih kecil daripada
+ongkos mengingat aturan-aturan itu. Entri kembar di `v2.0.1`, `v2.1.0`,
+`v2.1.1`, `v3.0.0`, dan `v3.0.1` adalah harga yang sudah terlanjur dibayar.
+
+Yang hilang bersamanya: CHANGELOG tidak lagi terisi sendiri. Itu bukan kerugian
+besar di sini — bagian **Catatan rinci** memang selalu ditulis tangan, dan
+bagian bernomor hanya satu baris per perubahan.
+
 
 ## Kontrak: yang sebenarnya mengikat kedua repo
 
