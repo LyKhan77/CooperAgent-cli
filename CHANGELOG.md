@@ -624,6 +624,76 @@ judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
 rilis mana yang membawanya.
 
 
+### Changed · 2026-09-17 — suite pindah ke lokal, CI tinggal memeriksa
+
+**Konteks.** Alur PR masih menuntut pekerjaan manual: judul diketik ulang, lalu
+menunggu CI menjalankan suite yang sama yang baru saja hijau di mesin dev.
+Permintaannya jelas — "cukup unit test di lokal, CI hanya cross check, saya
+hanya cek PR masuk lalu confirm merge".
+
+**Perubahan.**
+
+- `scripts/lib/uji_lokal.sh` (baru) — satu penjalan suite, dipakai hook maupun
+  `pr.sh`. Daftar ujinya adalah isi `test/`, bukan daftar yang disalin tangan.
+- `scripts/hooks/pre-push` (baru) — menjalankan suite; push ditolak bila merah.
+  Dipasang lewat `core.hooksPath` yang ikut ter-commit, bukan disalin per mesin.
+- `.github/workflows/test.yml` — job yang menjalankan suite **dihapus**. Yang
+  tersisa: sintaks bash, validator checklist, dan job Windows yang tidak
+  disentuh sama sekali.
+- `scripts/pr.sh` — menjalankan suite, menanam hasilnya sebagai checklist ke
+  pesan commit, lalu mem-push. Argumen judul **dihapus**.
+- `test/test-hook-pre-push.sh`, `test/test-checklist-uji.sh` (baru) — 8 dan 16
+  pemeriksaan; keduanya mengeksekusi yang sebenarnya berjalan, bukan salinannya.
+
+**Kenapa judul tidak lagi bisa dititipkan.** Di bawah squash, yang menentukan
+judul PR adalah isian otomatis GitHub — pada branch satu commit, subjek commit.
+Judul yang dititipkan lewat argumen atau query string hanya akan berbeda dari
+yang sebenarnya terpakai, dan pemeriksaan yang memeriksa hal lain dari yang
+berlaku lebih buruk daripada tidak ada pemeriksaan. Sekaligus itulah yang membuat
+body PR selamat: ia terisi dari badan commit, tanpa batas panjang URL dan tanpa
+kehilangan prosa. Ganti judul = `git commit --amend`.
+
+**Checklist adalah sambungannya.** Suite berjalan di lokal, jadi CI tidak bisa
+melihat hasilnya. `pr.sh` menanam hasil itu ke pesan commit; pesan commit menjadi
+body PR; CI membacanya dari sana dan memastikan **setiap** berkas `test/test-*.sh`
+disebut, tidak ada yang ditandai merah, dan tidak ada baris yang menyebut berkas
+yang tidak ada. Satu uji baru yang tidak pernah dijalankan karena itu tidak bisa
+lolos diam-diam.
+
+**Yang TIDAK dibuktikan, dan jangan dianggap sebaliknya.** Validator itu
+membuktikan **kecocokan** antara checklist dan isi repo — bukan bahwa ujinya
+lulus. Yang membuktikan lulus adalah hook, di mesin yang menjalankannya, dan
+`git push --no-verify` melewatinya. Jaringnya lebih longgar dari sebelumnya; itu
+pertukaran yang diminta dan disetujui, bukan kebetulan. Job Windows sengaja tidak
+ikut pindah: tidak ada PowerShell di mesin dev mana pun di tim ini, jadi
+memindahkannya berarti menghapusnya.
+
+**Bukti.** Suite 12 → 14 berkas, semuanya hijau lewat `pr.sh`. Hook dibuktikan
+menahan: satu uji dibuat merah, push ditolak dan nama ujinya disebut. Validator
+dibuktikan menangkap keempat bentuk kegagalannya (berkas tak disebut, uji merah,
+berkas hantu, body kosong).
+
+Penanaman checklist diuji dari ujung ke ujung, dan itu perlu — jalur itu rusak
+dua kali saat ditulis, keduanya dengan bentuk yang sama: **melapor sukses yang
+tidak terjadi**. Pertama `BLOK` diteruskan sebagai argumen alih-alih env,
+`python3` melempar `KeyError`, dan `2>/dev/null` menelannya sehingga yang
+terlihat hanya tuduhan terhadap python3. Kedua, `git commit --amend` ditolak git
+sementara `pr.sh` tetap mencetak tanda centang dan mem-push.
+
+`pr.sh` kini memeriksa **hasilnya**: pesan commit sesudah amend dibandingkan
+dengan pesan yang dimaksud, bukan dicari penandanya — commit pada jalan kedua
+sudah memuat penanda dari jalan pertama, sehingga pencarian penanda meloloskan
+amend yang gagal. Gagal menanam berarti **tidak di-push**: body PR tanpa
+checklist pasti ditolak validator, dan mem-push-nya hanya memindahkan kegagalan
+ke tempat yang lebih lambat terlihat. Diuji dengan mengunci `.git/objects`
+sehingga amend benar-benar gagal.
+
+**Dampak.** Setiap push kini menunggu suite (~3 menit). Itu ongkos yang dipindah,
+bukan yang ditambah — sebelumnya menunggu di CI sesudah push.
+
+**Rollback.** Kembalikan langkah-langkah suite ke `test.yml` dan hapus hook. Job
+Windows dan pagar judul tidak terlibat; keduanya berdiri sendiri.
+
 ### Changed · 2026-09-17 — squash merge, dan pagar judul PR dibalik
 
 **Konteks.** Alur PR menuntut satu pekerjaan manual pada **setiap** PR, dan

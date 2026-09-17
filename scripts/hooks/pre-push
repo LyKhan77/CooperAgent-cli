@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Suite uji dijalankan DI SINI, bukan di CI.
+#
+# KENAPA ADA. Sejak 17 September 2026 CI tidak lagi menjalankan suite: ia hanya
+# memeriksa yang tidak bisa dipastikan dari mesin lokal (PowerShell, penguraian
+# pohon yang terkirim, kelengkapan checklist). Yang menahan kode rusak sampai ke
+# origin karena itu hook ini -- bukan permintaan di AGENTS.md, karena permintaan
+# bukan penjaga.
+#
+# Batasnya jujur: `git push --no-verify` melewatinya. Hook ini menahan
+# kecelakaan, bukan niat.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$ROOT" || exit 0
+[ -d test ] || exit 0
+
+RED=$'\033[31m'; GREEN=$'\033[32m'; DIM=$'\033[2m'; NC=$'\033[0m'
+
+# Penghapusan branch tidak mengirim kode apa pun: SHA lokalnya nol.
+semua_hapus=1
+while read -r _lref lsha _rref _rsha; do
+    [ -z "${lsha:-}" ] && continue
+    case "$lsha" in *[!0]*) semua_hapus=0 ;; esac
+done
+[ "$semua_hapus" = 1 ] && exit 0
+
+# scripts/pr.sh baru saja menjalankannya untuk commit ini. Menjalankan ulang
+# suite yang sama demi push yang sama hanya menambah tiga menit tanpa menambah
+# satu pun kepastian.
+if [ "${COOPER_UJI_SUDAH:-}" = "$(git rev-parse HEAD)" ]; then
+    echo "${DIM}pre-push: suite sudah dijalankan pr.sh untuk commit ini${NC}"
+    exit 0
+fi
+
+. "$ROOT/scripts/lib/uji_lokal.sh" || exit 0
+TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
+echo "${DIM}pre-push: menjalankan suite uji lokal${NC}"
+if uji_lokal_jalankan "$TMP"; then
+    echo "${GREEN}✔${NC} suite hijau — push dilanjutkan"
+    exit 0
+fi
+echo
+echo "${RED}✘ PUSH DITOLAK${NC} — ada uji yang merah di atas."
+echo "  Perbaiki dulu, atau ${DIM}git push --no-verify${NC} bila Anda memang tahu sebabnya."
+exit 1

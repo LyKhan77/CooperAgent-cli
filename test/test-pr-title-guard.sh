@@ -78,59 +78,66 @@ if [ -f "$PR_SH" ]; then
         && no "pr.sh tidak menyalin pola" "polanya dipatok di dalam skrip" \
         || ok "pr.sh membaca pola dari workflow, tidak menyalinnya"
 
-    # Yang dijalankan di repo INI hanyalah kasus yang DITOLAK -- ia berhenti
-    # sebelum menyentuh remote. Kasus yang lolos berlanjut ke `git push`, jadi
-    # ia hanya boleh dijalankan di kotak pasir; uji yang mem-push branch yang
-    # sedang dikerjakan adalah uji yang tidak bisa dijalankan dengan tenang, dan
-    # yang tidak bisa dijalankan dengan tenang lama-lama tidak dijalankan.
-    out="$("$PR_SH" "Judul deskriptif tanpa prefiks" 2>&1)"; rc=$?
-    [ "$rc" -ne 0 ] && ok "pr.sh menolak judul tanpa prefiks sebelum push" \
-                    || no "pr.sh menolak judul tanpa prefiks" "ia meloloskannya (rc=0)"
-    printf '%s' "$out" | grep -q 'git push' \
+    # Judul TIDAK boleh dititipkan lewat argumen: yang menentukan judul PR adalah
+    # subjek commit, dan pemeriksaan yang memeriksa hal lain dari yang berlaku
+    # lebih buruk daripada tidak ada pemeriksaan. Dijalankan di repo ini karena
+    # ia berhenti seketika, jauh sebelum menyentuh remote.
+    out="$("$PR_SH" "fix(setup): judul titipan" 2>&1)"; rc=$?
+    { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'tidak menerima argumen judul'; } \
+        && ok "pr.sh menolak judul lewat argumen" \
+        || no "pr.sh menolak judul lewat argumen" "ia menerimanya (rc=$rc)"
+    printf '%s' "$out" | grep -q 'push' \
         && no "pr.sh menolak SEBELUM push" "ia sempat push lebih dulu" \
         || ok "pr.sh menolak SEBELUM menyentuh remote"
 
+    # Sisanya di KOTAK PASIR. Di repo ini pr.sh akan menjalankan seluruh suite
+    # lalu mem-push branch yang sedang dikerjakan -- uji yang menyentuh remote
+    # adalah uji yang tidak bisa dijalankan dengan tenang, dan yang tidak bisa
+    # dijalankan dengan tenang lama-lama tidak dijalankan sama sekali.
+    #
+    # Kotak pasir sengaja TIDAK punya direktori test/, jadi pr.sh melewati suite
+    # dan ujinya tidak memanggil dirinya sendiri.
     SBX="$(mktemp -d)"
-    mkdir -p "$SBX/scripts" "$SBX/.github/workflows"
+    mkdir -p "$SBX/scripts/lib" "$SBX/.github/workflows"
     cp "$PR_SH" "$SBX/scripts/pr.sh"
+    cp "$REPO/scripts/lib/uji_lokal.sh" "$SBX/scripts/lib/uji_lokal.sh"
     cp "$WF" "$SBX/.github/workflows/pr-title.yml"
     git -C "$SBX" init -q -b main
     git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --allow-empty -m awal
     git -C "$SBX" checkout -q -b cabang-uji
     git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --allow-empty \
-        -m 'fix(uji): satu commit conventional'
+        -m 'Judul deskriptif tanpa prefiks'
 
-    out="$(cd "$SBX" && bash scripts/pr.sh "fix(setup): sesuatu" 2>&1)"
+    out="$(cd "$SBX" && bash scripts/pr.sh 2>&1)"; rc=$?
+    { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'tidak berawalan prefiks'; } \
+        && ok "pr.sh menolak subjek commit tanpa prefiks" \
+        || no "pr.sh menolak subjek tanpa prefiks" "rc=$rc"
+
+    git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --amend --allow-empty \
+        -m 'fix(uji): subjek conventional'
+    out="$(cd "$SBX" && bash scripts/pr.sh 2>&1)"
     # Dibuktikan dengan SAMPAI ke tahap push, bukan dengan absennya pesan
     # penolakan: `Pola tidak terbaca` juga membuat pesan itu absen, dan ujinya
     # akan hijau atas skrip yang tidak memeriksa apa pun.
     printf '%s' "$out" | grep -q 'push cabang-uji -> origin' \
-        && ok "pr.sh meloloskan judul conventional sampai tahap push" \
-        || no "pr.sh meloloskan judul conventional" "ia tidak pernah sampai push: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+        && ok "pr.sh meloloskan subjek conventional sampai tahap push" \
+        || no "pr.sh meloloskan subjek conventional" "tidak sampai push: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+    printf '%s' "$out" | grep -q 'judul dari subjek commit: fix(uji): subjek conventional' \
+        && ok "judul diambil dari subjek commit, bukan ditebak" \
+        || no "judul dari subjek commit" "tidak diturunkan"
     # Tanpa remote, push gagal -- dan itu memang yang harus terjadi: skrip tidak
     # boleh mencetak tautan PR untuk branch yang tidak pernah sampai ke origin.
     printf '%s' "$out" | grep -q 'compare/main' \
         && no "pr.sh diam saat push gagal" "ia tetap mencetak tautan PR" \
         || ok "pr.sh tidak mencetak tautan bila push gagal"
 
-    # Tanpa argumen, judulnya diambil dari subjek commit -- persis yang akan
-    # diisi GitHub sendiri. Inilah yang membuat "buat PR lalu merge" tidak
-    # menuntut pengetikan apa pun.
-    out="$(cd "$SBX" && bash scripts/pr.sh 2>&1)"
-    printf '%s' "$out" | grep -q 'judul dari subjek commit: fix(uji): satu commit conventional' \
-        && ok "pr.sh tanpa argumen memakai subjek commit sebagai judul" \
-        || no "pr.sh tanpa argumen" "judul tidak diturunkan dari subjek commit"
-    printf '%s' "$out" | grep -q 'push cabang-uji -> origin' \
-        && ok "judul turunan lolos pagar yang sama" \
-        || no "judul turunan lolos pagar" "judul turunan tidak sampai push"
-
-    # Dua commit: GitHub akan mengisi judul dari NAMA BRANCH, jadi menurunkannya
-    # dari salah satu commit akan berbohong tentang apa yang akan terpakai.
+    # Dua commit: GitHub akan mengisi judul dari NAMA BRANCH, jadi memakai salah
+    # satu subjek commit akan berbohong tentang apa yang akan terpakai.
     git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --allow-empty \
         -m 'fix(uji): commit kedua'
     out="$(cd "$SBX" && bash scripts/pr.sh 2>&1)"; rc=$?
-    { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'berisi 2 commit'; } \
-        && ok "pr.sh menolak menurunkan judul dari branch dua commit" \
+    { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'harus tepat satu'; } \
+        && ok "pr.sh menolak branch dua commit" \
         || no "pr.sh pada branch dua commit" "ia menebak judul yang tidak akan terpakai"
     rm -rf "$SBX"
 else
