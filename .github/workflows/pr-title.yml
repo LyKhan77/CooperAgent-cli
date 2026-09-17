@@ -1,19 +1,22 @@
-# Judul PR tidak boleh berawalan prefiks conventional-commit.
+# Judul PR HARUS berawalan prefiks conventional-commit.
 #
-# KENAPA ADA. Aturan ini sudah tertulis di docs/versioning.md dan tetap
-# dilanggar LIMA kali: v2.8.1 (tiga entri sekaligus), v2.0.1, v2.1.0, v3.0.1,
-# dan v2.1.1 di kedua repo — dua di antaranya justru pada PR yang memperbaiki
-# akibatnya, dan satu pada PR yang menuliskan aturannya.
+# KENAPA ADA. Repo ini memakai squash merge: GitHub menyusun satu commit di
+# `main` yang SUBJEKNYA adalah judul PR. Judul itulah satu-satunya yang dibaca
+# release-please. Judul tanpa prefiks berarti release-please tidak melihat
+# perubahan apa pun -- tidak ada entri CHANGELOG, tidak ada kenaikan versi, dan
+# tidak ada yang merah di layar. Perubahannya terbit tanpa pernah tercatat.
 #
-# Sebabnya bukan kelalaian. GitHub menyusun pesan merge commit sebagai
-# `Merge pull request #N from <branch>` diikuti JUDUL PR, dan judul itu diisi
-# otomatis: bila branch berisi TEPAT SATU commit, GitHub memakai subjek commit
-# itu — yang tentu saja conventional. release-please lalu membacanya sebagai
-# commit tersendiri, dan entri yang sama terbit dua kali.
+# Polaritas pagar ini DIBALIK pada 17 September 2026. Sebelumnya repo memakai
+# merge commit, dan aturannya justru terbalik: judul conventional dilarang,
+# karena GitHub menaruhnya di badan merge commit dan release-please membacanya
+# sebagai commit KEDUA -- entri yang sama terbit dua kali. Alasan pindah ke
+# squash ada di docs/versioning.md; ringkasnya, di bawah merge commit isian
+# otomatis GitHub selalu salah, sedangkan di bawah squash ia selalu benar.
 #
-# Jadi jebakannya menyerang PR yang paling rapi, dan menyerang diam-diam: tidak
-# ada yang salah di layar, judulnya sudah terisi, tinggal klik. Dokumentasi
-# tidak bisa menghentikan kegagalan yang tidak terlihat. Cek merah bisa.
+# Jebakan yang tersisa hanya satu, dan ini yang dijaga di sini: bila branch
+# berisi DUA commit atau lebih, GitHub mengisi judul PR dari NAMA BRANCH, yang
+# tentu tidak conventional. Satu commit per branch = isian otomatisnya sudah
+# benar dan tidak ada yang perlu diketik.
 name: judul-pr
 
 on:
@@ -29,13 +32,13 @@ permissions:
 jobs:
   periksa:
     runs-on: ubuntu-latest
-    # PR milik release-please dilewati. Judulnya memang `chore(main): release X`,
-    # dan itu benar: `chore` bertanda hidden di release-please-config.json,
-    # sehingga merge commit-nya tidak menyumbang entri apa pun. Menggagalkannya
-    # justru akan memblokir setiap rilis.
+    # PR milik release-please dilewati. Judulnya memang sudah conventional
+    # (`chore(main): release X`), jadi pagar ini akan meloloskannya -- tetapi
+    # pengecualiannya dipertahankan supaya tidak ada versi pagar ini yang
+    # pernah bisa memblokir sebuah rilis.
     if: ${{ !startsWith(github.head_ref, 'release-please--') }}
     steps:
-      - name: Judul tidak berawalan prefiks conventional-commit
+      - name: Judul berawalan prefiks conventional-commit
         env:
           # Lewat env, BUKAN ${{ }} langsung di dalam skrip. Judul PR ditulis
           # oleh manusia mana pun yang bisa membuka PR; menempelkannya ke badan
@@ -49,25 +52,28 @@ jobs:
           # bawah pipefail mengirim SIGPIPE ke printf dan menghasilkan rc 141
           # justru KETIKA polanya ketemu. Kelas galat itu sudah menggigit repo
           # sebelah dan tidak perlu diulang di sini.
-          if grep -qE '^(feat|fix|docs|chore|refactor|perf|test|build|ci|style|revert)(\([^)]*\))?!?:' /tmp/judul.txt; then
-            echo "::error::Judul PR berawalan prefiks conventional-commit."
+          if ! grep -qE '^(feat|fix|docs|chore|refactor|perf|test|build|ci|style|revert)(\([^)]*\))?!?:' /tmp/judul.txt; then
+            echo "::error::Judul PR tidak berawalan prefiks conventional-commit."
             cat <<'PESAN'
 
-          GitHub menaruh judul PR ini ke dalam pesan merge commit, dan
-          release-please akan membacanya sebagai commit tersendiri. Akibatnya
-          perubahan yang sama terbit DUA KALI di CHANGELOG: sekali untuk commit
-          asli, sekali untuk merge commit.
+          Repo ini memakai squash merge: judul PR ini menjadi SUBJEK commit di
+          `main`, dan itulah satu-satunya yang dibaca release-please. Tanpa
+          prefiks, perubahan ini terbit tanpa entri CHANGELOG dan tanpa
+          kenaikan versi -- diam-diam, karena tidak ada yang gagal.
 
-          Ganti judulnya menjadi kalimat deskriptif biasa, tanpa prefiks:
+          Pakai prefiks yang sesuai jenis perubahannya:
 
-              feat(setup): retensi cadangan .bak      ->  Cadangan .bak tidak lagi menumpuk
-              docs: buang entri kembar di CHANGELOG   ->  Rapikan entri kembar di seksi v2.1.0
+              Cadangan .bak tidak lagi menumpuk   ->  fix(setup): retensi cadangan .bak
+              Satu pintu menuju produksi          ->  feat(setup): satu pintu menuju produksi
 
-          Judul sering terisi SENDIRI oleh GitHub dari subjek commit bila branch
-          hanya berisi satu commit -- periksa, jangan percaya isian otomatis.
+          Bila branch Anda berisi TEPAT SATU commit, GitHub sudah mengisi judul
+          ini dari subjek commit tersebut dan tidak ada yang perlu diketik. Yang
+          Anda lihat sekarang berarti branch ini berisi dua commit atau lebih,
+          dan judulnya terisi dari NAMA BRANCH -- perbaiki judulnya, atau
+          gabungkan commit-nya menjadi satu.
 
           Selengkapnya: docs/versioning.md
           PESAN
             exit 1
           fi
-          echo "OK — merge commit tidak akan menyumbang entri CHANGELOG."
+          echo "OK — release-please akan melihat perubahan ini."
