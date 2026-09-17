@@ -134,6 +134,8 @@ function getValue(kind, path, field) {
       process.stdout.write(`${compaction?.enabled === true ? "true" : "false"}\n`);
     } else if (field === "reserveTokens") {
       process.stdout.write(`${compaction?.reserveTokens ?? ""}\n`);
+    } else if (field === "defaultProvider") {
+      process.stdout.write(`${root.defaultProvider ?? ""}\n`);
     }
   }
 }

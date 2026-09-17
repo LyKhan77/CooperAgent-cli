@@ -304,6 +304,12 @@ else
 fi
 
 tanpa_komentar() { grep -vE '^[[:space:]]*#' "$1"; }
+# Peringatan provider aktif harus ada di KEDUA jalur verify. Jalur bash diuji
+# sungguhan di test-pi-adapter.sh; sisi Windows diperiksa pada teks, karena
+# runner ini Linux.
+tanpa_komentar "$REPO/scripts/lib/PiModels.ps1" | grep -q "pi memakai provider" \
+  && ok "verify Windows ikut memperingatkan provider di luar kelolaan" \
+  || bad "peringatan provider aktif hanya ada di jalur bash"
 tanpa_komentar "$REPO/scripts/lib/OmpModels.ps1" | grep -q "cooperagent\*'" \
   && bad "OmpModels.ps1 masih memakai pola nama pra-3.0.0 (-like 'cooperagent*')" \
   || ok "OmpModels.ps1 tidak lagi memakai pola nama pra-3.0.0"

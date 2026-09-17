@@ -309,6 +309,21 @@ function Invoke-PiVerify([string]$AgentDir, [string]$ModelsPath, [string]$Settin
         throw "reserveTokens pi $gotReserve, seharusnya $wantReserve (turunan kontrak)."
     }
     Write-Host "  [v] konfigurasi pi sesuai kontrak: baseUrl, token, compaction $gotReserve, model $Model."
+    # Provider mana yang SEBENARNYA dipakai pi -- cermin dari catatan sepadan di
+    # scripts/lib/pi_verify.sh. Semua pemeriksaan di atas menyangkut provider
+    # `cooper-agent`, yang memang selalu benar; pi merutekan lewat
+    # `defaultProvider`, dan yang menunjuk ke luar template baseUrl-nya beku.
+    # PERINGATAN, bukan kegagalan: provider pilihan dev adalah keputusan sah.
+    $dp = [string](Get-PiPropertyValue $settings 'defaultProvider')
+    if ($dp -eq 'cooper-agent' -or $dp -eq 'cooper-s1' -or $dp -eq 'cooper-s2') {
+        # provider terkelola -- tidak ada yang perlu dikatakan
+    } elseif ([string]::IsNullOrWhiteSpace($dp)) {
+        Write-Host "  [!] defaultProvider pi tidak terbaca -- pi mungkin memakai provider lain."
+    } else {
+        Write-Host "  [!] pi memakai provider '$dp', di luar kelolaan CooperAgent."
+        Write-Host "      baseUrl-nya TIDAK ikut pindah saat gateway berganti LAN/VPN."
+        Write-Host "      Bila itu tidak disengaja: setel defaultProvider ke cooper-agent."
+    }
     # Aturan yang BERBEDA adalah peringatan, bukan kegagalan -- lihat catatan
     # sepadan di scripts/lib/pi_verify.sh.
     $rulesPathInstalled = Join-Path $AgentDir 'AGENTS.md'

@@ -266,6 +266,47 @@ grep -q 'checkpoint' "$T/setup.out" \
     && ok "verify() melaporkan task-boundary checkpoint" \
     || bad "verify() tidak melaporkan checkpoint"
 
+# --- verify menyebut provider yang SEBENARNYA dipakai pi ---------------------
+#
+# Fixture ini sengaja memakai `defaultProvider: anthropic-saya` -- pilihan dev
+# yang memang dipertahankan installer. Sampai 18 September 2026 verify memeriksa
+# baseUrl dan apiKey milik `cooper-agent`, lalu mencetak "konfigurasi pi sesuai
+# kontrak" tanpa pernah menanyakan provider mana yang dipakai pi. Provider di
+# luar template baseUrl-nya BEKU saat gateway berganti, dan tidak ada yang
+# memberi tahu -- itulah kenapa `defaultProvider: cooperagent` yatim bertahan
+# berbulan-bulan tanpa terlihat.
+grep -q "pi memakai provider 'anthropic-saya'" "$T/setup.out" \
+    && ok "verify memperingatkan provider di luar kelolaan, dan menyebut namanya" \
+    || bad "verify diam soal provider aktif -- titik buta yang menyembunyikan bug defaultProvider"
+grep -q 'TIDAK ikut pindah saat gateway berganti' "$T/setup.out" \
+    && ok "peringatan menyebut AKIBATNYA, bukan hanya keadaannya" \
+    || bad "peringatan tidak menjelaskan kenapa itu penting"
+# PERINGATAN, bukan kegagalan: setup di atas sudah dinyatakan berhasil dan
+# provider pilihan dev tetap utuh. Menggagalkan verify karenanya berarti
+# menghukum dev atas keputusan yang installer hormati sendiri.
+grep -q 'konfigurasi pi sesuai kontrak' "$T/setup.out" \
+    && ok "provider dev diperingatkan, verify tetap lulus" \
+    || bad "verify tidak lulus padahal hanya provider dev yang berbeda"
+
+# Dan kebalikannya: provider TERKELOLA tidak boleh memicu peringatan apa pun.
+# Peringatan yang muncul pada keadaan yang benar akan dilatih untuk diabaikan,
+# dan peringatan yang diabaikan sama saja dengan tidak ada.
+python3 - "$HOME/.pi/agent/settings.json" <<'PYSET'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["defaultProvider"] = "cooper-agent"
+json.dump(d, open(p, "w", encoding="utf-8"), indent=2)
+PYSET
+if HOME="$HOME" PATH="$PATH" bash "$REPO/scripts/setup-pi.sh" \
+       --endpoint "$GW/api/v1" --token "$TOK" --rules >"$T/setup2.out" 2>&1; then
+    grep -q 'pi memakai provider' "$T/setup2.out" \
+        && bad "provider terkelola ikut diperingatkan -- peringatan jadi kebisingan" \
+        || ok "provider terkelola tidak memicu peringatan"
+else
+    bad "setup-pi gagal pada jalan kedua: $(tail -n 5 "$T/setup2.out")"
+fi
+
 echo
 echo "Paritas dan batas default:"
 grep -q '3) Pi' "$REPO/setup.sh" && grep -q '3) Pi' "$REPO/setup.ps1" \
