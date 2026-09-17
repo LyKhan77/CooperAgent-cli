@@ -646,6 +646,73 @@ menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
 bernomor di atas menyebut rilis mana yang membawanya.
 
 
+### Added · 2026-09-18 — verify menyebut provider yang sebenarnya dipakai pi
+
+**Konteks.** Titik buta yang menyembunyikan bug `defaultProvider` selama
+berbulan-bulan, dan yang perbaikannya pada 17 September tidak menutup: `verify()`
+memeriksa `baseUrl` dan `apiKey` milik provider `cooper-agent`, lalu mencetak
+*"konfigurasi pi sesuai kontrak"* — tanpa pernah menanyakan provider mana yang
+benar-benar dipakai pi.
+
+Provider `cooper-agent` memang selalu benar: ia dirender ulang dari template
+setiap kali setup berjalan. Tetapi pi merutekan lewat `defaultProvider`, dan
+hanya provider yang **ada di template** yang `baseUrl`-nya ikut pindah saat
+gateway berganti. `defaultProvider` yang menunjuk ke luar sana beku — dan verify
+mencetak tanda centang di atasnya.
+
+Perbaikan 17 September menyembuhkan satu nilai buruk yang diketahui
+(`cooperagent` yatim). Ini menutup kelasnya.
+
+**Perubahan.**
+
+- `scripts/lib/pi_verify.sh` dan `scripts/lib/PiModels.ps1` — peringatan bila
+  `defaultProvider` berada di luar `cooper-agent`/`cooper-s1`/`cooper-s2`,
+  menyebut nama providernya **dan akibatnya**.
+- `scripts/lib/pi_json.mjs` — `get settings <berkas> defaultProvider`; pembaca
+  itu belum ada.
+
+**PERINGATAN, bukan kegagalan.** Provider pilihan dev adalah keputusan sah, dan
+installer sengaja mempertahankannya — `test-pi-adapter.sh` bahkan menegaskan
+`anthropic-saya` harus utuh. Menggagalkan verify karenanya berarti menghukum dev
+atas keputusan yang kita hormati sendiri, alasan yang sama persis dengan
+perlakuan terhadap `AGENTS.md` yang disunting dev di berkas yang sama.
+
+**Bukti.** Fixture e2e `test-pi-adapter.sh` memang memakai
+`defaultProvider: anthropic-saya`, jadi peringatannya diuji pada jalur verify
+yang sungguhan — bukan pada fungsi yang dipanggil terpisah. Tiga pemeriksaan:
+peringatan muncul dan menyebut namanya, ia menyebut akibatnya, dan verify tetap
+lulus. Ditambah kebalikannya: provider terkelola **tidak** memicu peringatan apa
+pun — peringatan yang muncul pada keadaan yang benar akan dilatih untuk
+diabaikan, dan yang diabaikan sama saja dengan tidak ada.
+
+Dibuktikan merah dengan membuang blok peringatannya. Sisi Windows diperiksa pada
+teks dari Linux; runner Windows yang menjalankannya.
+
+**Dampak.** Dev yang `defaultProvider`-nya menunjuk provider sendiri kini diberi
+tahu sekali setiap verify. Yang memakai provider terkelola tidak melihat
+perubahan apa pun.
+
+### Fixed · 2026-09-18 — mendorong tag menjalankan seluruh suite
+
+**Konteks.** `git push origin v3.1.2` menjalankan seluruh suite — tiga menit —
+untuk mendorong satu objek tag 207 byte. Commit yang ditunjuknya sudah diuji
+beberapa detik sebelumnya, saat `git push origin main`.
+
+Hook `pre-push` hanya membedakan satu hal: penghapusan branch, yang SHA lokalnya
+nol. Push tag terlihat sama seperti push branch baginya.
+
+**Perubahan.** `scripts/hooks/pre-push` melewati ref `refs/tags/*` **bila commit
+yang ditunjuknya sudah ada di remote**. Tag yang menunjuk commit yang belum
+terdorong justru membawa kodenya, jadi ia tetap diuji — begitu pula bila keadaan
+remote tidak bisa dipastikan dari sini. Ragu berarti menguji, bukan melewati.
+
+**Bukti.** `test-hook-pre-push.sh` 8 → 10. Kasus keduanya dibuktikan merah
+dengan melewati tag tanpa syarat: *"kode bisa sampai ke origin tanpa diuji"*.
+Pembuktian itu sempat gagal menunjukkan apa pun karena label `ok` dan `no`-nya
+berbeda sehingga pencariannya meleset — keduanya kini sama.
+
+**Dampak.** Mendorong tag rilis tidak lagi menunggu tiga menit.
+
 ### Fixed · 2026-09-17 — token dev pi-saja tidak pernah terbaca
 
 **Konteks.** `stored_token` membaca dari grok, lalu omp, lalu pi. Cabang pi
@@ -757,27 +824,6 @@ terpengaruh sama sekali.
 
 **Rollback.** Revert commit ini. Omp Windows kembali tidak terlihat; tidak ada
 yang lain yang bergantung padanya.
-
-### Fixed · 2026-09-18 — mendorong tag menjalankan seluruh suite
-
-**Konteks.** `git push origin v3.1.2` menjalankan seluruh suite — tiga menit —
-untuk mendorong satu objek tag 207 byte. Commit yang ditunjuknya sudah diuji
-beberapa detik sebelumnya, saat `git push origin main`.
-
-Hook `pre-push` hanya membedakan satu hal: penghapusan branch, yang SHA lokalnya
-nol. Push tag terlihat sama seperti push branch baginya.
-
-**Perubahan.** `scripts/hooks/pre-push` melewati ref `refs/tags/*` **bila commit
-yang ditunjuknya sudah ada di remote**. Tag yang menunjuk commit yang belum
-terdorong justru membawa kodenya, jadi ia tetap diuji — begitu pula bila keadaan
-remote tidak bisa dipastikan dari sini. Ragu berarti menguji, bukan melewati.
-
-**Bukti.** `test-hook-pre-push.sh` 8 → 10. Kasus keduanya dibuktikan merah
-dengan melewati tag tanpa syarat: *"kode bisa sampai ke origin tanpa diuji"*.
-Pembuktian itu sempat gagal menunjukkan apa pun karena label `ok` dan `no`-nya
-berbeda sehingga pencariannya meleset — keduanya kini sama.
-
-**Dampak.** Mendorong tag rilis tidak lagi menunggu tiga menit.
 
 ### Changed · 2026-09-17 — release-please dilepas, rilis diberi tag dengan tangan
 
