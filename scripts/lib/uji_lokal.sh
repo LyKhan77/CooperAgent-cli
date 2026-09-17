@@ -1,18 +1,11 @@
-# Menjalankan suite uji lokal, dan menuliskan hasilnya sebagai checklist.
+# Menjalankan suite uji lokal, dan meringkas hasilnya.
 #
-# KENAPA ADA. Sejak 17 September 2026 suite TIDAK lagi dijalankan di CI: ia
-# dijalankan di sini, sebelum push. CI hanya memeriksa dua hal yang tidak bisa
-# dipastikan dari mesin lokal -- bahwa pohon yang terkirim benar-benar mengurai,
-# dan bahwa checklist ujinya menyebut SETIAP berkas uji yang ada di repo.
+# KENAPA ADA. Suite tidak dijalankan di GitHub: ia dijalankan di mesin dev,
+# sebelum push, oleh `scripts/hooks/pre-push` dan `scripts/pr.sh`. Satu
+# pembacaan, satu tempat -- dua penjalan uji yang harus dijaga sinkron dengan
+# tangan adalah persis penyakit yang berkali-kali menggigit repo ini.
 #
-# Checklist itulah sambungan antara keduanya. Ia ditulis ke pesan commit, jadi ia
-# ikut menjadi body PR (isian otomatis GitHub) dan bisa diperiksa CI dari sana.
-# Satu berkas uji baru yang tidak pernah dijalankan karena itu tidak bisa lolos
-# diam-diam: ia akan absen dari checklist, dan CI menyebut namanya.
-#
-# Satu pembacaan, satu tempat: hook pre-push dan scripts/pr.sh memanggil fungsi
-# yang sama. Dua penjalan uji yang harus dijaga sinkron dengan tangan adalah
-# persis penyakit yang berkali-kali menggigit repo ini.
+# Daftar ujinya adalah isi `test/`, bukan daftar yang disalin ke suatu berkas.
 
 # Uji yang SENGAJA tidak dijalankan otomatis, beserta sebabnya. Ia tetap wajib
 # muncul di checklist -- ditandai `[ ]` dengan alasannya -- karena checklist yang
@@ -20,7 +13,7 @@
 UJI_DILEWATI="test/test-setup-dev.sh"
 UJI_SEBAB_DILEWATI="dijalankan tangan: memilih agent omp, sehingga setup.sh mengunduh biner dari internet"
 
-UJI_PENANDA="Uji lokal (scripts/pr.sh):"
+UJI_PENANDA="Uji lokal:"
 
 # uji_lokal_jalankan <berkas-checklist>
 # Keluar dengan kode != 0 bila ada satu saja uji yang merah.

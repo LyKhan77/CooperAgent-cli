@@ -617,12 +617,68 @@ catatan bahwa medan itu belum dibaca klien mana pun.
 
 ## Catatan rinci
 
-Seksi di atas ditulis otomatis oleh release-please: satu baris per commit.
-Seksi ini berisi catatan panjangnya — konteks, bukti, dampak, dan cara mundur —
-untuk perubahan yang membutuhkannya. Semuanya **sudah rilis**; tanggal pada tiap
-judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
-rilis mana yang membawanya.
+Seksi bernomor di atas: satu baris per perubahan, ditulis saat merilis. Sampai
+17 September 2026 ia diisi otomatis oleh release-please; sejak itu ditulis
+tangan bersama tag rilisnya.
 
+Seksi ini berisi catatan panjangnya — konteks, bukti, dampak, dan cara mundur —
+untuk perubahan yang membutuhkannya. Ditulis saat perubahannya dikerjakan, tidak
+menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
+bernomor di atas menyebut rilis mana yang membawanya.
+
+
+### Changed · 2026-09-17 — release-please dilepas, rilis diberi tag dengan tangan
+
+**Konteks.** Tiga kali dalam satu hari alur PR berhenti karena aturan, bukan
+karena kode: judul ditolak, lalu judul ditolak lagi dengan alasan yang
+berlawanan, lalu PR harus dibuka ulang karena body-nya tidak memuat checklist.
+Kalimat yang mengakhirinya: *"sumpah ini bingung sekali."*
+
+Akarnya satu, dan bukan salah satu dari aturan itu. release-please menentukan
+rilis dari pesan commit, sementara GitHub menaruh judul PR ke badan merge commit
+— sehingga judul PR ikut terbaca sebagai commit, dan satu perubahan tercatat dua
+kali. Setiap tambalan melahirkan tambalan berikutnya:
+
+- larangan prefiks di judul PR (karena merge commit menggandakan),
+- lalu **kewajiban** prefiks (karena squash membuat judul menjadi commit),
+- lalu skrip dan uji yang menjaga keduanya tetap sinkron dengan workflow-nya.
+
+Tiga lapis aturan untuk satu masalah yang tidak dimiliki siapa pun yang memberi
+tag dengan tangan.
+
+**Perubahan.**
+
+- Dihapus: `.github/workflows/pr-title.yml`, `.github/workflows/release-please.yml`,
+  `release-please-config.json`, `.release-please-manifest.json`,
+  `test/test-pr-title-guard.sh`, `test/test-checklist-uji.sh`.
+- `.github/workflows/test.yml` → `windows-powershell.yml`, disisakan **satu job**:
+  parser PowerShell 5.1 dan `Test-PiModels.ps1`.
+- `scripts/pr.sh` — pagar judul dan penanaman checklist dibuang. Yang tersisa:
+  jalankan suite, push, cetak tautan. Judul PR bebas.
+- `docs/versioning.md`, `AGENTS.md` — alur rilis ditulis ulang untuk `git tag`.
+
+**Kenapa job Windows tidak ikut dilepas.** Alasannya tidak pernah sama dengan
+yang lain. Ia tidak menuntut apa pun dari siapa pun — tidak ada judul yang harus
+berbentuk tertentu, tidak ada checklist yang harus diisi — dan ia memeriksa
+satu-satunya hal yang tidak bisa diperiksa dari mesin dev mana pun di tim ini:
+`.ps1`. Menghitung kurung bukan parser; `PiModels.ps1` pernah punya kurung
+seimbang sempurna dan tetap gagal di-parse, dan `setup.ps1` mati untuk setiap dev
+Windows sampai v1.4.0 terbit.
+
+**Yang hilang, dan itu memang hilang.** CHANGELOG tidak lagi terisi sendiri, dan
+versi tidak lagi naik sendiri. Keduanya kini keputusan manusia yang harus
+diingat saat merilis. Di repo dengan satu penulis tetap dan beberapa rilis
+sebulan, ongkos mengetik `git tag` lebih kecil daripada ongkos mengingat tiga
+lapis aturan judul — tetapi ongkosnya bukan nol, dan lupa menaikkan
+`version.txt` tidak akan digagalkan oleh apa pun.
+
+**Dampak.** Dua baris kembar peninggalan merge commit `#31` dan `#33` menjadi
+tidak relevan: tidak ada lagi PR rilis yang akan memuatnya. Tulis entri
+rilisnya dengan tangan saat memberi tag.
+
+**Rollback.** Kembalikan keempat berkas konfigurasi dan kedua workflow dari
+riwayat git. Pagar judul harus ikut kembali, dengan polaritas yang sesuai
+strategi merge yang dipilih — itulah yang membuatnya mahal sejak awal.
 
 ### Changed · 2026-09-17 — suite pindah ke lokal, CI tinggal memeriksa
 
