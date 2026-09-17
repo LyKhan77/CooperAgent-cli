@@ -447,15 +447,23 @@ function Get-CooperStoredGateway {
     if (-not $v -and (Test-CooperPiInstalled)) { $v = Get-PiStoredGateway $PI_MODELS_PATH }
     return $v
 }
+# Ketiganya SEJAJAR, bukan bersarang.
+#
+# Sampai 17 September 2026 cabang pi berada DI DALAM cabang omp: indentasinya
+# menyatakan sejajar, kurung penutup gandanya menyatakan bersarang. Dev yang
+# hanya memasang pi karena itu dibacakan "tidak ada token di config" padahal
+# tokennya ada di models.json -- lalu ditolak saat hendak pindah gateway.
+# Cermin dari `stored_token` di setup.sh, yang punya cacat yang sama persis.
 function Get-CooperStoredToken {
     $v = ''
     if (Test-CooperGrokInstalled) { $v = Read-ExistingIdentity }
     if ($v -notlike 'ca_*') { $v = '' }
     if (-not $v -and (Test-CooperOmpInstalled)) {
         $v = Get-OmpStoredKey $OMP_YML_PATH
+        if ($v -notlike 'ca_*') { $v = '' }
+    }
     if (-not $v -and (Test-CooperPiInstalled)) {
         $v = Get-PiStoredKey $PI_MODELS_PATH
-    }
         if ($v -notlike 'ca_*') { $v = '' }
     }
     return $v

@@ -207,6 +207,47 @@ grep -qi 'tidak ada token di config' <<<"$OUT5" \
   && ok "kunci lama dikatakan bukan kredensial, bukan didiamkan" \
   || bad "kunci `dev-nama@device` diterima seolah token"
 
+# ── 4c. dev pi-saja: tokennya harus terbaca ───────────────────────────────────
+#
+# `stored_token` membaca dari grok, lalu omp, lalu pi. Sampai 17 September 2026
+# cabang pi berada DI DALAM cabang omp -- indentasinya menyatakan sejajar, `fi`
+# gandanya menyatakan bersarang. Dev yang memasang pi SAJA karena itu dibacakan
+# "tidak ada token di config" padahal tokennya ada, lalu ditolak saat hendak
+# pindah gateway dan disuruh menempel ulang token yang sudah benar.
+#
+# Diuji lewat setup.sh sungguhan, bukan dengan memanggil fungsinya: yang penting
+# bukan nilai kembaliannya, melainkan apa yang dibacakan kepada dev.
+echo
+echo $'\033[1mdev pi-saja:\033[0m'
+H6="$T/home6"; mkdir -p "$H6/.pi/agent"
+cat > "$H6/.pi/agent/models.json" <<JSON
+{
+  "providers": {
+    "cooper-agent": {
+      "baseUrl": "http://127.0.0.1:$PORT/v1",
+      "apiKey": "$VALID",
+      "models": [{"id": "intercon-agent", "name": "CooperAgent"}]
+    }
+  }
+}
+JSON
+cat > "$H6/.pi/agent/settings.json" <<'JSON'
+{ "defaultProvider": "cooper-agent", "compaction": {"enabled": true, "reserveTokens": 26215} }
+JSON
+OUT6="$(printf '6\n' | HOME="$H6" timeout 60 bash "$REPO/setup.sh" 2>&1)"
+
+grep -qi 'sudah terpasang' <<<"$OUT6" \
+  && ok "dev pi-saja dikenali sebagai sudah terpasang" \
+  || bad "pemasangan pi-saja tidak terlihat"
+grep -qi 'tidak ada token di config' <<<"$OUT6" \
+  && bad "token pi tidak terbaca" "dev disuruh menempel ulang token yang sudah benar" \
+  || ok "token pi terbaca meski omp dan grok tidak terpasang"
+# Dan karena tokennya terbaca, kredensialnya benar-benar diperiksa ke gateway --
+# bukan dilewati dengan alasan tidak ada yang bisa diperiksa.
+grep -qiE 'kredensial: .*(sah|DITOLAK)' <<<"$OUT6" \
+  && ok "kredensial pi diperiksa ke gateway" \
+  || bad "kredensial pi tidak diperiksa" "layar melewatinya"
+
 # ── 5. sisi Windows tidak boleh tertinggal ────────────────────────────────────
 #
 # Diperiksa pada TEKS, bukan dengan menjalankannya: runner ini Linux, dan
@@ -238,6 +279,30 @@ grep -q 'Set-CooperAllHarness' "$REPO/setup.ps1" \
 grep -q 'function Test-OmpNamaMilikKami' "$REPO/scripts/lib/OmpModels.ps1" \
   && ok "nama provider omp dikenali lewat satu fungsi" \
   || bad "pola nama provider omp tersebar lagi di beberapa tempat"
+# Cacat bersarang yang sama ada di Get-CooperStoredToken. Bentuknya bisa
+# diperiksa dari sini tanpa PowerShell: ketiga pembacanya harus berada pada
+# KEDALAMAN KURUNG yang sama. Yang bersarang akan terbaca lebih dalam.
+if python3 - "$REPO/setup.ps1" <<'PYEOF'
+import re, sys
+baris = open(sys.argv[1], encoding="utf-8").read().split("\n")
+i = next(n for n, b in enumerate(baris) if b.startswith("function Get-CooperStoredToken"))
+dalam, kedalaman = 0, {}
+for b in baris[i:]:
+    telanjang = re.sub(r"#.*$", "", b)
+    for nama in ("Test-CooperGrokInstalled", "Test-CooperOmpInstalled", "Test-CooperPiInstalled"):
+        if nama in telanjang:
+            kedalaman[nama] = dalam
+    dalam += telanjang.count("{") - telanjang.count("}")
+    if dalam == 0 and "}" in telanjang and b.startswith("}"):
+        break
+sys.exit(0 if len(set(kedalaman.values())) == 1 and len(kedalaman) == 3 else 1)
+PYEOF
+then
+    ok "ketiga pembaca token di setup.ps1 sejajar, tidak bersarang"
+else
+    bad "pembaca token di setup.ps1 bersarang -- dev pi-saja tidak terbaca di Windows"
+fi
+
 tanpa_komentar() { grep -vE '^[[:space:]]*#' "$1"; }
 tanpa_komentar "$REPO/scripts/lib/OmpModels.ps1" | grep -q "cooperagent\*'" \
   && bad "OmpModels.ps1 masih memakai pola nama pra-3.0.0 (-like 'cooperagent*')" \
