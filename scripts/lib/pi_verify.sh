@@ -100,7 +100,7 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
     local dp
     dp="$(pi_json_get settings "$settings" defaultProvider 2>/dev/null || true)"
     case "$dp" in
-        cooper-agent|cooper-s1|cooper-s2) ;;
+        cooper-agent|cooper-s1|cooper-s2|cooper-s3) ;;
         "") echo "  [!] defaultProvider pi tidak terbaca — pi mungkin memakai provider lain." ;;
         *)  echo "  [!] pi memakai provider '$dp', di luar kelolaan CooperAgent."
             echo "      baseUrl-nya TIDAK ikut pindah saat gateway berganti LAN/VPN."

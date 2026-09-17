@@ -1,15 +1,16 @@
 # Provider CooperAgent untuk Oh My Pi.
 #
-# TIGA profil, sama persis dengan Grok dan pi. Sampai 12 September 2026 setiap
+# EMPAT profil, sama persis dengan Grok dan pi. Sampai 12 September 2026 setiap
 # harness memakai kosakata sendiri — Grok `internal-qwen*`, omp `cooperagent*`,
 # dan pi hanya punya satu dari tiga. Dev yang berpindah harness harus menghafal
 # nama berbeda untuk hal yang sama.
 #
-# Ketiganya dibedakan oleh SATU hal: siapa yang memilih server.
+# Keempatnya dibedakan oleh SATU hal: siapa yang memilih server.
 #
 #   cooper-agent  gateway yang memilih, dengan failover
 #   cooper-s1     dipaksa ke server 1, tanpa failover
 #   cooper-s2     dipaksa ke server 2, tanpa failover
+#   cooper-s3     dipaksa ke server 3, tanpa failover
 #
 # ALAMAT bukan bagian dari pilihan ini. LAN, VPN, dan localhost adalah pertanyaan
 # lain — dijawab sekali saat setup lewat `--endpoint lan|vpn|local`, dan
@@ -75,6 +76,24 @@ providers:
     models:
       - id: __MODEL_ID__
         name: CooperAgent @ s2 — tanpa failover
+        contextWindow: __CONTEXT_WINDOW__
+        maxTokens: __MAX_TOKENS__
+        # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini
+        # sebagai teks saja (`supportsImages === true`, dan tidak ada bawaan).
+        supportsImages: true
+
+  # Pasangan cooper-s1/cooper-s2. Gunanya membandingkan jawaban antar node pada
+  # prompt yang sama — kuantisasi dan drafter boleh berbeda di tiap node.
+  #
+  # Sesi yang memakainya KEHILANGAN failover, sama seperti cooper-s1/cooper-s2.
+  cooper-s3:
+    name: CooperAgent server 3 (langsung)
+    baseUrl: __GATEWAY__/v1/upstream/s3
+    apiKey: __API_KEY__
+    api: openai-completions
+    models:
+      - id: __MODEL_ID__
+        name: CooperAgent @ s3 — tanpa failover
         contextWindow: __CONTEXT_WINDOW__
         maxTokens: __MAX_TOKENS__
         # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini

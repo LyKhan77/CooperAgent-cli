@@ -72,14 +72,14 @@ try {
     $prov = $merged.providers.'cooper-agent'
     if ($null -ne $prov) { ok "provider cooper-agent ditulis" } else { no "provider cooper-agent tidak ada" }
 
-    # KETIGA profil harus masuk, bukan hanya satu.
+    # KEEMPAT profil harus masuk, bukan hanya satu.
     #
     # Sampai 12 September 2026 Merge-PiModels mengeraskan satu nama provider,
     # jadi pi hanya pernah mendapat sepertiga dari yang dimiliki Grok dan omp.
     # Uji ini yang menahannya kembali ke sana.
-    $wajib = @('cooper-agent', 'cooper-s1', 'cooper-s2')
+    $wajib = @('cooper-agent', 'cooper-s1', 'cooper-s2', 'cooper-s3')
     $hilang = @($wajib | Where-Object { $null -eq $merged.providers.PSObject.Properties[$_] })
-    if ($hilang.Count -eq 0) { ok "ketiga profil model masuk" }
+    if ($hilang.Count -eq 0) { ok "keempat profil model masuk" }
     else { no ("profil hilang: " + ($hilang -join ', ')) }
 
     # Profil langsung menembus routing; kalau baseUrl-nya sama dengan yang

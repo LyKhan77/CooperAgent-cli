@@ -271,7 +271,7 @@ esac
 # Seksi yang DIKELOLA CooperAgent. Apa pun di luar daftar ini milik dev --
 # server MCP, preferensi [ui], model tambahan -- dan dipakai untuk memberi tahu
 # dengan jujur apa yang akan hilang bila ia memilih tulis-ulang penuh.
-MANAGED_SECTIONS="[cli] [features] [session] [memory] [models] [model.cooper-agent] [model.cooper-s1] [model.cooper-s2]"
+MANAGED_SECTIONS="[cli] [features] [session] [memory] [models] [model.cooper-agent] [model.cooper-s1] [model.cooper-s2] [model.cooper-s3]"
 
 # Nama baru DULU, nama lama sebagai jalur mundur.
 #
@@ -455,6 +455,23 @@ model = "${DEFAULT_MODEL_NAME}"
 base_url = "${gw}/api/v1/upstream/s2"
 name = "CooperAgent @ server 2 (langsung)"
 description = "Langsung ke server 2, menembus routing gateway -- tanpa failover"
+api_backend = "chat_completions"
+context_window = ${CONTRACT_CONTEXT_WINDOW}
+max_completion_tokens = ${CONTRACT_MAX_TOKENS}
+max_tokens = ${CONTRACT_MAX_TOKENS}
+max_output_tokens = ${CONTRACT_MAX_TOKENS}
+temperature = 1.0
+top_p = 0.95
+min_p = 0.0
+repeat_penalty = 1.0
+presence_penalty = 0.0
+api_key = "${api_key_value}"
+
+[model.cooper-s3]
+model = "${DEFAULT_MODEL_NAME}"
+base_url = "${gw}/api/v1/upstream/s3"
+name = "CooperAgent @ server 3 (langsung)"
+description = "Langsung ke server 3, menembus routing gateway -- tanpa failover"
 api_backend = "chat_completions"
 context_window = ${CONTRACT_CONTEXT_WINDOW}
 max_completion_tokens = ${CONTRACT_MAX_TOKENS}

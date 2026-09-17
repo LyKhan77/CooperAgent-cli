@@ -120,12 +120,12 @@ echo "vision: omp harus diberi tahu modelnya bisa melihat"
 # Kunci yang hilang = model dianggap teks saja, dan gambar tidak pernah dikirim
 # ke model yang sebenarnya memuat mmproj. Tidak ada galat sama sekali.
 kurang=""
-for prov in cooper-agent cooper-s1 cooper-s2; do
+for prov in cooper-agent cooper-s1 cooper-s2 cooper-s3; do
     blok="$(awk -v p="  $prov:" '$0==p{f=1;next} /^  [A-Za-z0-9_-]+:[[:space:]]*$/{f=0} f' \
             "$ROOT/templates/omp-models.yml")"
     printf '%s' "$blok" | grep -qE 'supportsImages:[[:space:]]*true' || kurang="$kurang $prov"
 done
-[ -z "$kurang" ] && ok "ketiga provider template menyatakan supportsImages: true" \
+[ -z "$kurang" ] && ok "keempat provider template menyatakan supportsImages: true" \
                  || no "template TANPA supportsImages:$kurang" "omp tidak akan mengirim gambar"
 
 # Yang menentukan: dev yang SUDAH memasang. merge_providers bersifat tambah-saja,

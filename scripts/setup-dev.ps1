@@ -172,7 +172,7 @@ if ($Token) {
             # SETIAP blok model, termasuk [model.claude-saya] milik dev -- dan
             # menimpa api_key di sana menghapus kunci BERBAYAR miliknya dengan
             # token kita. Ditemukan lewat pengujian 1 September 2026.
-            $isModel = ($line -match '^\[model\.(cooper-agent|cooper-s1|cooper-s2|internal-qwen)')
+            $isModel = ($line -match '^\[model\.(cooper-agent|cooper-s1|cooper-s2|cooper-s3|internal-qwen)')
             $buf.Add($line)
             continue
         }

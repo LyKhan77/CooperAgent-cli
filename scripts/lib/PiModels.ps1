@@ -315,7 +315,7 @@ function Invoke-PiVerify([string]$AgentDir, [string]$ModelsPath, [string]$Settin
     # `defaultProvider`, dan yang menunjuk ke luar template baseUrl-nya beku.
     # PERINGATAN, bukan kegagalan: provider pilihan dev adalah keputusan sah.
     $dp = [string](Get-PiPropertyValue $settings 'defaultProvider')
-    if ($dp -eq 'cooper-agent' -or $dp -eq 'cooper-s1' -or $dp -eq 'cooper-s2') {
+    if ($dp -eq 'cooper-agent' -or $dp -eq 'cooper-s1' -or $dp -eq 'cooper-s2' -or $dp -eq 'cooper-s3') {
         # provider terkelola -- tidak ada yang perlu dikatakan
     } elseif ([string]::IsNullOrWhiteSpace($dp)) {
         Write-Host "  [!] defaultProvider pi tidak terbaca -- pi mungkin memakai provider lain."
