@@ -10,6 +10,25 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [3.1.2](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.1...v3.1.2) (2026-09-17)
+
+Rilis pertama yang diberi tag dengan tangan. Seksi ini tidak lagi ditulis
+release-please.
+
+### Perbaikan
+
+* **pi:** migrasi `defaultProvider` lama `cooperagent` ke `cooper-agent` ([20a53c3](https://github.com/LyKhan77/CooperAgent-cli/commit/20a53c3))
+* **omp:** kenali provider `cooper-*` di sisi Windows — omp dilewati sepenuhnya saat ganti gateway sejak 3.0.0 ([1c6d7dd](https://github.com/LyKhan77/CooperAgent-cli/commit/1c6d7dd))
+* **setup:** baca token pi meski omp dan grok tidak terpasang ([67b24c4](https://github.com/LyKhan77/CooperAgent-cli/commit/67b24c4))
+
+### Perkakas & CI
+
+* lepas release-please dan seluruh gerbang PR; rilis diberi tag dengan tangan ([dcf1687](https://github.com/LyKhan77/CooperAgent-cli/commit/dcf1687))
+
+  Dua langkah antaranya — pagar judul dibalik, lalu suite dipindah ke lokal —
+  dibuat dan dicabut kembali dalam jendela rilis yang sama, jadi tidak ada yang
+  pernah terbit darinya. Ketiganya dicatat utuh di **Catatan rinci**.
+
 ## [3.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.0...v3.1.1) (2026-09-12)
 
 
