@@ -74,3 +74,11 @@ jobs:
       - name: Uji runtime PiModels (merge tanpa jaringan)
         shell: powershell
         run: .\test\Test-PiModels.ps1
+
+      # Sisi omp punya cacat yang sama bentuknya dan lolos lebih lama: nama
+      # provider berganti pada 3.0.0, sisi Windows masih mencari nama lama, dan
+      # omp menjadi tidak terlihat sebagai terpasang. Sisi bash tidak pernah
+      # terkena -- itu justru yang membuatnya sulit terlihat.
+      - name: Uji runtime OmpModels (nama provider, tanpa jaringan)
+        shell: powershell
+        run: .\test\Test-OmpModels.ps1

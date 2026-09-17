@@ -424,8 +424,17 @@ function Test-CooperGrokInstalled {
             ((Get-Content $GROK_CFG_PATH) -match '^\[model\.(cooper-agent|internal-qwen)'))
 }
 function Test-CooperOmpInstalled {
-    return ((Test-Path $OMP_YML_PATH) -and
-            ((Get-Content $OMP_YML_PATH) -match '^  cooperagent:'))
+    if (-not (Test-Path $OMP_YML_PATH)) { return $false }
+    # Nama provider dibaca lewat Test-OmpNamaMilikKami, bukan dipola di sini.
+    # Bentuk sebelumnya -- `-match '^  cooperagent:'` -- berhenti cocok sejak
+    # templates/omp-models.yml menulis `cooper-agent`, sehingga SETIAP pemasangan
+    # omp Windows yang dibuat 3.0.0 ke atas tidak terlihat sebagai terpasang.
+    foreach ($l in (Get-Content $OMP_YML_PATH)) {
+        if ($l -match '^  ([A-Za-z0-9_-]+):\s*$' -and (Test-OmpNamaMilikKami $Matches[1])) {
+            return $true
+        }
+    }
+    return $false
 }
 
 # Alamat dan token dibaca dari MANA PUN yang ada. Dev yang memilih omp saja
@@ -1289,7 +1298,7 @@ if ($AGENT_CHOICE -eq "2") {
         $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', $ompApiKey)
         if (-not (Assert-CooperRendered $yml 'models.yml')) { exit 1 }
         [System.IO.File]::WriteAllText($MODELS_YML, $yml, $utf8NoBomOmp)
-        Write-Host "[v] models.yml dibuat (3 provider: otomatis, localhost, server 2)" -ForegroundColor Green
+        Write-Host "[v] models.yml dibuat (3 provider: otomatis, server 1, server 2)" -ForegroundColor Green
     } else {
         $lines = Get-Content $MODELS_YML
         $first = $lines | Where-Object { $_ -match '^\s+baseUrl:' } | Select-Object -First 1

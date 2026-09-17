@@ -58,16 +58,30 @@ function Set-OmpApiKey([string]$Path, [string]$Key, [string]$Gateway) {
 # `~\.grok\config.toml`, jadi satu-satunya tempat alamat dan kredensialnya
 # tercatat adalah berkas ini.
 #
-# Provider dikenali dari NAMANYA (`cooperagent`, `cooperagent-localhost`,
-# `cooperagent-s2` -- persis yang ditulis templates/omp-models.yml), bukan dari
-# bentuk alamatnya. Menebak dari alamat akan salah menyebut Ollama milik dev
-# (`http://localhost:11434`) sebagai provider kita, dan yang terbaca lalu
-# dilaporkan sebagai "kredensial Anda" adalah kunci orang lain.
+# Provider dikenali dari NAMANYA, bukan dari bentuk alamatnya. Menebak dari
+# alamat akan salah menyebut Ollama milik dev (`http://localhost:11434`) sebagai
+# provider kita, dan yang terbaca lalu dilaporkan sebagai "kredensial Anda"
+# adalah kunci orang lain.
+#
+# Nama yang dikenali ada di SATU tempat, dan itu penting: sampai 17 September
+# 2026 polanya ditulis tiga kali dengan dua ejaan berbeda -- dua kali di sini
+# sebagai `-like 'cooperagent*'`, sekali lagi di setup.ps1 sebagai
+# `'^  cooperagent:'`. Ketiganya berhenti cocok saat penyatuan profil 3.0.0
+# mengganti nama provider menjadi `cooper-agent`, dan tidak ada yang memberi
+# tahu: omp menjadi TIDAK TERLIHAT di Windows, sehingga Set-CooperAllHarness
+# melewatinya -- baseUrl dan apiKey-nya tidak pernah ikut pindah saat dev
+# berganti LAN/VPN, tanpa satu pun galat.
+#
+# Cermin dari regex yang sama di scripts/lib/omp_models.sh. Nama lama tetap
+# dikenali: berkas dev yang belum pernah dimigrasi masih memakainya.
+function Test-OmpNamaMilikKami([string]$Name) {
+    return ($Name -match '^cooper-(agent|s[0-9]+)$' -or $Name -match '^cooperagent')
+}
 function Get-OmpStoredKey([string]$Path) {
     if (-not (Test-Path $Path)) { return '' }
     $mine = $false
     foreach ($l in (Get-Content $Path)) {
-        if ($l -match '^  ([A-Za-z0-9_-]+):\s*$') { $mine = ($Matches[1] -like 'cooperagent*'); continue }
+        if ($l -match '^  ([A-Za-z0-9_-]+):\s*$') { $mine = (Test-OmpNamaMilikKami $Matches[1]); continue }
         if ($mine -and $l -match '^\s*apiKey:\s*(\S+)\s*$') { return $Matches[1] }
     }
     return ''
@@ -81,7 +95,7 @@ function Get-OmpStoredGateway([string]$Path) {
     if (-not (Test-Path $Path)) { return '' }
     $mine = $false; $local = ''
     foreach ($l in (Get-Content $Path)) {
-        if ($l -match '^  ([A-Za-z0-9_-]+):\s*$') { $mine = ($Matches[1] -like 'cooperagent*'); continue }
+        if ($l -match '^  ([A-Za-z0-9_-]+):\s*$') { $mine = (Test-OmpNamaMilikKami $Matches[1]); continue }
         if ($mine -and $l -match '^\s*baseUrl:\s*(\S+)\s*$') {
             $u = $Matches[1] -replace '/(api/)?v1.*$', ''
             if ($u -notmatch '127\.0\.0\.1') { return $u }
