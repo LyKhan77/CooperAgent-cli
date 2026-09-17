@@ -144,6 +144,10 @@ function Merge-PiSettings([string]$ExistingPath, [string]$TemplatePath) {
     $p = Get-PiProperty $root 'defaultProvider'
     if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.Value)) {
         Set-PiProperty $root 'defaultProvider' $tplProvider
+    } elseif ([string]$p.Value -eq 'cooperagent') {
+        # `cooperagent` (tanpa strip) tidak lagi dikelola Merge-PiModels sejak
+        # 12 September 2026 -- baseUrl-nya beku, gagal ikut pindah LAN/VPN.
+        Set-PiProperty $root 'defaultProvider' $tplProvider
     }
     $p = Get-PiProperty $root 'defaultModel'
     if ($null -eq $p -or [string]::IsNullOrWhiteSpace([string]$p.Value)) {

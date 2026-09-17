@@ -10,6 +10,35 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [Unreleased]
+
+### Perbaikan
+
+* **pi:** migrasi `defaultProvider` lama `cooperagent` (tanpa strip) ke `cooper-agent`
+
+  **Konteks:** `templates/pi-settings.json` menyetel `defaultProvider` ke `cooperagent`,
+  tetapi `Merge-PiModels`/`mergeModels` cuma mengelola key `cooper-agent` (dengan strip).
+  Instalasi yang sudah punya `defaultProvider: cooperagent` tidak pernah dimigrasi, jadi
+  baseUrl-nya beku dan tidak ikut pindah saat gateway diganti LAN/VPN — pi timeout diam-diam
+  ke alamat gateway yang sudah tidak berlaku.
+
+  **Perubahan:**
+  - `templates/pi-settings.json`: default `defaultProvider` diganti ke `cooper-agent`
+  - `scripts/lib/PiModels.ps1` (`Merge-PiSettings`): migrasi nilai lama `cooperagent` → `cooper-agent`
+  - `scripts/lib/pi_json.mjs` (`mergeSettings`): migrasi setara untuk jalur bash/mac/linux
+  - `test/Test-PiModels.ps1`: kasus regresi untuk migrasi ini
+
+  **Bukti:** `test/Test-PiModels.ps1` — 13/13 lulus, termasuk kasus baru
+  "defaultProvider cooperagent dipindah ke cooper-agent". Direproduksi manual: gateway
+  dipindah LAN→VPN pakai `setup.ps1`, pi timeout ke IP lama; sesudah patch, provider aktif
+  ikut pindah dan pi menjawab.
+
+  **Dampak:** hanya instalasi yang masih punya `defaultProvider: cooperagent` peninggalan
+  (sebelum migrasi profil model 3.0.0). Instalasi baru sudah pakai `cooper-agent` sejak awal.
+
+  **Rollback:** revert commit ini; instalasi yang sudah bermigrasi lewat setup ulang perlu
+  menimpa manual `defaultProvider` balik ke `cooperagent` di `settings.json` bila diperlukan.
+
 ## [3.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.0...v3.1.1) (2026-09-12)
 
 
