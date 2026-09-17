@@ -229,6 +229,31 @@ grep -q 'Set-CooperAllHarness' "$REPO/setup.ps1" \
   && ok "-Endpoint menyentuh SEMUA harness, bukan Grok saja" \
   || bad "-Endpoint Windows masih hanya menulis config Grok"
 
+# Nama provider omp: sisi Windows harus mengenali nama yang BENAR-BENAR ditulis
+# templates/omp-models.yml hari ini, bukan nama sebelum penyatuan profil 3.0.0.
+#
+# Diperiksa pada TEKS karena runner ini Linux. Yang dijaga bukan ejaan regexnya,
+# melainkan bahwa polanya hidup di SATU fungsi -- tiga salinan dengan dua ejaan
+# berbeda adalah persis bagaimana cacat ini lahir dan bertahan.
+grep -q 'function Test-OmpNamaMilikKami' "$REPO/scripts/lib/OmpModels.ps1" \
+  && ok "nama provider omp dikenali lewat satu fungsi" \
+  || bad "pola nama provider omp tersebar lagi di beberapa tempat"
+tanpa_komentar() { grep -vE '^[[:space:]]*#' "$1"; }
+tanpa_komentar "$REPO/scripts/lib/OmpModels.ps1" | grep -q "cooperagent\*'" \
+  && bad "OmpModels.ps1 masih memakai pola nama pra-3.0.0 (-like 'cooperagent*')" \
+  || ok "OmpModels.ps1 tidak lagi memakai pola nama pra-3.0.0"
+tanpa_komentar "$REPO/setup.ps1" | grep -q "'\^  cooperagent:'" \
+  && bad "Test-CooperOmpInstalled masih mencari '^  cooperagent:' -- omp tak terlihat" \
+  || ok "deteksi omp di setup.ps1 tidak lagi mematok nama pra-3.0.0"
+# Dan nama yang ditulis template harus benar-benar lolos fungsi itu. Diuji
+# sungguhan oleh test/Test-OmpModels.ps1 di runner Windows; di sini yang dijaga
+# adalah keduanya tidak berpisah diam-diam.
+for prov in $(grep -oE '^  [a-z0-9-]+:' "$REPO/templates/omp-models.yml" | tr -d ' :'); do
+    grep -q "cooper-(agent|s\[0-9\]+)" "$REPO/scripts/lib/OmpModels.ps1" \
+      || { bad "pola Windows tidak menerima $prov dari template"; break; }
+done
+ok "pola Windows sejajar dengan nama di templates/omp-models.yml"
+
 # `catch {}` KOSONG di sekitar probe whoami adalah bug aslinya: kegagalan
 # ditelan, lalu setup berjalan terus seolah tidak terjadi apa-apa.
 if grep -Pzoq '(?s)whoami.{0,600}?catch \{\s*\}' "$REPO/setup.ps1" 2>/dev/null; then
@@ -273,7 +298,8 @@ done
 # Kurung yang tidak seimbang di sana tidak akan ketahuan sampai seorang dev
 # Windows menjalankannya.
 for f in setup.ps1 scripts/setup-dev.ps1 scripts/lib/OmpModels.ps1 \
-         scripts/lib/Credential.ps1 scripts/lib/PiModels.ps1 test/Test-PiModels.ps1; do
+         scripts/lib/Credential.ps1 scripts/lib/PiModels.ps1 \
+         test/Test-PiModels.ps1 test/Test-OmpModels.ps1; do
     nl="$(tr -cd '{' < "$REPO/$f" | wc -c)"; nr="$(tr -cd '}' < "$REPO/$f" | wc -c)"
     [ "$nl" = "$nr" ] && ok "$f: kurung kurawal seimbang ($nl)" \
         || bad "$f: kurung kurawal TIDAK seimbang ($nl buka, $nr tutup)"

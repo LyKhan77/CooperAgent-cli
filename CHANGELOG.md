@@ -627,6 +627,66 @@ menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
 bernomor di atas menyebut rilis mana yang membawanya.
 
 
+### Fixed · 2026-09-17 — omp tidak terlihat di Windows sejak 3.0.0
+
+**Konteks.** Ditemukan saat memeriksa apakah ganti gateway benar-benar menyentuh
+ketiga harness. Di Linux/macOS: ya, semuanya lewat satu pintu
+(`apply_to_all_harness`). Di Windows: **omp dilewati sepenuhnya.**
+
+`Test-CooperOmpInstalled` mendeteksi omp dengan `-match '^  cooperagent:'` —
+nama sebelum penyatuan profil 3.0.0. `templates/omp-models.yml` menulis
+`cooper-agent`, `cooper-s1`, `cooper-s2`, dan `'  cooper-agent:'` tidak cocok
+dengan pola itu: ada stripnya. Setiap pemasangan omp Windows yang berkasnya
+dibuat 3.0.0 ke atas karena itu tidak pernah terlihat sebagai terpasang, dan
+`Set-CooperAllHarness` melewati seluruh blok omp — **baseUrl dan apiKey-nya
+tidak pernah ditulis** saat dev berganti LAN/VPN atau mengganti token.
+
+Pemasangan lama justru selamat: berkasnya masih menyimpan kunci `cooperagent`
+di sampingnya.
+
+`Get-OmpStoredKey` dan `Get-OmpStoredGateway` punya cacat yang sama lewat
+`-like 'cooperagent*'`, jadi pembacaannya ikut buta. Yang tidak bermasalah:
+`Set-OmpBaseUrl` dan `Set-OmpApiKey` mengenali provider dari baris `baseUrl`-nya,
+bukan dari nama — keduanya akan bekerja, hanya tidak pernah dipanggil.
+
+Sisi bash tidak pernah terkena: regexnya menerima kedua nama sejak awal. Itu
+justru yang membuatnya bertahan — dev Linux tidak pernah mengalaminya, dan
+tidak ada satu pun uji yang MENJALANKAN sisi PowerShell omp.
+
+**Perubahan.**
+
+- `scripts/lib/OmpModels.ps1` — `Test-OmpNamaMilikKami`, satu fungsi, cermin
+  regex di `omp_models.sh`. Kedua pembaca memanggilnya.
+- `setup.ps1` — `Test-CooperOmpInstalled` memakai fungsi itu, tidak lagi mematok
+  polanya sendiri. Pesan "(3 provider: otomatis, localhost, server 2)" juga
+  dibetulkan: provider keduanya s1, bukan localhost, sejak 3.0.0.
+- `test/Test-OmpModels.ps1` (baru) — uji runtime di runner Windows: nama 3.0.0
+  dikenali, nama lama tetap dikenali, provider dev **tidak** diakui milik kita,
+  gateway berpindah dengan jalur `/upstream` utuh, kunci berbayar dev selamat.
+- `test/test-credential-gate.sh` — pagar paritas dari Linux.
+
+**Kenapa polanya disatukan, bukan sekadar diperbaiki di tiga tempat.** Tiga
+salinan dengan dua ejaan berbeda adalah persis bagaimana cacat ini lahir: nama
+berubah di satu tempat, dan tidak ada yang tahu dua tempat lain ikut berhenti
+cocok. Pagar paritasnya karena itu menjaga bahwa polanya **tetap satu fungsi**,
+bukan menjaga ejaannya.
+
+**Bukti.** `test-credential-gate.sh` bertambah empat pemeriksaan, dan saya
+buktikan memerah dengan mengembalikan `-like 'cooperagent*'`. Pagar paritas itu
+sempat merah atas kode yang sudah benar — ia mengenai komentar yang menjelaskan
+pola lamanya; kini komentar dibuang sebelum dicocokkan.
+
+`Test-OmpModels.ps1` **belum pernah dijalankan**: tidak ada PowerShell di mesin
+ini, dan runner Windows-lah yang akan membuktikannya pertama kali. Yang sudah
+diperiksa dari sini hanya kurung seimbang dan tiadanya non-ASCII di baris kode.
+
+**Dampak.** Dev omp Windows menjalankan `.\setup.ps1` sekali; sesudah itu ganti
+gateway dan token menyentuh omp seperti seharusnya. Yang di Linux/macOS tidak
+terpengaruh sama sekali.
+
+**Rollback.** Revert commit ini. Omp Windows kembali tidak terlihat; tidak ada
+yang lain yang bergantung padanya.
+
 ### Changed · 2026-09-17 — release-please dilepas, rilis diberi tag dengan tangan
 
 **Konteks.** Tiga kali dalam satu hari alur PR berhenti karena aturan, bukan
