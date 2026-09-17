@@ -10,6 +10,22 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [3.1.2](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.1...v3.1.2) (2026-09-17)
+
+
+### Perbaikan
+
+* **pi:** migrate stale cooperagent defaultProvider to cooper-agent ([c649cbb](https://github.com/LyKhan77/CooperAgent-cli/commit/c649cbb3e188e6d4fa16ea4569ba92503ea9ba12))
+* **pi:** migrate stale cooperagent defaultProvider to cooper-agent ([20a53c3](https://github.com/LyKhan77/CooperAgent-cli/commit/20a53c3cf5350a877da47a14ebe1e0162402a339))
+
+
+### Perkakas & CI
+
+* **judul-pr:** wajibkan prefiks conventional, pindah ke squash merge ([fdd2607](https://github.com/LyKhan77/CooperAgent-cli/commit/fdd26077e17d10e3af08aa40bf26dfbe804d1e74))
+* **judul-pr:** wajibkan prefiks conventional, pindah ke squash merge ([8be07fe](https://github.com/LyKhan77/CooperAgent-cli/commit/8be07feb9bfe9c8218dc09909c445ebfb4eb42b5))
+* **uji:** jalankan suite di lokal, CI tinggal memeriksa ([246137a](https://github.com/LyKhan77/CooperAgent-cli/commit/246137a70741f22a2ef20e6f3cd64cd47e60bc6a))
+* **uji:** jalankan suite di lokal, CI tinggal memeriksa ([112dc27](https://github.com/LyKhan77/CooperAgent-cli/commit/112dc2729a0b0dd8fea845010fdf428ac630ec9e))
+
 ## [3.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.0...v3.1.1) (2026-09-12)
 
 
