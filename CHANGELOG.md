@@ -627,6 +627,58 @@ menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
 bernomor di atas menyebut rilis mana yang membawanya.
 
 
+### Fixed · 2026-09-17 — token dev pi-saja tidak pernah terbaca
+
+**Konteks.** `stored_token` membaca dari grok, lalu omp, lalu pi. Cabang pi
+berada **di dalam** cabang omp: indentasinya menyatakan sejajar, `fi` gandanya
+menyatakan bersarang.
+
+```bash
+if [ -z "$v" ] && installed_omp; then
+    v="$(omp_api_key_of ...)"
+    case "$v" in ca_*) ;; *) v="" ;; esac
+if [ -z "$v" ] && installed_pi; then     # <- di dalam cabang omp
+    v="$(pi_api_key_of ...)"
+fi
+fi
+```
+
+Dev yang memasang **pi saja** karena itu tidak pernah sampai ke pembacaannya:
+layar "sudah terpasang" mengatakan *"tidak ada token di config — Permintaan ke
+gateway akan dijawab 401"* padahal tokennya ada di `models.json`. Lalu pilihan
+"Ganti alamat gateway" menolaknya dengan *"Tidak ada token untuk diverifikasi"*
+dan menyuruhnya menempel ulang token yang sudah benar — hanya untuk pindah
+LAN/VPN.
+
+`stored_gateway` tepat di atasnya datar dan benar, dan jalur `--endpoint` punya
+rantai fallback sendiri yang juga benar. Cacatnya hanya di satu fungsi — dan di
+cerminannya, `Get-CooperStoredToken` di `setup.ps1`, dengan bentuk yang sama
+persis.
+
+**Perubahan.**
+
+- `setup.sh` (`stored_token`) dan `setup.ps1` (`Get-CooperStoredToken`) —
+  ketiga pembacaan diratakan, masing-masing memvalidasi `ca_*`.
+- `setup.sh` — pesan galat jalur `--endpoint` menyebut satu berkas
+  (`~/.grok/config.toml`) padahal fallbacknya membaca tiga. Dev pi-saja
+  disuruh memperbaiki berkas yang memang tidak ia punya; kini ketiganya
+  disebut.
+- `test/test-credential-gate.sh` — bagian "dev pi-saja" dan pagar struktural
+  untuk sisi Windows.
+
+**Bukti.** Ujinya menjalankan `setup.sh` sungguhan terhadap `HOME` berisi pi
+saja, dan memeriksa **apa yang dibacakan kepada dev** — bukan nilai kembalian
+fungsinya. Sisi Windows diperiksa dari Linux tanpa PowerShell: ketiga pembacanya
+harus berada pada **kedalaman kurung yang sama**, dan yang bersarang terbaca
+lebih dalam. Ketiga pemeriksaan dibuktikan merah dengan mengembalikan bentuk
+bersarangnya di kedua berkas.
+
+**Dampak.** Dev yang memasang pi saja. Yang memasang grok atau omp di sampingnya
+tidak pernah terkena — tokennya terbaca lebih dulu dari sana, dan itulah yang
+menyembunyikan cacat ini.
+
+**Rollback.** Revert commit ini.
+
 ### Fixed · 2026-09-17 — omp tidak terlihat di Windows sejak 3.0.0
 
 **Konteks.** Ditemukan saat memeriksa apakah ganti gateway benar-benar menyentuh
