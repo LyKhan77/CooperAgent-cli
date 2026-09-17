@@ -137,6 +137,16 @@ try {
         ok "server MCP, extension, dan keybinding milik dev utuh"
     } else { no "config dev di luar kelolaan CooperAgent hilang" }
 
+    # Regresi: instalasi lama dengan defaultProvider "cooperagent" (tanpa
+    # strip, kunci yatim yang tidak lagi disentuh Merge-PiModels) harus
+    # dipindah ke "cooper-agent" -- kalau tidak, baseUrl-nya beku dan pi
+    # timeout diam-diam setiap kali gateway pindah LAN/VPN.
+    $legacySettings = Join-Path $tmp 'settings.legacy.json'
+    Write-Utf8 $legacySettings '{ "defaultProvider": "cooperagent" }'
+    $msLegacy = Merge-PiSettings $legacySettings $settingsTplPath
+    if ($msLegacy.defaultProvider -eq 'cooper-agent') { ok "defaultProvider cooperagent dipindah ke cooper-agent" }
+    else { no ("defaultProvider tidak dipindah: " + $msLegacy.defaultProvider) }
+
 }
 finally {
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue

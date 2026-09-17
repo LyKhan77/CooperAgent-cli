@@ -1,5 +1,5 @@
 {
-  "defaultProvider": "cooperagent",
+  "defaultProvider": "cooper-agent",
   "defaultModel": "__MODEL_ID__",
   "compaction": {
     "enabled": true,

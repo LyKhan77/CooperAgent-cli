@@ -759,6 +759,62 @@ kemudian, dan PR ini di-merge dengan **Squash**.
 Membalik salah satunya saja menghasilkan keadaan yang tidak pernah benar: pagar
 lama dengan squash membuat setiap perubahan terbit tanpa entri, pagar baru dengan
 merge commit menggandakan setiap entri.
+### Fixed · 2026-09-17 — pi menunjuk provider yang tidak dikelola siapa pun
+
+**Konteks.** `templates/pi-settings.json` menyetel `defaultProvider` ke
+`cooperagent` — nama tanpa strip, peninggalan sebelum penyatuan profil 3.0.0.
+`templates/pi-models.json` tidak pernah punya provider bernama itu, dan
+`Merge-PiModels`/`mergeModels` hanya mengelola provider yang **ada di template**.
+Nilai itu karena itu tidak pernah tersentuh siapa pun.
+
+Dua populasi, dua gejala, dan keduanya senyap dari sisi pemasang:
+
+- Pemasangan pra-3.0.0 masih menyimpan provider yatim `cooperagent` di
+  `models.json`. Ia dipertahankan apa adanya — memang begitu aturannya untuk
+  provider di luar template — sehingga `baseUrl`-nya **beku**. pi tetap menembak
+  alamat gateway lama setiap kali mesin pindah LAN/VPN, dan yang terlihat hanya
+  timeout.
+- Pemasangan 3.0.0 ke atas mendapat `cooperagent` dari template padahal provider
+  itu tidak ada di `models.json`. pi menjawab `Unknown provider "cooperagent"` —
+  bunyinya sama dengan galat 11 September, sebabnya lain.
+
+Yang membuatnya bertahan: `verify()` memeriksa `baseUrl` dan `apiKey` provider
+`cooper-agent`, dan provider itu selalu benar. Ia tidak pernah menanyakan
+provider mana yang sebenarnya dipakai pi.
+
+**Perubahan.**
+
+- `templates/pi-settings.json` — `defaultProvider` menjadi `cooper-agent`.
+- `scripts/lib/PiModels.ps1` (`Merge-PiSettings`) dan `scripts/lib/pi_json.mjs`
+  (`mergeSettings`) — nilai lama `cooperagent` dipindah ke nilai template. Hanya
+  nilai itu: `defaultProvider` lain adalah pilihan sadar dev dan tetap utuh.
+- `test/Test-PiModels.ps1` dan `test/test-pi-adapter.sh` — kasus regresi di
+  **kedua** jalur. Template yang benar tidak menolong pemasangan yang sudah ada;
+  yang menentukan adalah merge-nya benar-benar memindahkan nilai lama.
+
+**Bukti.** `test-pi-adapter.sh` bertambah tiga pemeriksaan: template menunjuk
+provider yang benar-benar ada di `pi-models.json`, merge memindahkan
+`cooperagent`, dan pilihan dev tidak ikut terbawa. Dengan template dikembalikan
+ke `cooperagent`, yang pertama merah; dengan cabang migrasinya dibuang, yang
+kedua merah. `Test-PiModels.ps1` 13/13 di job Windows. Direproduksi manual:
+gateway dipindah LAN→VPN lewat `setup.ps1`, pi timeout ke IP lama; sesudah
+patch, provider aktif ikut pindah dan pi menjawab.
+
+**Dampak.** **Semua** pemasangan pi sejak 3.0.0, bukan hanya peninggalan —
+templatnya sendiri yang menulis nilai buruk itu. Satu kali `setup`
+memindahkannya; tidak ada yang perlu disunting tangan.
+
+**Rollback.** Revert commit ini mengembalikan template ke `cooperagent` sekaligus
+mematikan migrasinya — artinya mengembalikan bug-nya, pada kedua populasi. Bila
+yang ingin dibatalkan hanya migrasi paksanya (mis. ada dev yang sengaja menamai
+providernya sendiri `cooperagent`), buang cabang `elseif`/`else if`-nya saja dan
+biarkan perubahan template berdiri: pemasangan baru selamat, yang lama tidak
+tersentuh.
+
+**Yang belum dibereskan.** `verify()` masih tidak pernah memeriksa provider mana
+yang dipakai pi — ia mencetak "konfigurasi pi sesuai kontrak" sementara pi
+merutekan lewat provider lain. Perbaikan ini menyembuhkan satu nilai buruk yang
+diketahui, bukan titik butanya.
 
 ### Fixed · 2026-09-12 — omp juga tidak tahu modelnya bisa melihat
 
