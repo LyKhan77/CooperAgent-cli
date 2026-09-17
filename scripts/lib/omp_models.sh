@@ -140,7 +140,7 @@ omp_set_base_url() { # $1 = models.yml  $2 = gateway lama  $3 = gateway baru
 # hilang. Provider dev tidak dilihat sama sekali, dan `supportsImages: false`
 # yang ia tulis sendiri di provider kami tetap dihormati -- itu pilihan sadar,
 # bukan kelalaian.
-OMP_MANAGED_PROVIDERS="${OMP_MANAGED_PROVIDERS:-cooper-agent cooper-s1 cooper-s2 cooperagent}"
+OMP_MANAGED_PROVIDERS="${OMP_MANAGED_PROVIDERS:-cooper-agent cooper-s1 cooper-s2 cooper-s3 cooperagent}"
 
 omp_ensure_supports_images() { # $1 = models.yml
     awk -v managed="$OMP_MANAGED_PROVIDERS" '

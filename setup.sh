@@ -271,7 +271,7 @@ esac
 # Seksi yang DIKELOLA CooperAgent. Apa pun di luar daftar ini milik dev --
 # server MCP, preferensi [ui], model tambahan -- dan dipakai untuk memberi tahu
 # dengan jujur apa yang akan hilang bila ia memilih tulis-ulang penuh.
-MANAGED_SECTIONS="[cli] [features] [session] [memory] [models] [model.cooper-agent] [model.cooper-s1] [model.cooper-s2]"
+MANAGED_SECTIONS="[cli] [features] [session] [memory] [models] [model.cooper-agent] [model.cooper-s1] [model.cooper-s2] [model.cooper-s3]"
 
 # Nama baru DULU, nama lama sebagai jalur mundur.
 #
@@ -466,6 +466,23 @@ min_p = 0.0
 repeat_penalty = 1.0
 presence_penalty = 0.0
 api_key = "${api_key_value}"
+
+[model.cooper-s3]
+model = "${DEFAULT_MODEL_NAME}"
+base_url = "${gw}/api/v1/upstream/s3"
+name = "CooperAgent @ server 3 (langsung)"
+description = "Langsung ke server 3, menembus routing gateway -- tanpa failover"
+api_backend = "chat_completions"
+context_window = ${CONTRACT_CONTEXT_WINDOW}
+max_completion_tokens = ${CONTRACT_MAX_TOKENS}
+max_tokens = ${CONTRACT_MAX_TOKENS}
+max_output_tokens = ${CONTRACT_MAX_TOKENS}
+temperature = 1.0
+top_p = 0.95
+min_p = 0.0
+repeat_penalty = 1.0
+presence_penalty = 0.0
+api_key = "${api_key_value}"
 EOF
 
     # Nama profil lama diganti SEBELUM merge, sama seperti scripts/setup-dev.sh.
@@ -570,6 +587,14 @@ stored_gateway() {
     [ -z "$v" ] && installed_pi && v="$(pi_gateway_of "$PI_MODELS_PATH" || true)"
     printf '%s' "$v"
 }
+# Ketiganya SEJAJAR, bukan bersarang.
+#
+# Sampai 17 September 2026 cabang pi berada DI DALAM cabang omp: indentasinya
+# menyatakan sejajar, `fi` gandanya menyatakan bersarang. Dev yang hanya
+# memasang pi karena itu dibacakan "tidak ada token di config" padahal tokennya
+# ada di models.json -- lalu ditolak saat hendak pindah gateway, dan disuruh
+# menempel ulang token yang sudah benar. `stored_gateway` di atas tidak pernah
+# punya cacat ini; hanya fungsi ini, dan cerminannya di setup.ps1.
 stored_token() {
     local v=""
     if installed_grok; then
@@ -580,9 +605,10 @@ stored_token() {
     if [ -z "$v" ] && installed_omp; then
         v="$(omp_api_key_of "$OMP_YML_PATH" || true)"
         case "$v" in ca_*) ;; *) v="" ;; esac
+    fi
     if [ -z "$v" ] && installed_pi; then
         v="$(pi_api_key_of "$PI_MODELS_PATH" || true)"
-    fi
+        case "$v" in ca_*) ;; *) v="" ;; esac
     fi
     printf '%s' "$v"
 }
@@ -676,7 +702,8 @@ if [ -n "$SWITCH_ONLY" ]; then
     [ -z "$EXISTING_KEY" ] && installed_omp && EXISTING_KEY="$(omp_api_key_of "$OMP_YML_PATH" || true)"
     [ -z "$EXISTING_KEY" ] && installed_pi && EXISTING_KEY="$(pi_api_key_of "$PI_MODELS_PATH" || true)"
     if [ -z "$EXISTING_KEY" ]; then
-        echo -e "${RED}${S_NO} Tidak menemukan api_key di ~/.grok/config.toml.${NC}"
+        echo -e "${RED}${S_NO} Tidak menemukan token di config harness mana pun.${NC}"
+        echo -e "${YELLOW}    Dicari di: ~/.grok/config.toml, ~/.omp/agent/models.yml, ~/.pi/agent/models.json${NC}"
         echo -e "${YELLOW}Jalankan setup penuh dulu: bash setup.sh${NC}"
         exit 1
     fi

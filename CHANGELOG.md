@@ -10,34 +10,24 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
-## [Unreleased]
+## [3.1.2](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.1...v3.1.2) (2026-09-17)
+
+Rilis pertama yang diberi tag dengan tangan. Seksi ini tidak lagi ditulis
+release-please.
 
 ### Perbaikan
 
-* **pi:** migrasi `defaultProvider` lama `cooperagent` (tanpa strip) ke `cooper-agent`
+* **pi:** migrasi `defaultProvider` lama `cooperagent` ke `cooper-agent` ([20a53c3](https://github.com/LyKhan77/CooperAgent-cli/commit/20a53c3))
+* **omp:** kenali provider `cooper-*` di sisi Windows — omp dilewati sepenuhnya saat ganti gateway sejak 3.0.0 ([1c6d7dd](https://github.com/LyKhan77/CooperAgent-cli/commit/1c6d7dd))
+* **setup:** baca token pi meski omp dan grok tidak terpasang ([67b24c4](https://github.com/LyKhan77/CooperAgent-cli/commit/67b24c4))
 
-  **Konteks:** `templates/pi-settings.json` menyetel `defaultProvider` ke `cooperagent`,
-  tetapi `Merge-PiModels`/`mergeModels` cuma mengelola key `cooper-agent` (dengan strip).
-  Instalasi yang sudah punya `defaultProvider: cooperagent` tidak pernah dimigrasi, jadi
-  baseUrl-nya beku dan tidak ikut pindah saat gateway diganti LAN/VPN — pi timeout diam-diam
-  ke alamat gateway yang sudah tidak berlaku.
+### Perkakas & CI
 
-  **Perubahan:**
-  - `templates/pi-settings.json`: default `defaultProvider` diganti ke `cooper-agent`
-  - `scripts/lib/PiModels.ps1` (`Merge-PiSettings`): migrasi nilai lama `cooperagent` → `cooper-agent`
-  - `scripts/lib/pi_json.mjs` (`mergeSettings`): migrasi setara untuk jalur bash/mac/linux
-  - `test/Test-PiModels.ps1`: kasus regresi untuk migrasi ini
+* lepas release-please dan seluruh gerbang PR; rilis diberi tag dengan tangan ([dcf1687](https://github.com/LyKhan77/CooperAgent-cli/commit/dcf1687))
 
-  **Bukti:** `test/Test-PiModels.ps1` — 13/13 lulus, termasuk kasus baru
-  "defaultProvider cooperagent dipindah ke cooper-agent". Direproduksi manual: gateway
-  dipindah LAN→VPN pakai `setup.ps1`, pi timeout ke IP lama; sesudah patch, provider aktif
-  ikut pindah dan pi menjawab.
-
-  **Dampak:** hanya instalasi yang masih punya `defaultProvider: cooperagent` peninggalan
-  (sebelum migrasi profil model 3.0.0). Instalasi baru sudah pakai `cooper-agent` sejak awal.
-
-  **Rollback:** revert commit ini; instalasi yang sudah bermigrasi lewat setup ulang perlu
-  menimpa manual `defaultProvider` balik ke `cooperagent` di `settings.json` bila diperlukan.
+  Dua langkah antaranya — pagar judul dibalik, lalu suite dipindah ke lokal —
+  dibuat dan dicabut kembali dalam jendela rilis yang sama, jadi tidak ada yang
+  pernah terbit darinya. Ketiganya dicatat utuh di **Catatan rinci**.
 
 ## [3.1.1](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.0...v3.1.1) (2026-09-12)
 
@@ -646,12 +636,247 @@ catatan bahwa medan itu belum dibaca klien mana pun.
 
 ## Catatan rinci
 
-Seksi di atas ditulis otomatis oleh release-please: satu baris per commit.
-Seksi ini berisi catatan panjangnya — konteks, bukti, dampak, dan cara mundur —
-untuk perubahan yang membutuhkannya. Semuanya **sudah rilis**; tanggal pada tiap
-judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
-rilis mana yang membawanya.
+Seksi bernomor di atas: satu baris per perubahan, ditulis saat merilis. Sampai
+17 September 2026 ia diisi otomatis oleh release-please; sejak itu ditulis
+tangan bersama tag rilisnya.
 
+Seksi ini berisi catatan panjangnya — konteks, bukti, dampak, dan cara mundur —
+untuk perubahan yang membutuhkannya. Ditulis saat perubahannya dikerjakan, tidak
+menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
+bernomor di atas menyebut rilis mana yang membawanya.
+
+
+### Added · 2026-09-18 — verify menyebut provider yang sebenarnya dipakai pi
+
+**Konteks.** Titik buta yang menyembunyikan bug `defaultProvider` selama
+berbulan-bulan, dan yang perbaikannya pada 17 September tidak menutup: `verify()`
+memeriksa `baseUrl` dan `apiKey` milik provider `cooper-agent`, lalu mencetak
+*"konfigurasi pi sesuai kontrak"* — tanpa pernah menanyakan provider mana yang
+benar-benar dipakai pi.
+
+Provider `cooper-agent` memang selalu benar: ia dirender ulang dari template
+setiap kali setup berjalan. Tetapi pi merutekan lewat `defaultProvider`, dan
+hanya provider yang **ada di template** yang `baseUrl`-nya ikut pindah saat
+gateway berganti. `defaultProvider` yang menunjuk ke luar sana beku — dan verify
+mencetak tanda centang di atasnya.
+
+Perbaikan 17 September menyembuhkan satu nilai buruk yang diketahui
+(`cooperagent` yatim). Ini menutup kelasnya.
+
+**Perubahan.**
+
+- `scripts/lib/pi_verify.sh` dan `scripts/lib/PiModels.ps1` — peringatan bila
+  `defaultProvider` berada di luar `cooper-agent`/`cooper-s1`/`cooper-s2`,
+  menyebut nama providernya **dan akibatnya**.
+- `scripts/lib/pi_json.mjs` — `get settings <berkas> defaultProvider`; pembaca
+  itu belum ada.
+
+**PERINGATAN, bukan kegagalan.** Provider pilihan dev adalah keputusan sah, dan
+installer sengaja mempertahankannya — `test-pi-adapter.sh` bahkan menegaskan
+`anthropic-saya` harus utuh. Menggagalkan verify karenanya berarti menghukum dev
+atas keputusan yang kita hormati sendiri, alasan yang sama persis dengan
+perlakuan terhadap `AGENTS.md` yang disunting dev di berkas yang sama.
+
+**Bukti.** Fixture e2e `test-pi-adapter.sh` memang memakai
+`defaultProvider: anthropic-saya`, jadi peringatannya diuji pada jalur verify
+yang sungguhan — bukan pada fungsi yang dipanggil terpisah. Tiga pemeriksaan:
+peringatan muncul dan menyebut namanya, ia menyebut akibatnya, dan verify tetap
+lulus. Ditambah kebalikannya: provider terkelola **tidak** memicu peringatan apa
+pun — peringatan yang muncul pada keadaan yang benar akan dilatih untuk
+diabaikan, dan yang diabaikan sama saja dengan tidak ada.
+
+Dibuktikan merah dengan membuang blok peringatannya. Sisi Windows diperiksa pada
+teks dari Linux; runner Windows yang menjalankannya.
+
+**Dampak.** Dev yang `defaultProvider`-nya menunjuk provider sendiri kini diberi
+tahu sekali setiap verify. Yang memakai provider terkelola tidak melihat
+perubahan apa pun.
+
+### Fixed · 2026-09-18 — mendorong tag menjalankan seluruh suite
+
+**Konteks.** `git push origin v3.1.2` menjalankan seluruh suite — tiga menit —
+untuk mendorong satu objek tag 207 byte. Commit yang ditunjuknya sudah diuji
+beberapa detik sebelumnya, saat `git push origin main`.
+
+Hook `pre-push` hanya membedakan satu hal: penghapusan branch, yang SHA lokalnya
+nol. Push tag terlihat sama seperti push branch baginya.
+
+**Perubahan.** `scripts/hooks/pre-push` melewati ref `refs/tags/*` **bila commit
+yang ditunjuknya sudah ada di remote**. Tag yang menunjuk commit yang belum
+terdorong justru membawa kodenya, jadi ia tetap diuji — begitu pula bila keadaan
+remote tidak bisa dipastikan dari sini. Ragu berarti menguji, bukan melewati.
+
+**Bukti.** `test-hook-pre-push.sh` 8 → 10. Kasus keduanya dibuktikan merah
+dengan melewati tag tanpa syarat: *"kode bisa sampai ke origin tanpa diuji"*.
+Pembuktian itu sempat gagal menunjukkan apa pun karena label `ok` dan `no`-nya
+berbeda sehingga pencariannya meleset — keduanya kini sama.
+
+**Dampak.** Mendorong tag rilis tidak lagi menunggu tiga menit.
+
+### Fixed · 2026-09-17 — token dev pi-saja tidak pernah terbaca
+
+**Konteks.** `stored_token` membaca dari grok, lalu omp, lalu pi. Cabang pi
+berada **di dalam** cabang omp: indentasinya menyatakan sejajar, `fi` gandanya
+menyatakan bersarang.
+
+```bash
+if [ -z "$v" ] && installed_omp; then
+    v="$(omp_api_key_of ...)"
+    case "$v" in ca_*) ;; *) v="" ;; esac
+if [ -z "$v" ] && installed_pi; then     # <- di dalam cabang omp
+    v="$(pi_api_key_of ...)"
+fi
+fi
+```
+
+Dev yang memasang **pi saja** karena itu tidak pernah sampai ke pembacaannya:
+layar "sudah terpasang" mengatakan *"tidak ada token di config — Permintaan ke
+gateway akan dijawab 401"* padahal tokennya ada di `models.json`. Lalu pilihan
+"Ganti alamat gateway" menolaknya dengan *"Tidak ada token untuk diverifikasi"*
+dan menyuruhnya menempel ulang token yang sudah benar — hanya untuk pindah
+LAN/VPN.
+
+`stored_gateway` tepat di atasnya datar dan benar, dan jalur `--endpoint` punya
+rantai fallback sendiri yang juga benar. Cacatnya hanya di satu fungsi — dan di
+cerminannya, `Get-CooperStoredToken` di `setup.ps1`, dengan bentuk yang sama
+persis.
+
+**Perubahan.**
+
+- `setup.sh` (`stored_token`) dan `setup.ps1` (`Get-CooperStoredToken`) —
+  ketiga pembacaan diratakan, masing-masing memvalidasi `ca_*`.
+- `setup.sh` — pesan galat jalur `--endpoint` menyebut satu berkas
+  (`~/.grok/config.toml`) padahal fallbacknya membaca tiga. Dev pi-saja
+  disuruh memperbaiki berkas yang memang tidak ia punya; kini ketiganya
+  disebut.
+- `test/test-credential-gate.sh` — bagian "dev pi-saja" dan pagar struktural
+  untuk sisi Windows.
+
+**Bukti.** Ujinya menjalankan `setup.sh` sungguhan terhadap `HOME` berisi pi
+saja, dan memeriksa **apa yang dibacakan kepada dev** — bukan nilai kembalian
+fungsinya. Sisi Windows diperiksa dari Linux tanpa PowerShell: ketiga pembacanya
+harus berada pada **kedalaman kurung yang sama**, dan yang bersarang terbaca
+lebih dalam. Ketiga pemeriksaan dibuktikan merah dengan mengembalikan bentuk
+bersarangnya di kedua berkas.
+
+**Dampak.** Dev yang memasang pi saja. Yang memasang grok atau omp di sampingnya
+tidak pernah terkena — tokennya terbaca lebih dulu dari sana, dan itulah yang
+menyembunyikan cacat ini.
+
+**Rollback.** Revert commit ini.
+
+### Fixed · 2026-09-17 — omp tidak terlihat di Windows sejak 3.0.0
+
+**Konteks.** Ditemukan saat memeriksa apakah ganti gateway benar-benar menyentuh
+ketiga harness. Di Linux/macOS: ya, semuanya lewat satu pintu
+(`apply_to_all_harness`). Di Windows: **omp dilewati sepenuhnya.**
+
+`Test-CooperOmpInstalled` mendeteksi omp dengan `-match '^  cooperagent:'` —
+nama sebelum penyatuan profil 3.0.0. `templates/omp-models.yml` menulis
+`cooper-agent`, `cooper-s1`, `cooper-s2`, dan `'  cooper-agent:'` tidak cocok
+dengan pola itu: ada stripnya. Setiap pemasangan omp Windows yang berkasnya
+dibuat 3.0.0 ke atas karena itu tidak pernah terlihat sebagai terpasang, dan
+`Set-CooperAllHarness` melewati seluruh blok omp — **baseUrl dan apiKey-nya
+tidak pernah ditulis** saat dev berganti LAN/VPN atau mengganti token.
+
+Pemasangan lama justru selamat: berkasnya masih menyimpan kunci `cooperagent`
+di sampingnya.
+
+`Get-OmpStoredKey` dan `Get-OmpStoredGateway` punya cacat yang sama lewat
+`-like 'cooperagent*'`, jadi pembacaannya ikut buta. Yang tidak bermasalah:
+`Set-OmpBaseUrl` dan `Set-OmpApiKey` mengenali provider dari baris `baseUrl`-nya,
+bukan dari nama — keduanya akan bekerja, hanya tidak pernah dipanggil.
+
+Sisi bash tidak pernah terkena: regexnya menerima kedua nama sejak awal. Itu
+justru yang membuatnya bertahan — dev Linux tidak pernah mengalaminya, dan
+tidak ada satu pun uji yang MENJALANKAN sisi PowerShell omp.
+
+**Perubahan.**
+
+- `scripts/lib/OmpModels.ps1` — `Test-OmpNamaMilikKami`, satu fungsi, cermin
+  regex di `omp_models.sh`. Kedua pembaca memanggilnya.
+- `setup.ps1` — `Test-CooperOmpInstalled` memakai fungsi itu, tidak lagi mematok
+  polanya sendiri. Pesan "(3 provider: otomatis, localhost, server 2)" juga
+  dibetulkan: provider keduanya s1, bukan localhost, sejak 3.0.0.
+- `test/Test-OmpModels.ps1` (baru) — uji runtime di runner Windows: nama 3.0.0
+  dikenali, nama lama tetap dikenali, provider dev **tidak** diakui milik kita,
+  gateway berpindah dengan jalur `/upstream` utuh, kunci berbayar dev selamat.
+- `test/test-credential-gate.sh` — pagar paritas dari Linux.
+
+**Kenapa polanya disatukan, bukan sekadar diperbaiki di tiga tempat.** Tiga
+salinan dengan dua ejaan berbeda adalah persis bagaimana cacat ini lahir: nama
+berubah di satu tempat, dan tidak ada yang tahu dua tempat lain ikut berhenti
+cocok. Pagar paritasnya karena itu menjaga bahwa polanya **tetap satu fungsi**,
+bukan menjaga ejaannya.
+
+**Bukti.** `test-credential-gate.sh` bertambah empat pemeriksaan, dan saya
+buktikan memerah dengan mengembalikan `-like 'cooperagent*'`. Pagar paritas itu
+sempat merah atas kode yang sudah benar — ia mengenai komentar yang menjelaskan
+pola lamanya; kini komentar dibuang sebelum dicocokkan.
+
+`Test-OmpModels.ps1` **belum pernah dijalankan**: tidak ada PowerShell di mesin
+ini, dan runner Windows-lah yang akan membuktikannya pertama kali. Yang sudah
+diperiksa dari sini hanya kurung seimbang dan tiadanya non-ASCII di baris kode.
+
+**Dampak.** Dev omp Windows menjalankan `.\setup.ps1` sekali; sesudah itu ganti
+gateway dan token menyentuh omp seperti seharusnya. Yang di Linux/macOS tidak
+terpengaruh sama sekali.
+
+**Rollback.** Revert commit ini. Omp Windows kembali tidak terlihat; tidak ada
+yang lain yang bergantung padanya.
+
+### Changed · 2026-09-17 — release-please dilepas, rilis diberi tag dengan tangan
+
+**Konteks.** Tiga kali dalam satu hari alur PR berhenti karena aturan, bukan
+karena kode: judul ditolak, lalu judul ditolak lagi dengan alasan yang
+berlawanan, lalu PR harus dibuka ulang karena body-nya tidak memuat checklist.
+Kalimat yang mengakhirinya: *"sumpah ini bingung sekali."*
+
+Akarnya satu, dan bukan salah satu dari aturan itu. release-please menentukan
+rilis dari pesan commit, sementara GitHub menaruh judul PR ke badan merge commit
+— sehingga judul PR ikut terbaca sebagai commit, dan satu perubahan tercatat dua
+kali. Setiap tambalan melahirkan tambalan berikutnya:
+
+- larangan prefiks di judul PR (karena merge commit menggandakan),
+- lalu **kewajiban** prefiks (karena squash membuat judul menjadi commit),
+- lalu skrip dan uji yang menjaga keduanya tetap sinkron dengan workflow-nya.
+
+Tiga lapis aturan untuk satu masalah yang tidak dimiliki siapa pun yang memberi
+tag dengan tangan.
+
+**Perubahan.**
+
+- Dihapus: `.github/workflows/pr-title.yml`, `.github/workflows/release-please.yml`,
+  `release-please-config.json`, `.release-please-manifest.json`,
+  `test/test-pr-title-guard.sh`, `test/test-checklist-uji.sh`.
+- `.github/workflows/test.yml` → `windows-powershell.yml`, disisakan **satu job**:
+  parser PowerShell 5.1 dan `Test-PiModels.ps1`.
+- `scripts/pr.sh` — pagar judul dan penanaman checklist dibuang. Yang tersisa:
+  jalankan suite, push, cetak tautan. Judul PR bebas.
+- `docs/versioning.md`, `AGENTS.md` — alur rilis ditulis ulang untuk `git tag`.
+
+**Kenapa job Windows tidak ikut dilepas.** Alasannya tidak pernah sama dengan
+yang lain. Ia tidak menuntut apa pun dari siapa pun — tidak ada judul yang harus
+berbentuk tertentu, tidak ada checklist yang harus diisi — dan ia memeriksa
+satu-satunya hal yang tidak bisa diperiksa dari mesin dev mana pun di tim ini:
+`.ps1`. Menghitung kurung bukan parser; `PiModels.ps1` pernah punya kurung
+seimbang sempurna dan tetap gagal di-parse, dan `setup.ps1` mati untuk setiap dev
+Windows sampai v1.4.0 terbit.
+
+**Yang hilang, dan itu memang hilang.** CHANGELOG tidak lagi terisi sendiri, dan
+versi tidak lagi naik sendiri. Keduanya kini keputusan manusia yang harus
+diingat saat merilis. Di repo dengan satu penulis tetap dan beberapa rilis
+sebulan, ongkos mengetik `git tag` lebih kecil daripada ongkos mengingat tiga
+lapis aturan judul — tetapi ongkosnya bukan nol, dan lupa menaikkan
+`version.txt` tidak akan digagalkan oleh apa pun.
+
+**Dampak.** Dua baris kembar peninggalan merge commit `#31` dan `#33` menjadi
+tidak relevan: tidak ada lagi PR rilis yang akan memuatnya. Tulis entri
+rilisnya dengan tangan saat memberi tag.
+
+**Rollback.** Kembalikan keempat berkas konfigurasi dan kedua workflow dari
+riwayat git. Pagar judul harus ikut kembali, dengan polaritas yang sesuai
+strategi merge yang dipilih — itulah yang membuatnya mahal sejak awal.
 
 ### Changed · 2026-09-17 — suite pindah ke lokal, CI tinggal memeriksa
 

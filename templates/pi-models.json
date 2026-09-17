@@ -47,6 +47,22 @@
           "maxTokens": __MAX_TOKENS__
         }
       ]
+    },
+    "cooper-s3": {
+      "name": "CooperAgent server 3 (langsung)",
+      "baseUrl": "__GATEWAY__/v1/upstream/s3",
+      "api": "openai-completions",
+      "authHeader": true,
+      "apiKey": "__API_KEY__",
+      "models": [
+        {
+          "id": "__MODEL_ID__",
+          "name": "CooperAgent @ s3 — tanpa failover",
+          "input": ["text", "image"],
+          "contextWindow": __CONTEXT_WINDOW__,
+          "maxTokens": __MAX_TOKENS__
+        }
+      ]
     }
   }
 }

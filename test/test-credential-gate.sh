@@ -207,6 +207,47 @@ grep -qi 'tidak ada token di config' <<<"$OUT5" \
   && ok "kunci lama dikatakan bukan kredensial, bukan didiamkan" \
   || bad "kunci `dev-nama@device` diterima seolah token"
 
+# ── 4c. dev pi-saja: tokennya harus terbaca ───────────────────────────────────
+#
+# `stored_token` membaca dari grok, lalu omp, lalu pi. Sampai 17 September 2026
+# cabang pi berada DI DALAM cabang omp -- indentasinya menyatakan sejajar, `fi`
+# gandanya menyatakan bersarang. Dev yang memasang pi SAJA karena itu dibacakan
+# "tidak ada token di config" padahal tokennya ada, lalu ditolak saat hendak
+# pindah gateway dan disuruh menempel ulang token yang sudah benar.
+#
+# Diuji lewat setup.sh sungguhan, bukan dengan memanggil fungsinya: yang penting
+# bukan nilai kembaliannya, melainkan apa yang dibacakan kepada dev.
+echo
+echo $'\033[1mdev pi-saja:\033[0m'
+H6="$T/home6"; mkdir -p "$H6/.pi/agent"
+cat > "$H6/.pi/agent/models.json" <<JSON
+{
+  "providers": {
+    "cooper-agent": {
+      "baseUrl": "http://127.0.0.1:$PORT/v1",
+      "apiKey": "$VALID",
+      "models": [{"id": "intercon-agent", "name": "CooperAgent"}]
+    }
+  }
+}
+JSON
+cat > "$H6/.pi/agent/settings.json" <<'JSON'
+{ "defaultProvider": "cooper-agent", "compaction": {"enabled": true, "reserveTokens": 26215} }
+JSON
+OUT6="$(printf '6\n' | HOME="$H6" timeout 60 bash "$REPO/setup.sh" 2>&1)"
+
+grep -qi 'sudah terpasang' <<<"$OUT6" \
+  && ok "dev pi-saja dikenali sebagai sudah terpasang" \
+  || bad "pemasangan pi-saja tidak terlihat"
+grep -qi 'tidak ada token di config' <<<"$OUT6" \
+  && bad "token pi tidak terbaca" "dev disuruh menempel ulang token yang sudah benar" \
+  || ok "token pi terbaca meski omp dan grok tidak terpasang"
+# Dan karena tokennya terbaca, kredensialnya benar-benar diperiksa ke gateway --
+# bukan dilewati dengan alasan tidak ada yang bisa diperiksa.
+grep -qiE 'kredensial: .*(sah|DITOLAK)' <<<"$OUT6" \
+  && ok "kredensial pi diperiksa ke gateway" \
+  || bad "kredensial pi tidak diperiksa" "layar melewatinya"
+
 # ── 5. sisi Windows tidak boleh tertinggal ────────────────────────────────────
 #
 # Diperiksa pada TEKS, bukan dengan menjalankannya: runner ini Linux, dan
@@ -228,6 +269,61 @@ grep -q 'Test-CooperGrokInstalled' "$REPO/setup.ps1" \
 grep -q 'Set-CooperAllHarness' "$REPO/setup.ps1" \
   && ok "-Endpoint menyentuh SEMUA harness, bukan Grok saja" \
   || bad "-Endpoint Windows masih hanya menulis config Grok"
+
+# Nama provider omp: sisi Windows harus mengenali nama yang BENAR-BENAR ditulis
+# templates/omp-models.yml hari ini, bukan nama sebelum penyatuan profil 3.0.0.
+#
+# Diperiksa pada TEKS karena runner ini Linux. Yang dijaga bukan ejaan regexnya,
+# melainkan bahwa polanya hidup di SATU fungsi -- tiga salinan dengan dua ejaan
+# berbeda adalah persis bagaimana cacat ini lahir dan bertahan.
+grep -q 'function Test-OmpNamaMilikKami' "$REPO/scripts/lib/OmpModels.ps1" \
+  && ok "nama provider omp dikenali lewat satu fungsi" \
+  || bad "pola nama provider omp tersebar lagi di beberapa tempat"
+# Cacat bersarang yang sama ada di Get-CooperStoredToken. Bentuknya bisa
+# diperiksa dari sini tanpa PowerShell: ketiga pembacanya harus berada pada
+# KEDALAMAN KURUNG yang sama. Yang bersarang akan terbaca lebih dalam.
+if python3 - "$REPO/setup.ps1" <<'PYEOF'
+import re, sys
+baris = open(sys.argv[1], encoding="utf-8").read().split("\n")
+i = next(n for n, b in enumerate(baris) if b.startswith("function Get-CooperStoredToken"))
+dalam, kedalaman = 0, {}
+for b in baris[i:]:
+    telanjang = re.sub(r"#.*$", "", b)
+    for nama in ("Test-CooperGrokInstalled", "Test-CooperOmpInstalled", "Test-CooperPiInstalled"):
+        if nama in telanjang:
+            kedalaman[nama] = dalam
+    dalam += telanjang.count("{") - telanjang.count("}")
+    if dalam == 0 and "}" in telanjang and b.startswith("}"):
+        break
+sys.exit(0 if len(set(kedalaman.values())) == 1 and len(kedalaman) == 3 else 1)
+PYEOF
+then
+    ok "ketiga pembaca token di setup.ps1 sejajar, tidak bersarang"
+else
+    bad "pembaca token di setup.ps1 bersarang -- dev pi-saja tidak terbaca di Windows"
+fi
+
+tanpa_komentar() { grep -vE '^[[:space:]]*#' "$1"; }
+# Peringatan provider aktif harus ada di KEDUA jalur verify. Jalur bash diuji
+# sungguhan di test-pi-adapter.sh; sisi Windows diperiksa pada teks, karena
+# runner ini Linux.
+tanpa_komentar "$REPO/scripts/lib/PiModels.ps1" | grep -q "pi memakai provider" \
+  && ok "verify Windows ikut memperingatkan provider di luar kelolaan" \
+  || bad "peringatan provider aktif hanya ada di jalur bash"
+tanpa_komentar "$REPO/scripts/lib/OmpModels.ps1" | grep -q "cooperagent\*'" \
+  && bad "OmpModels.ps1 masih memakai pola nama pra-3.0.0 (-like 'cooperagent*')" \
+  || ok "OmpModels.ps1 tidak lagi memakai pola nama pra-3.0.0"
+tanpa_komentar "$REPO/setup.ps1" | grep -q "'\^  cooperagent:'" \
+  && bad "Test-CooperOmpInstalled masih mencari '^  cooperagent:' -- omp tak terlihat" \
+  || ok "deteksi omp di setup.ps1 tidak lagi mematok nama pra-3.0.0"
+# Dan nama yang ditulis template harus benar-benar lolos fungsi itu. Diuji
+# sungguhan oleh test/Test-OmpModels.ps1 di runner Windows; di sini yang dijaga
+# adalah keduanya tidak berpisah diam-diam.
+for prov in $(grep -oE '^  [a-z0-9-]+:' "$REPO/templates/omp-models.yml" | tr -d ' :'); do
+    grep -q "cooper-(agent|s\[0-9\]+)" "$REPO/scripts/lib/OmpModels.ps1" \
+      || { bad "pola Windows tidak menerima $prov dari template"; break; }
+done
+ok "pola Windows sejajar dengan nama di templates/omp-models.yml"
 
 # `catch {}` KOSONG di sekitar probe whoami adalah bug aslinya: kegagalan
 # ditelan, lalu setup berjalan terus seolah tidak terjadi apa-apa.
@@ -273,7 +369,8 @@ done
 # Kurung yang tidak seimbang di sana tidak akan ketahuan sampai seorang dev
 # Windows menjalankannya.
 for f in setup.ps1 scripts/setup-dev.ps1 scripts/lib/OmpModels.ps1 \
-         scripts/lib/Credential.ps1 scripts/lib/PiModels.ps1 test/Test-PiModels.ps1; do
+         scripts/lib/Credential.ps1 scripts/lib/PiModels.ps1 \
+         test/Test-PiModels.ps1 test/Test-OmpModels.ps1; do
     nl="$(tr -cd '{' < "$REPO/$f" | wc -c)"; nr="$(tr -cd '}' < "$REPO/$f" | wc -c)"
     [ "$nl" = "$nr" ] && ok "$f: kurung kurawal seimbang ($nl)" \
         || bad "$f: kurung kurawal TIDAK seimbang ($nl buka, $nr tutup)"

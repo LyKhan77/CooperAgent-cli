@@ -17,7 +17,7 @@ pass=0; fail=0
 ok(){ printf "  ok   %s\n" "$1"; pass=$((pass+1)); }
 no(){ printf "  GAGAL %s — %s\n" "$1" "${2:-}"; fail=$((fail+1)); }
 
-WAJIB="cooper-agent cooper-s1 cooper-s2"
+WAJIB="cooper-agent cooper-s1 cooper-s2 cooper-s3"
 
 echo "ketiga profil ada di setiap sumber:"
 
@@ -43,12 +43,12 @@ echo "profil langsung menembus routing, bukan menyalin endpoint auto:"
 # cooper-s1 yang menunjuk /api/v1 biasa BUKAN alat banding -- ia diam-diam
 # ikut routing, dan hasil bandingnya bohong tanpa ada yang tahu.
 for f in templates/config.toml templates/omp-models.yml templates/pi-models.json setup.sh setup.ps1; do
-    for n in s1 s2; do
+    for n in s1 s2 s3; do
         grep -q "upstream/$n" "$ROOT/$f" \
             || no "$f menyebut upstream/$n" "tidak ada"
     done
 done
-ok "kelima sumber menyebut /upstream/s1 dan /upstream/s2"
+ok "kelima sumber menyebut /upstream/s1, /upstream/s2, dan /upstream/s3"
 
 echo "peringatan kehilangan failover ikut di tiap sumber:"
 for f in templates/config.toml templates/omp-models.yml setup.sh setup.ps1; do

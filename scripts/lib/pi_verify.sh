@@ -81,6 +81,31 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
         return 1
     fi
     echo "  [v] konfigurasi pi sesuai kontrak: baseUrl, token, compaction $got_reserve, model $model."
+
+    # Provider mana yang SEBENARNYA dipakai pi -- pertanyaan yang verify tidak
+    # pernah ajukan sampai 18 September 2026.
+    #
+    # Semua pemeriksaan di atas menyangkut provider `cooper-agent`, dan provider
+    # itu memang selalu benar: ia dirender ulang dari template setiap kali setup
+    # berjalan. Tetapi pi merutekan lewat `defaultProvider`, dan hanya provider
+    # yang ADA DI TEMPLATE yang baseUrl-nya ikut pindah saat gateway berganti.
+    # `defaultProvider` yang menunjuk ke luar sana karena itu beku -- dan verify
+    # mencetak "sesuai kontrak" di atasnya. Itulah kenapa `defaultProvider:
+    # cooperagent` yatim bertahan berbulan-bulan tanpa terlihat.
+    #
+    # PERINGATAN, bukan kegagalan: provider pilihan dev adalah keputusan sah,
+    # dan installer sengaja mempertahankannya. Menggagalkan verify karenanya
+    # berarti menghukum dev atas keputusan yang kita hormati sendiri -- alasan
+    # yang sama persis dengan AGENTS.md di bawah.
+    local dp
+    dp="$(pi_json_get settings "$settings" defaultProvider 2>/dev/null || true)"
+    case "$dp" in
+        cooper-agent|cooper-s1|cooper-s2|cooper-s3) ;;
+        "") echo "  [!] defaultProvider pi tidak terbaca — pi mungkin memakai provider lain." ;;
+        *)  echo "  [!] pi memakai provider '$dp', di luar kelolaan CooperAgent."
+            echo "      baseUrl-nya TIDAK ikut pindah saat gateway berganti LAN/VPN."
+            echo "      Bila itu tidak disengaja: setel defaultProvider ke cooper-agent." ;;
+    esac
     # Aturan yang BERBEDA adalah peringatan, bukan kegagalan.
     #
     # Installer sengaja mempertahankan AGENTS.md yang sudah disunting dev;

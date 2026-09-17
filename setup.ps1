@@ -114,7 +114,7 @@ if ([string]::IsNullOrWhiteSpace($SCRIPT_DIR)) { $SCRIPT_DIR = Split-Path -Paren
 # server MCP, preferensi [ui], model tambahan -- dan dipakai untuk memberi tahu
 # dengan jujur apa yang akan hilang bila ia memilih tulis-ulang penuh.
 $MANAGED_SECTIONS = @('[cli]','[features]','[session]','[memory]','[models]',
-                      '[model.cooper-agent]','[model.cooper-s1]','[model.cooper-s2]')
+                      '[model.cooper-agent]','[model.cooper-s1]','[model.cooper-s2]','[model.cooper-s3]')
 
 function Get-GrokConfigPath { Join-Path (Join-Path $env:USERPROFILE '.grok') 'config.toml' }
 
@@ -333,6 +333,17 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
         "max_completion_tokens = $ContractMaxTokens", "max_tokens = $ContractMaxTokens", "max_output_tokens = $ContractMaxTokens",
         "temperature = 1.0", "top_p = 0.95", "min_p = 0.0",
         "repeat_penalty = 1.0", "presence_penalty = 0.0",
+        "api_key = `"$apiKeyValue`"", "",
+        "[model.cooper-s3]",
+        "model = `"$DEFAULT_MODEL_NAME`"",
+        "base_url = `"$gw/api/v1/upstream/s3`"",
+        "name = `"CooperAgent @ server 3 (langsung)`"",
+        "description = `"Langsung ke server 3, menembus routing -- tanpa failover`"",
+        "api_backend = `"chat_completions`"",
+        "context_window = $ContractContextWindow",
+        "max_completion_tokens = $ContractMaxTokens", "max_tokens = $ContractMaxTokens", "max_output_tokens = $ContractMaxTokens",
+        "temperature = 1.0", "top_p = 0.95", "min_p = 0.0",
+        "repeat_penalty = 1.0", "presence_penalty = 0.0",
         "api_key = `"$apiKeyValue`""
     )
 
@@ -424,8 +435,17 @@ function Test-CooperGrokInstalled {
             ((Get-Content $GROK_CFG_PATH) -match '^\[model\.(cooper-agent|internal-qwen)'))
 }
 function Test-CooperOmpInstalled {
-    return ((Test-Path $OMP_YML_PATH) -and
-            ((Get-Content $OMP_YML_PATH) -match '^  cooperagent:'))
+    if (-not (Test-Path $OMP_YML_PATH)) { return $false }
+    # Nama provider dibaca lewat Test-OmpNamaMilikKami, bukan dipola di sini.
+    # Bentuk sebelumnya -- `-match '^  cooperagent:'` -- berhenti cocok sejak
+    # templates/omp-models.yml menulis `cooper-agent`, sehingga SETIAP pemasangan
+    # omp Windows yang dibuat 3.0.0 ke atas tidak terlihat sebagai terpasang.
+    foreach ($l in (Get-Content $OMP_YML_PATH)) {
+        if ($l -match '^  ([A-Za-z0-9_-]+):\s*$' -and (Test-OmpNamaMilikKami $Matches[1])) {
+            return $true
+        }
+    }
+    return $false
 }
 
 # Alamat dan token dibaca dari MANA PUN yang ada. Dev yang memilih omp saja
@@ -438,15 +458,23 @@ function Get-CooperStoredGateway {
     if (-not $v -and (Test-CooperPiInstalled)) { $v = Get-PiStoredGateway $PI_MODELS_PATH }
     return $v
 }
+# Ketiganya SEJAJAR, bukan bersarang.
+#
+# Sampai 17 September 2026 cabang pi berada DI DALAM cabang omp: indentasinya
+# menyatakan sejajar, kurung penutup gandanya menyatakan bersarang. Dev yang
+# hanya memasang pi karena itu dibacakan "tidak ada token di config" padahal
+# tokennya ada di models.json -- lalu ditolak saat hendak pindah gateway.
+# Cermin dari `stored_token` di setup.sh, yang punya cacat yang sama persis.
 function Get-CooperStoredToken {
     $v = ''
     if (Test-CooperGrokInstalled) { $v = Read-ExistingIdentity }
     if ($v -notlike 'ca_*') { $v = '' }
     if (-not $v -and (Test-CooperOmpInstalled)) {
         $v = Get-OmpStoredKey $OMP_YML_PATH
+        if ($v -notlike 'ca_*') { $v = '' }
+    }
     if (-not $v -and (Test-CooperPiInstalled)) {
         $v = Get-PiStoredKey $PI_MODELS_PATH
-    }
         if ($v -notlike 'ca_*') { $v = '' }
     }
     return $v
@@ -1289,7 +1317,7 @@ if ($AGENT_CHOICE -eq "2") {
         $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', $ompApiKey)
         if (-not (Assert-CooperRendered $yml 'models.yml')) { exit 1 }
         [System.IO.File]::WriteAllText($MODELS_YML, $yml, $utf8NoBomOmp)
-        Write-Host "[v] models.yml dibuat (3 provider: otomatis, localhost, server 2)" -ForegroundColor Green
+        Write-Host "[v] models.yml dibuat (3 provider: otomatis, server 1, server 2)" -ForegroundColor Green
     } else {
         $lines = Get-Content $MODELS_YML
         $first = $lines | Where-Object { $_ -match '^\s+baseUrl:' } | Select-Object -First 1
