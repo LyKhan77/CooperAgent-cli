@@ -82,6 +82,10 @@ function mergeSettings(existingPath, templatePath) {
 
   if (root.defaultProvider === undefined || root.defaultProvider === "") {
     root.defaultProvider = tpl.defaultProvider;
+  } else if (root.defaultProvider === "cooperagent") {
+    // `cooperagent` (tanpa strip) tidak lagi dikelola mergeModels sejak
+    // 12 September 2026 -- baseUrl-nya beku, gagal ikut pindah LAN/VPN.
+    root.defaultProvider = tpl.defaultProvider;
   }
   if (root.defaultModel === undefined || root.defaultModel === "") {
     root.defaultModel = tpl.defaultModel;

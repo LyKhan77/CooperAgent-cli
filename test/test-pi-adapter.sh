@@ -437,6 +437,78 @@ else
     printf "  \033[33m—\033[0m node tidak ada; merge input tidak diuji\n"
 fi
 
+# ── defaultProvider lama harus dipindah ──────────────────────────────────────
+#
+# `cooperagent` (tanpa strip) tidak pernah menjadi provider di pi-models.json,
+# dan merge hanya mengelola provider yang ADA di template -- jadi nilai itu tidak
+# pernah tersentuh siapa pun. Pemasangan pra-3.0.0 menunjuk provider yatim yang
+# baseUrl-nya beku; pemasangan sesudahnya menunjuk provider yang tidak ada dan
+# dijawab `Unknown provider "cooperagent"`. Kedua gejalanya senyap.
+#
+# Cerminan dari kasus yang sama di test/Test-PiModels.ps1. Jalur ini yang jalan
+# di Linux/macOS, dan uji PowerShell hanya dieksekusi oleh job Windows -- satu
+# suite saja berarti separuh dev tidak terjaga.
+echo "defaultProvider lama dipindah:"
+render_pi_settings() {
+    sed -e 's|__MODEL_ID__|m|g; s|__PI_COMPACTION_RESERVE__|26215|g' \
+        "$REPO/templates/pi-settings.json"
+}
+
+# Yang dipatok bukan namanya, melainkan KONTRAKNYA: apa pun yang ditunjuk
+# settings harus benar-benar ada di models.json. Memeriksa string 'cooper-agent'
+# akan lolos pada hari nama itu berubah lagi dan models.json ikut pindah.
+if render_pi_settings | python3 -c '
+import json, sys
+tpl_settings = json.load(sys.stdin)
+raw = open(sys.argv[1], encoding="utf-8").read()
+for ph in ("__CONTEXT_WINDOW__", "__MAX_TOKENS__"):
+    raw = raw.replace(ph, "1")
+providers = json.loads(raw)["providers"]
+dp = tpl_settings.get("defaultProvider")
+sys.exit(0 if dp in providers else 1)
+' "$REPO/templates/pi-models.json" 2>/dev/null; then
+    ok "defaultProvider template menunjuk provider yang ada di pi-models.json"
+else
+    bad "defaultProvider template menunjuk provider yang TIDAK ada — pi menjawab Unknown provider"
+fi
+
+if command -v node >/dev/null 2>&1; then
+    SBX="$(mktemp -d)"
+    render_pi_settings > "$SBX/tpl.json"
+    dp_of() { # $1 = berkas hasil merge
+        python3 -c '
+import json, sys
+print(json.load(open(sys.argv[1])).get("defaultProvider", ""))
+' "$1" 2>/dev/null
+    }
+
+    printf '%s' '{"defaultProvider":"cooperagent","defaultModel":"model-lama","theme":"dracula"}' \
+        > "$SBX/lama.json"
+    node "$REPO/scripts/lib/pi_json.mjs" merge-settings "$SBX/lama.json" "$SBX/tpl.json" \
+        > "$SBX/lama.hasil.json" 2>/dev/null
+    case "$(dp_of "$SBX/lama.hasil.json")" in
+        cooper-agent) ok "defaultProvider cooperagent dipindah ke cooper-agent" ;;
+        "")           bad "merge-settings gagal dijalankan — migrasi tidak terperiksa" ;;
+        *)            bad "defaultProvider lama DIPERTAHANKAN ($(dp_of "$SBX/lama.hasil.json")) — pi tetap menunjuk provider yatim" ;;
+    esac
+
+    # Migrasinya harus sempit. Provider pilihan dev adalah keputusan sadar, dan
+    # satu-satunya yang membuat nilai lama boleh ditimpa adalah bahwa nilai itu
+    # tidak pernah bisa benar.
+    printf '%s' '{"defaultProvider":"anthropic-saya","defaultModel":"claude-dev"}' \
+        > "$SBX/dev.json"
+    node "$REPO/scripts/lib/pi_json.mjs" merge-settings "$SBX/dev.json" "$SBX/tpl.json" \
+        > "$SBX/dev.hasil.json" 2>/dev/null
+    if [ "$(dp_of "$SBX/dev.hasil.json")" = 'anthropic-saya' ]; then
+        ok "defaultProvider pilihan dev tidak ikut dipindah"
+    else
+        bad "provider pilihan dev ditimpa menjadi $(dp_of "$SBX/dev.hasil.json")"
+    fi
+    rm -rf "$SBX"
+else
+    printf "  \033[33m—\033[0m node tidak ada; migrasi defaultProvider tidak diuji\n"
+fi
+
 echo
 if [ "$FAIL" -eq 0 ]; then
     printf "  \033[32mLULUS\033[0m — adapter pi mengikuti kontrak dan aturan CooperAgent\n"
