@@ -25,6 +25,8 @@ mkdir -p "$SBX/scripts/lib" "$SBX/scripts/hooks" "$SBX/test"
 cp "$REPO/scripts/lib/uji_lokal.sh" "$SBX/scripts/lib/"
 cp "$HOOK" "$SBX/scripts/hooks/"
 git -C "$SBX" init -q -b main
+git -C "$SBX" config user.email u@e
+git -C "$SBX" config user.name u
 git -C "$SBX" -c user.email=u@e -c user.name=u add -A
 git -C "$SBX" -c user.email=u@e -c user.name=u commit -q -m awal
 
@@ -57,6 +59,31 @@ out="$(jalankan "(delete) $NOL refs/heads/b $SHA")"; rc=$?
 printf '%s' "$out" | grep -q 'menjalankan suite' \
     && no "penghapusan branch melewati suite" "suite tetap dijalankan" \
     || ok "penghapusan branch melewati suite"
+
+# Mendorong TAG atas commit yang sudah ada di remote tidak membawa kode baru:
+# commitnya sudah diuji saat branch-nya di-push beberapa detik sebelumnya.
+# Sebelum 17 September 2026 hook ini menjalankan seluruh suite untuk objek tag
+# 207 byte -- tiga menit tanpa satu pun kepastian baru.
+git -C "$SBX" update-ref refs/remotes/origin/main "$SHA"
+git -C "$SBX" tag -a v9.9.9 -m rilis
+TAGSHA="$(git -C "$SBX" rev-parse v9.9.9)"
+out="$(jalankan "refs/tags/v9.9.9 $TAGSHA refs/tags/v9.9.9 $NOL")"; rc=$?
+{ [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q 'menjalankan suite'; } \
+    && ok "tag atas commit yang sudah di remote tidak menjalankan suite" \
+    || no "tag dilewati" "suite tetap dijalankan untuk mendorong satu objek tag"
+
+# Tapi tag atas commit yang BELUM terdorong justru MEMBAWA kodenya. Melewatinya
+# berarti kode sampai ke origin tanpa pernah diuji -- ragu harus berarti menguji.
+git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --allow-empty -m 'belum didorong'
+BARU="$(git -C "$SBX" rev-parse HEAD)"
+git -C "$SBX" tag -a v9.9.10 -m rilis
+TAGBARU="$(git -C "$SBX" rev-parse v9.9.10)"
+out="$(jalankan "refs/tags/v9.9.10 $TAGBARU refs/tags/v9.9.10 $NOL")"; rc=$?
+printf '%s' "$out" | grep -q 'menjalankan suite' \
+    && ok "tag atas commit yang belum terdorong tetap diuji" \
+    || no "tag atas commit yang belum terdorong tetap diuji" "kode bisa sampai ke origin tanpa diuji"
+git -C "$SBX" reset -q --hard "$SHA"
+git -C "$SBX" tag -d v9.9.9 v9.9.10 >/dev/null 2>&1
 
 # pr.sh baru saja menjalankannya untuk commit yang sama.
 out="$(jalankan "refs/heads/b $SHA refs/heads/b $NOL" "COOPER_UJI_SUDAH=$SHA")"; rc=$?

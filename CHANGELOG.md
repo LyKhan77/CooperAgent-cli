@@ -758,6 +758,27 @@ terpengaruh sama sekali.
 **Rollback.** Revert commit ini. Omp Windows kembali tidak terlihat; tidak ada
 yang lain yang bergantung padanya.
 
+### Fixed · 2026-09-18 — mendorong tag menjalankan seluruh suite
+
+**Konteks.** `git push origin v3.1.2` menjalankan seluruh suite — tiga menit —
+untuk mendorong satu objek tag 207 byte. Commit yang ditunjuknya sudah diuji
+beberapa detik sebelumnya, saat `git push origin main`.
+
+Hook `pre-push` hanya membedakan satu hal: penghapusan branch, yang SHA lokalnya
+nol. Push tag terlihat sama seperti push branch baginya.
+
+**Perubahan.** `scripts/hooks/pre-push` melewati ref `refs/tags/*` **bila commit
+yang ditunjuknya sudah ada di remote**. Tag yang menunjuk commit yang belum
+terdorong justru membawa kodenya, jadi ia tetap diuji — begitu pula bila keadaan
+remote tidak bisa dipastikan dari sini. Ragu berarti menguji, bukan melewati.
+
+**Bukti.** `test-hook-pre-push.sh` 8 → 10. Kasus keduanya dibuktikan merah
+dengan melewati tag tanpa syarat: *"kode bisa sampai ke origin tanpa diuji"*.
+Pembuktian itu sempat gagal menunjukkan apa pun karena label `ok` dan `no`-nya
+berbeda sehingga pencariannya meleset — keduanya kini sama.
+
+**Dampak.** Mendorong tag rilis tidak lagi menunggu tiga menit.
+
 ### Changed · 2026-09-17 — release-please dilepas, rilis diberi tag dengan tangan
 
 **Konteks.** Tiga kali dalam satu hari alur PR berhenti karena aturan, bukan
