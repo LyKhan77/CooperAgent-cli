@@ -38,7 +38,7 @@ New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 try {
     # --- pengenalan nama ------------------------------------------------------
     # Nama 3.0.0 yang ditulis templates/omp-models.yml hari ini.
-    foreach ($n in @('cooper-agent', 'cooper-s1', 'cooper-s2')) {
+    foreach ($n in @('cooper-agent', 'cooper-s1', 'cooper-s2', 'cooper-s3')) {
         if (Test-OmpNamaMilikKami $n) { ok ("nama 3.0.0 dikenali: " + $n) }
         else { no ("nama 3.0.0 TIDAK dikenali: " + $n + " -- omp akan dilewati di Windows") }
     }

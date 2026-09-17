@@ -332,7 +332,7 @@ if [ -n "$TOKEN" ]; then
         # api_key di sana berarti menghapus kunci BERBAYAR miliknya dengan token
         # kita. Ditemukan lewat pengujian 1 September 2026 dengan config yang
         # memuat kunci Anthropic: kunci itu hilang tanpa peringatan apa pun.
-        /^\[/ { emit(); ismodel = ($0 ~ /^\[model\.(cooper-agent|cooper-s1|cooper-s2|internal-qwen)/); buf[++nb] = $0; next }
+        /^\[/ { emit(); ismodel = ($0 ~ /^\[model\.(cooper-agent|cooper-s1|cooper-s2|cooper-s3|internal-qwen)/); buf[++nb] = $0; next }
         {
             if (nb == 0) { print; next }
             if (ismodel && $0 ~ /^[[:space:]]*api_key[[:space:]]*=/) {

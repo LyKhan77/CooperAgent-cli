@@ -110,3 +110,14 @@ context_window = __CONTEXT_WINDOW__
 max_tokens = __MAX_TOKENS__
 max_completion_tokens = __MAX_TOKENS__
 max_output_tokens = __MAX_TOKENS__
+
+# Pasangan cooper-s1/cooper-s2, langsung ke server 3. KEHILANGAN failover, sama alasannya.
+[model.cooper-s3]
+model = "__MODEL_ID__"
+# @keep-existing
+base_url = "__GATEWAY__/api/v1/upstream/s3"
+api_backend = "chat_completions"
+context_window = __CONTEXT_WINDOW__
+max_tokens = __MAX_TOKENS__
+max_completion_tokens = __MAX_TOKENS__
+max_output_tokens = __MAX_TOKENS__

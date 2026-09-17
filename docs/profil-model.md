@@ -1,7 +1,7 @@
-# Tiga profil model
+# Empat profil model
 
-Setiap harness — Grok, Oh My Pi, dan pi — memakai **nama yang sama** untuk tiga
-profil yang sama. Yang membedakan ketiganya hanya satu hal: **siapa yang memilih
+Setiap harness — Grok, Oh My Pi, dan pi — memakai **nama yang sama** untuk empat
+profil yang sama. Yang membedakan keempatnya hanya satu hal: **siapa yang memilih
 server.**
 
 | profil | endpoint | routing | failover |
@@ -9,13 +9,14 @@ server.**
 | `cooper-agent` | `/api/v1` | gateway yang memilih | **ya** |
 | `cooper-s1` | `/api/v1/upstream/s1` | dipaksa ke server 1 | tidak |
 | `cooper-s2` | `/api/v1/upstream/s2` | dipaksa ke server 2 | tidak |
+| `cooper-s3` | `/api/v1/upstream/s3` | dipaksa ke server 3 | tidak |
 
 **Sehari-hari pakai `cooper-agent`.** Gateway memilih node dengan slot lowong
 terbanyak, dan memindahkan sesi bila satu node penuh atau mati.
 
-`cooper-s1` dan `cooper-s2` adalah **alat pembanding**. Gunanya menjawab
-pertanyaan seperti "apakah kuantisasi di s2 menurunkan kualitas jawaban?" —
-kirim prompt yang sama ke keduanya, bandingkan.
+`cooper-s1`, `cooper-s2`, dan `cooper-s3` adalah **alat pembanding**. Gunanya
+menjawab pertanyaan seperti "apakah kuantisasi di s2 menurunkan kualitas
+jawaban?" — kirim prompt yang sama ke node yang dibandingkan.
 
 > **Sesi yang memakai profil langsung KEHILANGAN failover.** Bila node itu
 > penuh, permintaan mengantre; bila mati, permintaan gagal — ia tidak berpindah.
@@ -82,9 +83,14 @@ Meninggalkan seksi lama merusak dua hal, dan keduanya diam:
 
 ## Menambahkan node baru
 
-Tidak perlu menyunting repo ini. `cooperagent.upstreams` pada `GET /v1/models`
-menyebut node yang ada; profil `cooper-s<N>` mengikuti pola yang sama
-(`/api/v1/upstream/s<N>`).
+Tidak ada mekanisme otomatis — profil `cooper-s<N>` untuk node baru harus
+ditambahkan dengan tangan, mengikuti pola persis `cooper-s1`/`cooper-s2`
+(`/api/v1/upstream/s<N>`), di **setiap** tempat yang didaftar di
+"## Apa yang menjaga keseragamannya" di bawah. `MANAGED_SECTIONS` di `setup.sh`
+dan `setup.ps1`, serta daftar provider terkelola di `scripts/lib/omp_models.sh`
+dan `scripts/lib/PiModels.ps1`/`pi_verify.sh`, semuanya daftar statis — tidak
+ada yang membaca `cooperagent.upstreams` dari `GET /v1/models` untuk
+menghasilkan profil secara dinamis.
 
 ## Apa yang menjaga keseragamannya
 
