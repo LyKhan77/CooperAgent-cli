@@ -133,6 +133,24 @@ kenaikan versi, tidak ada yang merah. `.github/workflows/pr-title.yml`
 menggagalkan PR seperti itu sebelum sempat di-merge, dan `scripts/pr.sh`
 memeriksanya lebih awal lagi — sebelum PR dibuat.
 
+### Alur sehari-hari
+
+```bash
+git checkout -b <nama>
+# ... kerjakan, lalu satu commit dengan subjek conventional
+./scripts/pr.sh
+```
+
+`pr.sh` menjalankan seluruh suite, menanam hasilnya sebagai checklist ke pesan
+commit, mem-push, lalu mencetak tautan `compare`. Buka tautan itu: judul dan body
+PR sudah terisi oleh GitHub dari commit tersebut. *Create pull request* → CI hijau
+→ *Squash and merge*. Tidak ada yang perlu diketik.
+
+CI tidak menjalankan suite. Ia memeriksa tiga hal yang tidak bisa dipastikan dari
+mesin dev: bahwa pohon yang terkirim mengurai, bahwa checklist ujinya menyebut
+setiap berkas uji di repo, dan PowerShell. Yang menahan kode merah sampai ke
+origin adalah `scripts/hooks/pre-push`.
+
 **Perubahan MAJOR: pakai `!` di subjek, bukan hanya footer.** Inilah satu-satunya
 hal yang squash betul-betul membahayakan, dan keberatan yang sah saat squash
 ditolak pada 5 September 2026: footer `BREAKING CHANGE:` hidup di BADAN commit,

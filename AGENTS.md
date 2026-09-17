@@ -115,27 +115,39 @@ Latar: [`docs/profil-model.md`](docs/profil-model.md).
 ## Sebelum menutup pekerjaan
 
 ```bash
-bash test/test-contract-from-gateway.sh      # 17 pemeriksaan
-bash test/test-setup-dev.sh                  # 50 pemeriksaan (perlu jaringan)
-bash test/test-cli-output.sh                 #  9 pemeriksaan
-bash test/test-setup-preserves-dev-config.sh
-bash test/test-omp-api-key.sh                # models.yml omp membawa token
-bash test/test-credential-gate.sh            # gerbang kredensial + mode "sudah terpasang"
-bash test/test-harness-profiles.sh           # ketiga profil seragam di 5 sumber
-bash test/test-omp-providers.sh              # provider hilang ditambah, milik dev selamat
+./scripts/pr.sh
 ```
 
-Tiga yang pertama hermetis — masing-masing menyalakan gateway tiruannya sendiri
+Satu perintah: ia menjalankan **seluruh** suite, menanam hasilnya sebagai
+checklist ke pesan commit, mem-push, lalu mencetak tautan PR. Tidak ada lagi
+daftar uji yang disalin dengan tangan ke berkas ini — daftarnya adalah isi
+`test/`, dan yang membacanya `scripts/lib/uji_lokal.sh`.
+
+Menjalankan satu uji saja tetap boleh saat sedang mengerjakannya:
+
+```bash
+bash test/test-credential-gate.sh
+```
+
+**Suite tidak lagi dijalankan CI.** Sejak 17 September 2026 ia dijalankan di
+sini, dan `scripts/hooks/pre-push` menahan push bila ada yang merah. Yang
+tersisa di CI hanya yang tidak bisa dipastikan dari mesin ini: penguraian pohon
+yang benar-benar terkirim, kelengkapan checklist, dan PowerShell.
+
+Uji hermetis — masing-masing menyalakan gateway tiruannya sendiri
 (`test/fixtures/fake-gateway.py`) dan bekerja di `HOME` sekali pakai. **Tidak ada
 uji yang boleh menunjuk gateway produksi**: hasil yang bergantung pada keadaan
 server bukan uji, melainkan pemantauan. Satu uji pernah melakukannya tanpa
 disengaja, lewat fixture beralamat LAN sungguhan.
 
 `test-setup-dev.sh` adalah pengecualian: ia memilih agent `omp`, sehingga
-`setup.sh` mencoba memasangnya dari internet. Karena itu ia **tidak** berjalan di
-CI dan harus dijalankan dengan tangan. Perbaikan yang layak dikerjakan: penjaga
-lingkungan `COOPERAGENT_NO_INSTALL=1` yang melewati pemasangan agent dan hanya
-menulis config — berguna juga bagi dev yang cuma ingin memperbarui parameter.
+`setup.sh` mencoba memasangnya dari internet. Runner otomatis **melewatinya**,
+dan ia tetap muncul di checklist sebagai `[ ]` beserta sebabnya — checklist yang
+boleh menghilangkan baris adalah checklist yang tidak membuktikan kelengkapan.
+Jalankan dengan tangan bila menyentuh jalur pemasangan. Perbaikan yang layak
+dikerjakan: penjaga lingkungan `COOPERAGENT_NO_INSTALL=1` yang melewati
+pemasangan agent dan hanya menulis config.
+
 
 Perbarui `CHANGELOG.md`. Versi ditentukan prefiks commit — baca
 [`docs/versioning.md`](docs/versioning.md), terutama bagian **Kontrak**, yang
@@ -184,13 +196,14 @@ subjek tidak.
 Dua hal menjaganya, dan keduanya membaca pola yang sama dari satu berkas:
 
 ```
-./scripts/pr.sh                      # judul dari subjek commit + push + tautan
+./scripts/pr.sh                      # suite + checklist + push + tautan
 .github/workflows/pr-title.yml       # jaring pengaman, bila PR dibuat lewat web
 ```
 
-Pakai `scripts/pr.sh`. Tanpa argumen ia mengambil judul dari subjek commit,
-memeriksanya **sebelum** PR ada, lalu mencetak tautan yang judulnya sudah terisi
-— jadi tidak ada siklus "cek merah → sunting judul → tunggu CI lagi".
+`pr.sh` **tidak menerima judul sebagai argumen**, dan itu disengaja: yang
+menentukan judul PR adalah subjek commit, dan pemeriksaan yang memeriksa hal
+lain dari yang berlaku lebih buruk daripada tidak ada pemeriksaan. Ganti judul =
+`git commit --amend`.
 
 **Squash and merge, bukan merge commit.** Dibalik pada 17 September 2026. Merge
 commit menyelundupkan judul PR ke badannya sebagai commit kedua — entri CHANGELOG
@@ -201,7 +214,8 @@ description" supaya body commit tetap ada.
 
 **PR di repo ini membeli sesuatu yang nyata**, tidak seperti di sebagian repo:
 CI menjalankan parser PowerShell 5.1 di runner Windows, satu-satunya cara
-memeriksa `.ps1` tanpa mesin Windows. Ia sudah sekali menyelamatkan setiap dev
+memeriksa `.ps1` tanpa mesin Windows. Sisanya — suite bash — dijalankan sebelum
+push, bukan sesudahnya.
 Windows — `PiModels.ps1` lolos hitungan kurung tetapi gagal di-parse, dan
 `setup.ps1` mati untuk semua orang sampai v1.4.0 terbit.
 
