@@ -87,20 +87,22 @@ Release-As: 2.0.0
 Tidak ada yang dirilis tanpa seseorang menekan merge. Rilis adalah keputusan,
 bukan efek samping dari push.
 
-Pakai **"Create a merge commit"**, bukan squash. Squash membuat judul PR menjadi
-pesan commit, sehingga judul yang tidak berbentuk conventional commit membuat
-release-please tidak melihat perubahan apa pun.
+Pakai **"Squash and merge"**, bukan merge commit. Squash membuat judul PR
+menjadi subjek satu-satunya commit yang mendarat di `main`, dan itulah yang
+dibaca release-please.
 
-### Judul PR jangan berawalan prefiks conventional-commit
+### Judul PR HARUS berawalan prefiks conventional-commit
 
-Dengan merge commit, aturannya justru terbalik dari kalimat di atas — dan ini
-yang berkali-kali salah. GitHub menyusun pesan merge commit sebagai `Merge pull
+Aturan ini **dibalik pada 17 September 2026**. Sebelumnya repo memakai merge
+commit, dan judul conventional justru dilarang. Yang berubah bukan pendiriannya
+soal CHANGELOG, melainkan pengakuan bahwa kebijakan lama menuntut pengetikan
+ulang pada setiap PR — dan menuntutnya justru pada PR yang paling rapi.
+
+**Kenapa dulu dilarang.** GitHub menyusun pesan merge commit sebagai `Merge pull
 request #N from <branch>` diikuti **judul PR**. Bila judul itu berbentuk
-`feat: …` atau `docs: …`, release-please membacanya sebagai commit tersendiri,
-dan perubahan yang sama terbit **dua kali** di CHANGELOG.
-
-Sudah terjadi tiga kali di repo ini — `v2.0.1`, `v2.1.0`, `v3.0.0` — dan juga
-di repo server. Yang terakhir masih bisa dilihat bentuknya:
+`feat: …`, release-please membacanya sebagai commit tersendiri, dan perubahan
+yang sama terbit **dua kali** di CHANGELOG. Terjadi lima kali — `v2.0.1`,
+`v2.1.0`, `v2.1.1`, `v3.0.0`, `v3.0.1` — dan bentuknya masih bisa dilihat:
 
 ```
 $ git log -1 --format='%s%n%n%b' ddb12ae
@@ -111,20 +113,71 @@ fix(setup): bawa migrasi profil ke KEDUA pemasang, bukan hanya pembaru
 
 Baris ketiga itulah yang dibaca release-please sebagai commit kedua.
 
-**Jebakannya: GitHub yang mengisi judulnya, bukan Anda.** Bila branch berisi
-**tepat satu commit**, GitHub memakai subjek commit itu sebagai judul PR — dan
-subjek commit tentu saja conventional. Bila dua atau lebih, ia memakai nama
-branch, yang aman. Jadi jebakan ini menyerang PR yang paling rapi, dan
-menyerang diam-diam: tidak ada yang salah di layar, judulnya sudah terisi.
+**Kenapa kebijakan itu tidak bisa dipertahankan.** Bila branch berisi **tepat
+satu commit** — bentuk normal di repo ini — GitHub mengisi judul PR dari subjek
+commit itu, yang tentu conventional. Jadi di bawah merge commit, isian otomatis
+GitHub **selalu** melanggar aturannya sendiri, dan setiap PR menuntut judulnya
+diketik ulang dengan tangan. Pagar yang menuntut pekerjaan manual pada setiap
+PR adalah pagar yang akhirnya dimatikan orang.
 
-`.github/workflows/pr-title.yml` sekarang menggagalkan PR seperti itu sebelum
-sempat di-merge. PR release-please dikecualikan — judulnya memang
-`chore(main): release X`, dan `chore` bertanda `hidden`, jadi merge commit-nya
-tidak menyumbang entri.
+**Di bawah squash, polaritasnya berbalik ke arah yang menguntungkan.** Judul PR
+menjadi subjek commit, jadi ia HARUS conventional — dan isian otomatis GitHub
+sudah memenuhinya. Tidak ada merge commit yang menyelundupkan judul sebagai
+commit kedua, jadi tidak ada duplikasi. Satu commit per branch berarti: buat PR,
+tekan **Squash and merge**, tanpa mengetik apa pun.
 
-**Bila terlanjur:** sunting `CHANGELOG.md` di PR rilis sebelum di-merge, buang
-baris yang menunjuk hash merge commit. Sesudah tag terbit, duplikasinya
-permanen dan hanya bisa dirapikan di berkas `main`.
+**Jebakan yang tersisa satu.** Bila branch berisi **dua commit atau lebih**,
+GitHub mengisi judul dari **nama branch**, yang tidak conventional — dan
+release-please lalu tidak melihat perubahan apa pun: tidak ada entri, tidak ada
+kenaikan versi, tidak ada yang merah. `.github/workflows/pr-title.yml`
+menggagalkan PR seperti itu sebelum sempat di-merge, dan `scripts/pr.sh`
+memeriksanya lebih awal lagi — sebelum PR dibuat.
+
+### Alur sehari-hari
+
+```bash
+git checkout -b <nama>
+# ... kerjakan, lalu satu commit dengan subjek conventional
+./scripts/pr.sh
+```
+
+`pr.sh` menjalankan seluruh suite, menanam hasilnya sebagai checklist ke pesan
+commit, mem-push, lalu mencetak tautan `compare`. Buka tautan itu: judul dan body
+PR sudah terisi oleh GitHub dari commit tersebut. *Create pull request* → CI hijau
+→ *Squash and merge*. Tidak ada yang perlu diketik.
+
+CI tidak menjalankan suite. Ia memeriksa tiga hal yang tidak bisa dipastikan dari
+mesin dev: bahwa pohon yang terkirim mengurai, bahwa checklist ujinya menyebut
+setiap berkas uji di repo, dan PowerShell. Yang menahan kode merah sampai ke
+origin adalah `scripts/hooks/pre-push`.
+
+**Perubahan MAJOR: pakai `!` di subjek, bukan hanya footer.** Inilah satu-satunya
+hal yang squash betul-betul membahayakan, dan keberatan yang sah saat squash
+ditolak pada 5 September 2026: footer `BREAKING CHANGE:` hidup di BADAN commit,
+dan badan commit squash diambil dari **body PR** — yang bisa disunting atau
+dikosongkan siapa pun sebelum merge. Kenaikan MAJOR yang hilang tidak
+menggagalkan apa pun; ia hanya terbit sebagai patch.
+
+Tanda `!` menutup lubang itu karena ia hidup di **subjek**, dan subjek selalu
+menjadi subjek commit:
+
+```
+feat(setup)!: satu profil model untuk ketiga harness
+fix!: tolak identitas lama dev-<nama>@<device>
+```
+
+Footer `BREAKING CHANGE:` tetap boleh ditulis sebagai penjelasan, tetapi yang
+MENENTUKAN kenaikan MAJOR adalah `!`. Setelan repo juga wajib "Pull request
+title and description" supaya body commit tidak hilang sama sekali.
+
+PR release-please dikecualikan. Judulnya memang `chore(main): release X`,
+sehingga pagar ini meloloskannya; pengecualiannya dipertahankan supaya tidak ada
+versi pagar ini yang pernah bisa memblokir sebuah rilis.
+
+**Bila terlanjur:** judul tanpa prefiks yang sudah di-merge tidak menyumbang
+entri apa pun. Tambahkan entrinya dengan tangan di "Catatan rinci", atau
+terbitkan commit susulan berprefiks yang menyebut perubahan itu. Sesudah tag
+terbit, yang hilang hanya bisa ditambahkan di berkas `main`.
 
 ---
 

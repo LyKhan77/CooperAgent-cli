@@ -32,6 +32,10 @@
           "section": "Dokumentasi"
         },
         {
+          "type": "ci",
+          "section": "Perkakas & CI"
+        },
+        {
           "type": "chore",
           "section": "Pemeliharaan",
           "hidden": true

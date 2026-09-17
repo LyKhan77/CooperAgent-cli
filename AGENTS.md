@@ -115,27 +115,39 @@ Latar: [`docs/profil-model.md`](docs/profil-model.md).
 ## Sebelum menutup pekerjaan
 
 ```bash
-bash test/test-contract-from-gateway.sh      # 17 pemeriksaan
-bash test/test-setup-dev.sh                  # 50 pemeriksaan (perlu jaringan)
-bash test/test-cli-output.sh                 #  9 pemeriksaan
-bash test/test-setup-preserves-dev-config.sh
-bash test/test-omp-api-key.sh                # models.yml omp membawa token
-bash test/test-credential-gate.sh            # gerbang kredensial + mode "sudah terpasang"
-bash test/test-harness-profiles.sh           # ketiga profil seragam di 5 sumber
-bash test/test-omp-providers.sh              # provider hilang ditambah, milik dev selamat
+./scripts/pr.sh
 ```
 
-Tiga yang pertama hermetis — masing-masing menyalakan gateway tiruannya sendiri
+Satu perintah: ia menjalankan **seluruh** suite, menanam hasilnya sebagai
+checklist ke pesan commit, mem-push, lalu mencetak tautan PR. Tidak ada lagi
+daftar uji yang disalin dengan tangan ke berkas ini — daftarnya adalah isi
+`test/`, dan yang membacanya `scripts/lib/uji_lokal.sh`.
+
+Menjalankan satu uji saja tetap boleh saat sedang mengerjakannya:
+
+```bash
+bash test/test-credential-gate.sh
+```
+
+**Suite tidak lagi dijalankan CI.** Sejak 17 September 2026 ia dijalankan di
+sini, dan `scripts/hooks/pre-push` menahan push bila ada yang merah. Yang
+tersisa di CI hanya yang tidak bisa dipastikan dari mesin ini: penguraian pohon
+yang benar-benar terkirim, kelengkapan checklist, dan PowerShell.
+
+Uji hermetis — masing-masing menyalakan gateway tiruannya sendiri
 (`test/fixtures/fake-gateway.py`) dan bekerja di `HOME` sekali pakai. **Tidak ada
 uji yang boleh menunjuk gateway produksi**: hasil yang bergantung pada keadaan
 server bukan uji, melainkan pemantauan. Satu uji pernah melakukannya tanpa
 disengaja, lewat fixture beralamat LAN sungguhan.
 
 `test-setup-dev.sh` adalah pengecualian: ia memilih agent `omp`, sehingga
-`setup.sh` mencoba memasangnya dari internet. Karena itu ia **tidak** berjalan di
-CI dan harus dijalankan dengan tangan. Perbaikan yang layak dikerjakan: penjaga
-lingkungan `COOPERAGENT_NO_INSTALL=1` yang melewati pemasangan agent dan hanya
-menulis config — berguna juga bagi dev yang cuma ingin memperbarui parameter.
+`setup.sh` mencoba memasangnya dari internet. Runner otomatis **melewatinya**,
+dan ia tetap muncul di checklist sebagai `[ ]` beserta sebabnya — checklist yang
+boleh menghilangkan baris adalah checklist yang tidak membuktikan kelengkapan.
+Jalankan dengan tangan bila menyentuh jalur pemasangan. Perbaikan yang layak
+dikerjakan: penjaga lingkungan `COOPERAGENT_NO_INSTALL=1` yang melewati
+pemasangan agent dan hanya menulis config.
+
 
 Perbarui `CHANGELOG.md`. Versi ditentukan prefiks commit — baca
 [`docs/versioning.md`](docs/versioning.md), terutama bagian **Kontrak**, yang
@@ -164,30 +176,46 @@ untuk satu rencana yang sama. Sebabnya bukan salah paham: PR rilis yang terbuka
 dan terlihat siap merge memang *tampak seperti pekerjaan yang belum selesai*.
 `draft-pull-request` membalik bawaannya — mendiamkannya kini keadaan yang benar.
 
-**Judul PR jangan berawalan prefiks conventional-commit.** GitHub menaruh judul
-PR ke badan merge commit, dan release-please membacanya sebagai commit
-tersendiri — entri yang sama terbit dua kali. Jebakannya: bila branch berisi
-**tepat satu commit**, GitHub mengisi judul dari subjek commit itu, yang tentu
-saja conventional. Lihat [`docs/versioning.md`](docs/versioning.md).
+**Judul PR HARUS berawalan prefiks conventional-commit.** Repo ini memakai
+squash merge, jadi judul PR menjadi subjek satu-satunya commit di `main` — dan
+itulah satu-satunya yang dibaca release-please. Judul tanpa prefiks berarti
+perubahan terbit tanpa entri CHANGELOG dan tanpa kenaikan versi, tanpa satu pun
+cek merah. Aturan ini dibalik pada 17 September 2026; sebelumnya repo memakai
+merge commit dan larangannya terbalik. Lihat
+[`docs/versioning.md`](docs/versioning.md).
+
+**Satu commit per branch.** Dengan satu commit, GitHub mengisi judul PR dari
+subjek commit itu dan body PR dari badannya — keduanya sudah benar, dan tidak ada
+yang perlu diketik. Dua commit atau lebih membuat GitHub memakai **nama branch**
+sebagai judul, yang tidak conventional dan karena itu ditolak.
+
+**MAJOR ditandai `!` di subjek** (`feat(setup)!: …`), bukan hanya footer
+`BREAKING CHANGE:`. Footer hidup di body PR, yang bisa disunting sebelum merge;
+subjek tidak.
 
 Dua hal menjaganya, dan keduanya membaca pola yang sama dari satu berkas:
 
 ```
-./scripts/pr.sh "Judul deskriptif"   # periksa + push + tautan yang sudah terisi
+./scripts/pr.sh                      # suite + checklist + push + tautan
 .github/workflows/pr-title.yml       # jaring pengaman, bila PR dibuat lewat web
 ```
 
-Pakai `scripts/pr.sh`. Ia memeriksa judul **sebelum** PR ada, jadi tidak ada
-siklus "cek merah → sunting judul → tunggu CI lagi", dan tautannya membawa judul
-yang sudah benar sehingga isian otomatis GitHub tidak pernah terpakai.
+`pr.sh` **tidak menerima judul sebagai argumen**, dan itu disengaja: yang
+menentukan judul PR adalah subjek commit, dan pemeriksaan yang memeriksa hal
+lain dari yang berlaku lebih buruk daripada tidak ada pemeriksaan. Ganti judul =
+`git commit --amend`.
 
-**Merge commit, bukan squash.** Squash melipat semua commit jadi satu: detail
-CHANGELOG hilang, dan footer `BREAKING CHANGE:` bisa ikut hilang — bersamanya
-kenaikan MAJOR.
+**Squash and merge, bukan merge commit.** Dibalik pada 17 September 2026. Merge
+commit menyelundupkan judul PR ke badannya sebagai commit kedua — entri CHANGELOG
+kembar, lima kali. Keberatan asli terhadap squash (footer `BREAKING CHANGE:` bisa
+hilang bersama kenaikan MAJOR) dijawab dengan memindahkan penanda MAJOR ke `!` di
+subjek, yang tidak bisa hilang, dan dengan setelan repo "Pull request title and
+description" supaya body commit tetap ada.
 
 **PR di repo ini membeli sesuatu yang nyata**, tidak seperti di sebagian repo:
 CI menjalankan parser PowerShell 5.1 di runner Windows, satu-satunya cara
-memeriksa `.ps1` tanpa mesin Windows. Ia sudah sekali menyelamatkan setiap dev
+memeriksa `.ps1` tanpa mesin Windows. Sisanya — suite bash — dijalankan sebelum
+push, bukan sesudahnya.
 Windows — `PiModels.ps1` lolos hitungan kurung tetapi gagal di-parse, dan
 `setup.ps1` mati untuk semua orang sampai v1.4.0 terbit.
 

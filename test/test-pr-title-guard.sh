@@ -7,8 +7,11 @@
 # dijaga sinkron dengan tangan -- kelas kegagalan yang berkali-kali menggigit
 # repo ini, dan yang justru sedang dijaga oleh pagar itu sendiri.
 #
-# Kasus ujinya bukan karangan: keenam yang harus DITOLAK adalah judul yang
-# benar-benar terjadi dan benar-benar menggandakan entri CHANGELOG.
+# Polaritasnya DIBALIK pada 17 September 2026 bersama perpindahan ke squash
+# merge: judul PR kini menjadi subjek commit di `main`, jadi prefiks conventional
+# WAJIB ada, bukan dilarang. Keenam judul yang dulu harus ditolak kini harus
+# lolos -- dan itu bukan pelonggaran: judul deskriptif yang dulu benar sekarang
+# membuat release-please tidak melihat apa pun.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WF="$REPO/.github/workflows/pr-title.yml"
@@ -43,24 +46,27 @@ uji(){ # judul, harus_ditolak(1/0)
     fi
 }
 
-echo "judul yang BENAR-BENAR menggandakan entri CHANGELOG:"
-uji "feat(setup): retensi cadangan .bak di kedua installer"   1   # v2.1.0
-uji "docs(ops-02): prosa kembali ke satu arsip"               1   # v3.0.1
-uji "docs: buang entri kembar di seksi CHANGELOG v2.1.0"      1   # v2.1.1
-uji "docs: lipat prosa [Unreleased] ke dalam v2.0.0"          1   # v2.0.1
-uji "refactor!: pensiunkan jalur render lama"                 1
-uji "fix: sesuatu"                                            1
+echo "judul conventional — inilah yang dibaca release-please:"
+uji "feat(setup): retensi cadangan .bak di kedua installer"   0
+uji "docs(ops-02): prosa kembali ke satu arsip"               0
+uji "docs: buang entri kembar di seksi CHANGELOG v2.1.0"      0
+uji "refactor!: pensiunkan jalur render lama"                 0
+uji "feat(setup)!: satu profil model untuk ketiga harness"      0   # MAJOR
+uji "fix: sesuatu"                                            0
+uji "chore(main): release 3.1.2"                              0   # PR rilis
 
-echo "judul deskriptif — harus lolos:"
-uji "Cadangan .bak tidak lagi menumpuk selamanya"             0
-uji "Refactor/pensiunkan jalur render lama"                   0   # isian otomatis GitHub
-uji "Satu pintu menuju produksi: jalur render lama dipensiunkan" 0
-uji "Konvensi merge PR ditulis di OPS-02"                     0
-# Titik dua di tengah kalimat Indonesia bukan prefiks. Regex yang menolak ini
-# akan membuat pagar terasa sewenang-wenang, dan pagar yang terasa sewenang-
-# wenang adalah pagar yang akan dimatikan orang.
-uji "Perbaikan: cadangan rollback dipilih dari nama"          0
-uji "Fitur baru: retensi cadangan"                            0
+echo "judul tanpa prefiks — release-please tidak akan melihat apa pun:"
+uji "Cadangan .bak tidak lagi menumpuk selamanya"             1
+# Ini isian otomatis GitHub saat branch berisi DUA commit atau lebih: nama
+# branch, bukan subjek commit. Satu-satunya jebakan yang tersisa di bawah
+# squash, dan satu-satunya alasan pagar ini masih ada.
+uji "Refactor/pensiunkan jalur render lama"                   1
+uji "Satu pintu menuju produksi: jalur render lama dipensiunkan" 1
+# `Perbaikan:` dan `Fitur baru:` BUKAN tipe conventional-commit. Keduanya ada di
+# sini supaya tidak ada yang melonggarkan regexnya menjadi "apa pun sebelum
+# titik dua" -- yang akan meloloskan judul yang release-please tetap abaikan.
+uji "Perbaikan: cadangan rollback dipilih dari nama"          1
+uji "Fitur baru: retensi cadangan"                            1
 
 echo "scripts/pr.sh memakai pagar yang SAMA, bukan salinannya:"
 # Pemeriksaan lokal yang polanya disalin akan menyimpang dari CI tanpa ada yang
@@ -72,34 +78,67 @@ if [ -f "$PR_SH" ]; then
         && no "pr.sh tidak menyalin pola" "polanya dipatok di dalam skrip" \
         || ok "pr.sh membaca pola dari workflow, tidak menyalinnya"
 
-    out="$("$PR_SH" "fix(setup): sesuatu" 2>&1)"; rc=$?
-    [ "$rc" -ne 0 ] && ok "pr.sh menolak judul conventional sebelum push" \
-                    || no "pr.sh menolak judul conventional" "ia meloloskannya (rc=0)"
-    printf '%s' "$out" | grep -q 'git push' \
+    # Judul TIDAK boleh dititipkan lewat argumen: yang menentukan judul PR adalah
+    # subjek commit, dan pemeriksaan yang memeriksa hal lain dari yang berlaku
+    # lebih buruk daripada tidak ada pemeriksaan. Dijalankan di repo ini karena
+    # ia berhenti seketika, jauh sebelum menyentuh remote.
+    out="$("$PR_SH" "fix(setup): judul titipan" 2>&1)"; rc=$?
+    { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'tidak menerima argumen judul'; } \
+        && ok "pr.sh menolak judul lewat argumen" \
+        || no "pr.sh menolak judul lewat argumen" "ia menerimanya (rc=$rc)"
+    printf '%s' "$out" | grep -q 'push' \
         && no "pr.sh menolak SEBELUM push" "ia sempat push lebih dulu" \
         || ok "pr.sh menolak SEBELUM menyentuh remote"
 
-    # Judul yang benar dijalankan di KOTAK PASIR, bukan di repo ini.
-    # Menjalankannya di sini akan mem-push branch yang sedang dikerjakan --
-    # sebuah uji yang menyentuh remote adalah uji yang tidak bisa dijalankan
-    # dengan tenang, dan uji yang tidak bisa dijalankan dengan tenang lama-lama
-    # tidak dijalankan sama sekali.
+    # Sisanya di KOTAK PASIR. Di repo ini pr.sh akan menjalankan seluruh suite
+    # lalu mem-push branch yang sedang dikerjakan -- uji yang menyentuh remote
+    # adalah uji yang tidak bisa dijalankan dengan tenang, dan yang tidak bisa
+    # dijalankan dengan tenang lama-lama tidak dijalankan sama sekali.
+    #
+    # Kotak pasir sengaja TIDAK punya direktori test/, jadi pr.sh melewati suite
+    # dan ujinya tidak memanggil dirinya sendiri.
     SBX="$(mktemp -d)"
-    mkdir -p "$SBX/scripts" "$SBX/.github/workflows"
+    mkdir -p "$SBX/scripts/lib" "$SBX/.github/workflows"
     cp "$PR_SH" "$SBX/scripts/pr.sh"
+    cp "$REPO/scripts/lib/uji_lokal.sh" "$SBX/scripts/lib/uji_lokal.sh"
     cp "$WF" "$SBX/.github/workflows/pr-title.yml"
     git -C "$SBX" init -q -b main
     git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --allow-empty -m awal
     git -C "$SBX" checkout -q -b cabang-uji
-    out="$(cd "$SBX" && bash scripts/pr.sh "Judul deskriptif biasa" 2>&1)"
-    printf '%s' "$out" | grep -q 'prefiks conventional-commit' \
-        && no "pr.sh meloloskan judul deskriptif" "ia menolaknya" \
-        || ok "pr.sh meloloskan judul deskriptif"
+    git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --allow-empty \
+        -m 'Judul deskriptif tanpa prefiks'
+
+    out="$(cd "$SBX" && bash scripts/pr.sh 2>&1)"; rc=$?
+    { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'tidak berawalan prefiks'; } \
+        && ok "pr.sh menolak subjek commit tanpa prefiks" \
+        || no "pr.sh menolak subjek tanpa prefiks" "rc=$rc"
+
+    git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --amend --allow-empty \
+        -m 'fix(uji): subjek conventional'
+    out="$(cd "$SBX" && bash scripts/pr.sh 2>&1)"
+    # Dibuktikan dengan SAMPAI ke tahap push, bukan dengan absennya pesan
+    # penolakan: `Pola tidak terbaca` juga membuat pesan itu absen, dan ujinya
+    # akan hijau atas skrip yang tidak memeriksa apa pun.
+    printf '%s' "$out" | grep -q 'push cabang-uji -> origin' \
+        && ok "pr.sh meloloskan subjek conventional sampai tahap push" \
+        || no "pr.sh meloloskan subjek conventional" "tidak sampai push: $(printf '%s' "$out" | head -2 | tr '\n' ' ')"
+    printf '%s' "$out" | grep -q 'judul dari subjek commit: fix(uji): subjek conventional' \
+        && ok "judul diambil dari subjek commit, bukan ditebak" \
+        || no "judul dari subjek commit" "tidak diturunkan"
     # Tanpa remote, push gagal -- dan itu memang yang harus terjadi: skrip tidak
     # boleh mencetak tautan PR untuk branch yang tidak pernah sampai ke origin.
     printf '%s' "$out" | grep -q 'compare/main' \
         && no "pr.sh diam saat push gagal" "ia tetap mencetak tautan PR" \
         || ok "pr.sh tidak mencetak tautan bila push gagal"
+
+    # Dua commit: GitHub akan mengisi judul dari NAMA BRANCH, jadi memakai salah
+    # satu subjek commit akan berbohong tentang apa yang akan terpakai.
+    git -C "$SBX" -c user.email=u@e -c user.name=u commit -q --allow-empty \
+        -m 'fix(uji): commit kedua'
+    out="$(cd "$SBX" && bash scripts/pr.sh 2>&1)"; rc=$?
+    { [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'harus tepat satu'; } \
+        && ok "pr.sh menolak branch dua commit" \
+        || no "pr.sh pada branch dua commit" "ia menebak judul yang tidak akan terpakai"
     rm -rf "$SBX"
 else
     no "scripts/pr.sh ada" "hilang — jalur cepat membuat PR tidak terjaga"

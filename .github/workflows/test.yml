@@ -1,8 +1,24 @@
-# Uji berjalan pada setiap PR dan setiap push ke main.
+# CI TIDAK menjalankan suite uji. Suite dijalankan di mesin dev, sebelum push.
 #
-# KENAPA: AGENTS.md meminta uji dijalankan sebelum menutup pekerjaan, tapi
-# permintaan bukan penjaga. Rilis ditentukan otomatis dari pesan commit, jadi
-# kode yang rusak bisa masuk main dan langsung menjadi kandidat rilis.
+# KENAPA. Suite ini memerlukan gateway tiruan, HOME sekali pakai, dan beberapa
+# menit; menjalankannya dua kali -- sekali di mesin dev, sekali lagi di runner --
+# membeli kepastian yang sama dua kali. Yang tersisa untuk CI adalah yang TIDAK
+# bisa dipastikan dari mesin dev:
+#
+#   1. bahwa pohon yang BENAR-BENAR terkirim mengurai (bukan pohon lokal yang
+#      mungkin berbeda dari yang di-push),
+#   2. bahwa checklist ujinya menyebut SETIAP berkas uji yang ada di repo,
+#   3. PowerShell, yang tidak ada di mesin dev mana pun di tim ini.
+#
+# Yang menahan kode merah sampai ke origin adalah `scripts/hooks/pre-push`.
+# Checklist di bawah adalah sambungannya: ia ditanam ke pesan commit oleh
+# `scripts/pr.sh`, ikut menjadi body PR lewat isian otomatis GitHub, dan dibaca
+# dari sana. Satu berkas uji baru yang tidak pernah dijalankan karena itu tidak
+# bisa lolos diam-diam -- ia absen dari checklist, dan job ini menyebut namanya.
+#
+# Yang TIDAK dibuktikan job ini, dan jangan dianggap sebaliknya: bahwa ujinya
+# benar-benar lulus. Ia membuktikan KECOCOKAN antara checklist dan isi repo.
+# Yang membuktikan lulus adalah hook pre-push, di mesin yang menjalankannya.
 name: test
 
 on:
@@ -11,61 +27,70 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  periksa:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Periksa sintaks bash
         run: |
-          for f in setup.sh scripts/setup-dev.sh scripts/setup-pi.sh scripts/lib/*.sh test/*.sh; do
+          for f in setup.sh scripts/setup-dev.sh scripts/setup-pi.sh \
+                   scripts/lib/*.sh scripts/hooks/* test/*.sh; do
+            [ -f "$f" ] || continue
             bash -n "$f" || exit 1
           done
 
-      # Ketiga uji ini memakai mode manual (pilihan 4) atau tidak memanggil
-      # setup.sh sama sekali, jadi tidak ada agent pihak ketiga yang diunduh.
-      # Masing-masing menyalakan gateway tiruannya sendiri dan bekerja di HOME
-      # sekali pakai, jadi tidak ada yang perlu dijangkau dari runner.
-      - name: Kontrak diambil dari gateway
-        run: bash test/test-contract-from-gateway.sh
-
-      - name: Keluaran terbaca di berkas dan konsol non-UTF-8
-        run: bash test/test-cli-output.sh
-
-      - name: Setup tidak menyentuh milik dev
-        run: bash test/test-setup-preserves-dev-config.sh
-
-      - name: models.yml omp membawa token, bukan identitas
-        run: bash test/test-omp-api-key.sh
-
-      - name: Gerbang kredensial berhenti dengan sebabnya
-        run: bash test/test-credential-gate.sh
-
-      - name: Retensi cadangan .bak hanya menyentuh miliknya sendiri
-        run: bash test/test-bak-retention.sh
-
-      # Menguji skrip yang BENAR-BENAR dijalankan pr-title.yml, bukan salinan
-      # polanya: dua kebenaran yang harus dijaga sinkron dengan tangan adalah
-      # persis penyakit yang sedang dijaga pagar itu.
-      - name: Pagar judul PR menolak prefiks conventional-commit
+      - name: Checklist uji menyebut setiap berkas uji
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          # Lewat env, BUKAN ${{ }} di dalam skrip: body PR ditulis manusia mana
+          # pun yang bisa membuka PR, dan menempelkannya ke badan skrip adalah
+          # injeksi perintah, bukan pemeriksaan.
+          BODY: ${{ github.event.pull_request.body }}
         run: |
-          python3 -m pip install --quiet pyyaml
-          bash test/test-pr-title-guard.sh
+          set -uo pipefail
+          printf '%s\n' "$BODY" > /tmp/body.txt
+          kurang=""; merah=""; hantu=""
+          for f in test/test-*.sh; do
+            [ -f "$f" ] || continue
+            if grep -qE "^- \[!\] ${f} " /tmp/body.txt; then merah="$merah $f"; continue; fi
+            grep -qE "^- \[[x ]\] ${f} " /tmp/body.txt || kurang="$kurang $f"
+          done
+          # Baris yang mengaku menjalankan berkas yang tidak ada: checklist basi,
+          # disalin dari PR lain, atau berkas ujinya dihapus tanpa memperbarui.
+          while read -r nama; do
+            [ -n "$nama" ] || continue
+            [ -f "$nama" ] || hantu="$hantu $nama"
+          done < <(sed -nE 's/^- \[[x !]\] (test\/[^ ]+) .*/\1/p' /tmp/body.txt)
 
-      # test-setup-dev.sh SENGAJA TIDAK dijalankan di sini.
-      #
-      # Ia memilih agent omp, sehingga setup.sh mencoba memasangnya dengan
-      # mengunduh biner dari internet. Itu lambat, mudah goyah, dan bukan yang
-      # sedang diuji.
-      #
-      # PERBAIKANNYA, bila ada yang mengerjakannya: beri setup.sh penjaga
-      # lingkungan COOPERAGENT_NO_INSTALL=1 yang melewati pemasangan agent dan
-      # hanya menulis config. Itu juga berguna di luar CI -- dev yang cuma ingin
-      # memperbarui parameter tidak perlu dipaksa memasang apa pun.
-      # Setelah itu, tambahkan langkahnya di sini.
-      #
-      # Sampai saat itu ia dijalankan dengan tangan:
-      #     bash test/test-setup-dev.sh
+          rc=0
+          if [ -n "$kurang" ]; then
+            echo "::error::Checklist uji tidak menyebut:$kurang"
+            rc=1
+          fi
+          if [ -n "$merah" ]; then
+            echo "::error::Checklist menandai uji MERAH:$merah"
+            rc=1
+          fi
+          if [ -n "$hantu" ]; then
+            echo "::error::Checklist menyebut berkas yang tidak ada:$hantu"
+            rc=1
+          fi
+          if [ "$rc" -ne 0 ]; then
+            cat <<'PESAN'
+
+          Body PR ini berasal dari pesan commit (isian otomatis GitHub), dan
+          checklistnya ditanam ke sana oleh scripts/pr.sh saat ia menjalankan
+          suite. Jalankan ulang:
+
+              ./scripts/pr.sh
+
+          Ia menjalankan suite, memperbarui checklist di pesan commit, lalu
+          mem-push. Body PR ikut diperbarui dengan sendirinya.
+          PESAN
+            exit 1
+          fi
+          echo "OK — checklist menyebut setiap berkas uji, tidak ada yang merah."
 
   # Sintaks PowerShell TIDAK dapat diperiksa dari runner Linux, dan
   # menghitung kurung BUKAN parser. Terbukti 4 September 2026:

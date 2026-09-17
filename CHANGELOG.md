@@ -653,6 +653,198 @@ judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
 rilis mana yang membawanya.
 
 
+### Changed · 2026-09-17 — suite pindah ke lokal, CI tinggal memeriksa
+
+**Konteks.** Alur PR masih menuntut pekerjaan manual: judul diketik ulang, lalu
+menunggu CI menjalankan suite yang sama yang baru saja hijau di mesin dev.
+Permintaannya jelas — "cukup unit test di lokal, CI hanya cross check, saya
+hanya cek PR masuk lalu confirm merge".
+
+**Perubahan.**
+
+- `scripts/lib/uji_lokal.sh` (baru) — satu penjalan suite, dipakai hook maupun
+  `pr.sh`. Daftar ujinya adalah isi `test/`, bukan daftar yang disalin tangan.
+- `scripts/hooks/pre-push` (baru) — menjalankan suite; push ditolak bila merah.
+  Dipasang lewat `core.hooksPath` yang ikut ter-commit, bukan disalin per mesin.
+- `.github/workflows/test.yml` — job yang menjalankan suite **dihapus**. Yang
+  tersisa: sintaks bash, validator checklist, dan job Windows yang tidak
+  disentuh sama sekali.
+- `scripts/pr.sh` — menjalankan suite, menanam hasilnya sebagai checklist ke
+  pesan commit, lalu mem-push. Argumen judul **dihapus**.
+- `test/test-hook-pre-push.sh`, `test/test-checklist-uji.sh` (baru) — 8 dan 16
+  pemeriksaan; keduanya mengeksekusi yang sebenarnya berjalan, bukan salinannya.
+
+**Kenapa judul tidak lagi bisa dititipkan.** Di bawah squash, yang menentukan
+judul PR adalah isian otomatis GitHub — pada branch satu commit, subjek commit.
+Judul yang dititipkan lewat argumen atau query string hanya akan berbeda dari
+yang sebenarnya terpakai, dan pemeriksaan yang memeriksa hal lain dari yang
+berlaku lebih buruk daripada tidak ada pemeriksaan. Sekaligus itulah yang membuat
+body PR selamat: ia terisi dari badan commit, tanpa batas panjang URL dan tanpa
+kehilangan prosa. Ganti judul = `git commit --amend`.
+
+**Checklist adalah sambungannya.** Suite berjalan di lokal, jadi CI tidak bisa
+melihat hasilnya. `pr.sh` menanam hasil itu ke pesan commit; pesan commit menjadi
+body PR; CI membacanya dari sana dan memastikan **setiap** berkas `test/test-*.sh`
+disebut, tidak ada yang ditandai merah, dan tidak ada baris yang menyebut berkas
+yang tidak ada. Satu uji baru yang tidak pernah dijalankan karena itu tidak bisa
+lolos diam-diam.
+
+**Yang TIDAK dibuktikan, dan jangan dianggap sebaliknya.** Validator itu
+membuktikan **kecocokan** antara checklist dan isi repo — bukan bahwa ujinya
+lulus. Yang membuktikan lulus adalah hook, di mesin yang menjalankannya, dan
+`git push --no-verify` melewatinya. Jaringnya lebih longgar dari sebelumnya; itu
+pertukaran yang diminta dan disetujui, bukan kebetulan. Job Windows sengaja tidak
+ikut pindah: tidak ada PowerShell di mesin dev mana pun di tim ini, jadi
+memindahkannya berarti menghapusnya.
+
+**Bukti.** Suite 12 → 14 berkas, semuanya hijau lewat `pr.sh`. Hook dibuktikan
+menahan: satu uji dibuat merah, push ditolak dan nama ujinya disebut. Validator
+dibuktikan menangkap keempat bentuk kegagalannya (berkas tak disebut, uji merah,
+berkas hantu, body kosong).
+
+Penanaman checklist diuji dari ujung ke ujung, dan itu perlu — jalur itu rusak
+dua kali saat ditulis, keduanya dengan bentuk yang sama: **melapor sukses yang
+tidak terjadi**. Pertama `BLOK` diteruskan sebagai argumen alih-alih env,
+`python3` melempar `KeyError`, dan `2>/dev/null` menelannya sehingga yang
+terlihat hanya tuduhan terhadap python3. Kedua, `git commit --amend` ditolak git
+sementara `pr.sh` tetap mencetak tanda centang dan mem-push.
+
+`pr.sh` kini memeriksa **hasilnya**: pesan commit sesudah amend dibandingkan
+dengan pesan yang dimaksud, bukan dicari penandanya — commit pada jalan kedua
+sudah memuat penanda dari jalan pertama, sehingga pencarian penanda meloloskan
+amend yang gagal. Gagal menanam berarti **tidak di-push**: body PR tanpa
+checklist pasti ditolak validator, dan mem-push-nya hanya memindahkan kegagalan
+ke tempat yang lebih lambat terlihat. Diuji dengan mengunci `.git/objects`
+sehingga amend benar-benar gagal.
+
+**Dampak.** Setiap push kini menunggu suite (~3 menit). Itu ongkos yang dipindah,
+bukan yang ditambah — sebelumnya menunggu di CI sesudah push.
+
+**Rollback.** Kembalikan langkah-langkah suite ke `test.yml` dan hapus hook. Job
+Windows dan pagar judul tidak terlibat; keduanya berdiri sendiri.
+
+### Changed · 2026-09-17 — squash merge, dan pagar judul PR dibalik
+
+**Konteks.** Alur PR menuntut satu pekerjaan manual pada **setiap** PR, dan
+pekerjaan itu tidak pernah bisa dihindari. Di bawah merge commit, judul PR
+berprefiks conventional dilarang — GitHub menaruhnya di badan merge commit dan
+release-please membacanya sebagai commit kedua, sehingga entri terbit dua kali.
+Sudah lima kali: `v2.0.1`, `v2.1.0`, `v2.1.1`, `v3.0.0`, `v3.0.1`.
+
+Tapi bila branch berisi **tepat satu commit** — bentuk normal di repo ini —
+GitHub mengisi judul PR dari subjek commit itu, yang tentu conventional. Jadi
+isian otomatis GitHub **selalu** melanggar aturannya sendiri, dan setiap PR
+menuntut judulnya diketik ulang. Pagar yang menuntut pekerjaan manual pada setiap
+PR adalah pagar yang akhirnya dimatikan orang; permintaannya memang muncul
+sebagai "tolong buat CI-nya tidak perlu".
+
+**Perubahan.** Repo pindah ke **Squash and merge**. Judul PR menjadi subjek
+satu-satunya commit di `main`, jadi prefiks conventional kini **wajib** — dan
+isian otomatis GitHub sudah memenuhinya. Tidak ada merge commit yang
+menyelundupkan judul sebagai commit kedua, jadi tidak ada duplikasi. Satu commit
+per branch berarti: buat PR, tekan Squash and merge, tanpa mengetik apa pun.
+
+- `.github/workflows/pr-title.yml` — kondisinya dibalik: prefiks wajib, bukan
+  dilarang. Struktur yang dijaga uji tetap utuh (pemicu `edited`, pengecualian
+  release-please, pola dibaca dari satu baris `grep -qE`).
+- `scripts/pr.sh` — verdictnya dibalik, dan **argumennya kini opsional**: pada
+  branch satu commit ia mengambil judul dari subjek commit, persis yang akan
+  diisi GitHub. Pada branch dua commit atau lebih ia menolak menebak.
+- `docs/versioning.md`, `AGENTS.md` — keputusan dan alasannya dibalik, termasuk
+  kenapa kebijakan lama tidak bisa dipertahankan.
+- `test/test-pr-title-guard.sh` — kolom ekspektasi dibalik, 18 → 21 pemeriksaan.
+- `release-please-config.json` — seksi `ci` ditambahkan (tidak disembunyikan).
+  Tanpanya perubahan kebijakan seperti ini tidak pernah muncul di catatan rilis,
+  padahal setiap PR berikutnya bergantung padanya. `ci` tetap tidak menaikkan
+  versi; entrinya ikut rilis berikutnya yang memang naik.
+
+**Keberatan asli dijawab, bukan dilewati.** Squash ditolak pada 5 September 2026
+dengan alasan yang sah: footer `BREAKING CHANGE:` hidup di badan commit, dan
+badan commit squash diambil dari body PR — yang bisa disunting atau dikosongkan
+siapa pun sebelum merge. Kenaikan MAJOR yang hilang tidak menggagalkan apa pun;
+ia terbit sebagai patch, diam-diam.
+
+Jawabannya: penanda MAJOR dipindahkan ke **`!` di subjek** (`feat(setup)!: …`),
+yang selalu menjadi subjek commit dan karena itu tidak bisa hilang. Footer tetap
+boleh ditulis sebagai penjelasan, tetapi bukan lagi yang menentukan. Pagarnya
+sudah menerima bentuk itu dan kini diuji untuk kedua bentuknya.
+
+**Bukti.** `test-pr-title-guard.sh` 21/21. Ujinya **mengeksekusi blok `run:` dari
+workflow**, bukan salinan regexnya, jadi membalik workflow otomatis membalik apa
+yang diuji — yang saya balik dengan tangan hanya kolom ekspektasinya. Kasus yang
+LOLOS kini berlanjut ke `git push`, jadi ia dipindahkan ke kotak pasir; hanya
+kasus yang ditolak dijalankan di repo ini, karena ia berhenti sebelum menyentuh
+remote. Suite bash penuh 12/12.
+
+**Dampak.** Satu setelan di GitHub yang harus ditekan tangan: Settings → General
+→ Pull Requests → aktifkan *Allow squash merging*, *Default commit message* =
+**"Pull request title and description"**, dan matikan *Allow merge commits*
+supaya tombol yang salah tidak bisa ditekan. Tanpa setelan itu, PR berikutnya
+di-merge sebagai merge commit dengan judul conventional — tepat pola yang
+menggandakan entri. Urutannya karena itu mengikat: setelan dulu, merge PR ini
+kemudian, dan PR ini di-merge dengan **Squash**.
+
+**Rollback.** Revert commit ini DAN kembalikan setelan repo ke merge commit.
+Membalik salah satunya saja menghasilkan keadaan yang tidak pernah benar: pagar
+lama dengan squash membuat setiap perubahan terbit tanpa entri, pagar baru dengan
+merge commit menggandakan setiap entri.
+### Fixed · 2026-09-17 — pi menunjuk provider yang tidak dikelola siapa pun
+
+**Konteks.** `templates/pi-settings.json` menyetel `defaultProvider` ke
+`cooperagent` — nama tanpa strip, peninggalan sebelum penyatuan profil 3.0.0.
+`templates/pi-models.json` tidak pernah punya provider bernama itu, dan
+`Merge-PiModels`/`mergeModels` hanya mengelola provider yang **ada di template**.
+Nilai itu karena itu tidak pernah tersentuh siapa pun.
+
+Dua populasi, dua gejala, dan keduanya senyap dari sisi pemasang:
+
+- Pemasangan pra-3.0.0 masih menyimpan provider yatim `cooperagent` di
+  `models.json`. Ia dipertahankan apa adanya — memang begitu aturannya untuk
+  provider di luar template — sehingga `baseUrl`-nya **beku**. pi tetap menembak
+  alamat gateway lama setiap kali mesin pindah LAN/VPN, dan yang terlihat hanya
+  timeout.
+- Pemasangan 3.0.0 ke atas mendapat `cooperagent` dari template padahal provider
+  itu tidak ada di `models.json`. pi menjawab `Unknown provider "cooperagent"` —
+  bunyinya sama dengan galat 11 September, sebabnya lain.
+
+Yang membuatnya bertahan: `verify()` memeriksa `baseUrl` dan `apiKey` provider
+`cooper-agent`, dan provider itu selalu benar. Ia tidak pernah menanyakan
+provider mana yang sebenarnya dipakai pi.
+
+**Perubahan.**
+
+- `templates/pi-settings.json` — `defaultProvider` menjadi `cooper-agent`.
+- `scripts/lib/PiModels.ps1` (`Merge-PiSettings`) dan `scripts/lib/pi_json.mjs`
+  (`mergeSettings`) — nilai lama `cooperagent` dipindah ke nilai template. Hanya
+  nilai itu: `defaultProvider` lain adalah pilihan sadar dev dan tetap utuh.
+- `test/Test-PiModels.ps1` dan `test/test-pi-adapter.sh` — kasus regresi di
+  **kedua** jalur. Template yang benar tidak menolong pemasangan yang sudah ada;
+  yang menentukan adalah merge-nya benar-benar memindahkan nilai lama.
+
+**Bukti.** `test-pi-adapter.sh` bertambah tiga pemeriksaan: template menunjuk
+provider yang benar-benar ada di `pi-models.json`, merge memindahkan
+`cooperagent`, dan pilihan dev tidak ikut terbawa. Dengan template dikembalikan
+ke `cooperagent`, yang pertama merah; dengan cabang migrasinya dibuang, yang
+kedua merah. `Test-PiModels.ps1` 13/13 di job Windows. Direproduksi manual:
+gateway dipindah LAN→VPN lewat `setup.ps1`, pi timeout ke IP lama; sesudah
+patch, provider aktif ikut pindah dan pi menjawab.
+
+**Dampak.** **Semua** pemasangan pi sejak 3.0.0, bukan hanya peninggalan —
+templatnya sendiri yang menulis nilai buruk itu. Satu kali `setup`
+memindahkannya; tidak ada yang perlu disunting tangan.
+
+**Rollback.** Revert commit ini mengembalikan template ke `cooperagent` sekaligus
+mematikan migrasinya — artinya mengembalikan bug-nya, pada kedua populasi. Bila
+yang ingin dibatalkan hanya migrasi paksanya (mis. ada dev yang sengaja menamai
+providernya sendiri `cooperagent`), buang cabang `elseif`/`else if`-nya saja dan
+biarkan perubahan template berdiri: pemasangan baru selamat, yang lama tidak
+tersentuh.
+
+**Yang belum dibereskan.** `verify()` masih tidak pernah memeriksa provider mana
+yang dipakai pi — ia mencetak "konfigurasi pi sesuai kontrak" sementara pi
+merutekan lewat provider lain. Perbaikan ini menyembuhkan satu nilai buruk yang
+diketahui, bukan titik butanya.
+
 ### Fixed · 2026-09-12 — omp juga tidak tahu modelnya bisa melihat
 
 **Konteks.** Perbaikan pi di bawah sempat disertai klaim bahwa "Grok dan omp
