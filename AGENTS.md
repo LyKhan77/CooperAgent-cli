@@ -164,26 +164,40 @@ untuk satu rencana yang sama. Sebabnya bukan salah paham: PR rilis yang terbuka
 dan terlihat siap merge memang *tampak seperti pekerjaan yang belum selesai*.
 `draft-pull-request` membalik bawaannya — mendiamkannya kini keadaan yang benar.
 
-**Judul PR jangan berawalan prefiks conventional-commit.** GitHub menaruh judul
-PR ke badan merge commit, dan release-please membacanya sebagai commit
-tersendiri — entri yang sama terbit dua kali. Jebakannya: bila branch berisi
-**tepat satu commit**, GitHub mengisi judul dari subjek commit itu, yang tentu
-saja conventional. Lihat [`docs/versioning.md`](docs/versioning.md).
+**Judul PR HARUS berawalan prefiks conventional-commit.** Repo ini memakai
+squash merge, jadi judul PR menjadi subjek satu-satunya commit di `main` — dan
+itulah satu-satunya yang dibaca release-please. Judul tanpa prefiks berarti
+perubahan terbit tanpa entri CHANGELOG dan tanpa kenaikan versi, tanpa satu pun
+cek merah. Aturan ini dibalik pada 17 September 2026; sebelumnya repo memakai
+merge commit dan larangannya terbalik. Lihat
+[`docs/versioning.md`](docs/versioning.md).
+
+**Satu commit per branch.** Dengan satu commit, GitHub mengisi judul PR dari
+subjek commit itu dan body PR dari badannya — keduanya sudah benar, dan tidak ada
+yang perlu diketik. Dua commit atau lebih membuat GitHub memakai **nama branch**
+sebagai judul, yang tidak conventional dan karena itu ditolak.
+
+**MAJOR ditandai `!` di subjek** (`feat(setup)!: …`), bukan hanya footer
+`BREAKING CHANGE:`. Footer hidup di body PR, yang bisa disunting sebelum merge;
+subjek tidak.
 
 Dua hal menjaganya, dan keduanya membaca pola yang sama dari satu berkas:
 
 ```
-./scripts/pr.sh "Judul deskriptif"   # periksa + push + tautan yang sudah terisi
+./scripts/pr.sh                      # judul dari subjek commit + push + tautan
 .github/workflows/pr-title.yml       # jaring pengaman, bila PR dibuat lewat web
 ```
 
-Pakai `scripts/pr.sh`. Ia memeriksa judul **sebelum** PR ada, jadi tidak ada
-siklus "cek merah → sunting judul → tunggu CI lagi", dan tautannya membawa judul
-yang sudah benar sehingga isian otomatis GitHub tidak pernah terpakai.
+Pakai `scripts/pr.sh`. Tanpa argumen ia mengambil judul dari subjek commit,
+memeriksanya **sebelum** PR ada, lalu mencetak tautan yang judulnya sudah terisi
+— jadi tidak ada siklus "cek merah → sunting judul → tunggu CI lagi".
 
-**Merge commit, bukan squash.** Squash melipat semua commit jadi satu: detail
-CHANGELOG hilang, dan footer `BREAKING CHANGE:` bisa ikut hilang — bersamanya
-kenaikan MAJOR.
+**Squash and merge, bukan merge commit.** Dibalik pada 17 September 2026. Merge
+commit menyelundupkan judul PR ke badannya sebagai commit kedua — entri CHANGELOG
+kembar, lima kali. Keberatan asli terhadap squash (footer `BREAKING CHANGE:` bisa
+hilang bersama kenaikan MAJOR) dijawab dengan memindahkan penanda MAJOR ke `!` di
+subjek, yang tidak bisa hilang, dan dengan setelan repo "Pull request title and
+description" supaya body commit tetap ada.
 
 **PR di repo ini membeli sesuatu yang nyata**, tidak seperti di sebagian repo:
 CI menjalankan parser PowerShell 5.1 di runner Windows, satu-satunya cara

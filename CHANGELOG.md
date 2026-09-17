@@ -624,6 +624,72 @@ judul menyebut kapan perubahannya masuk, dan seksi bernomor di atas menyebut
 rilis mana yang membawanya.
 
 
+### Changed · 2026-09-17 — squash merge, dan pagar judul PR dibalik
+
+**Konteks.** Alur PR menuntut satu pekerjaan manual pada **setiap** PR, dan
+pekerjaan itu tidak pernah bisa dihindari. Di bawah merge commit, judul PR
+berprefiks conventional dilarang — GitHub menaruhnya di badan merge commit dan
+release-please membacanya sebagai commit kedua, sehingga entri terbit dua kali.
+Sudah lima kali: `v2.0.1`, `v2.1.0`, `v2.1.1`, `v3.0.0`, `v3.0.1`.
+
+Tapi bila branch berisi **tepat satu commit** — bentuk normal di repo ini —
+GitHub mengisi judul PR dari subjek commit itu, yang tentu conventional. Jadi
+isian otomatis GitHub **selalu** melanggar aturannya sendiri, dan setiap PR
+menuntut judulnya diketik ulang. Pagar yang menuntut pekerjaan manual pada setiap
+PR adalah pagar yang akhirnya dimatikan orang; permintaannya memang muncul
+sebagai "tolong buat CI-nya tidak perlu".
+
+**Perubahan.** Repo pindah ke **Squash and merge**. Judul PR menjadi subjek
+satu-satunya commit di `main`, jadi prefiks conventional kini **wajib** — dan
+isian otomatis GitHub sudah memenuhinya. Tidak ada merge commit yang
+menyelundupkan judul sebagai commit kedua, jadi tidak ada duplikasi. Satu commit
+per branch berarti: buat PR, tekan Squash and merge, tanpa mengetik apa pun.
+
+- `.github/workflows/pr-title.yml` — kondisinya dibalik: prefiks wajib, bukan
+  dilarang. Struktur yang dijaga uji tetap utuh (pemicu `edited`, pengecualian
+  release-please, pola dibaca dari satu baris `grep -qE`).
+- `scripts/pr.sh` — verdictnya dibalik, dan **argumennya kini opsional**: pada
+  branch satu commit ia mengambil judul dari subjek commit, persis yang akan
+  diisi GitHub. Pada branch dua commit atau lebih ia menolak menebak.
+- `docs/versioning.md`, `AGENTS.md` — keputusan dan alasannya dibalik, termasuk
+  kenapa kebijakan lama tidak bisa dipertahankan.
+- `test/test-pr-title-guard.sh` — kolom ekspektasi dibalik, 18 → 21 pemeriksaan.
+- `release-please-config.json` — seksi `ci` ditambahkan (tidak disembunyikan).
+  Tanpanya perubahan kebijakan seperti ini tidak pernah muncul di catatan rilis,
+  padahal setiap PR berikutnya bergantung padanya. `ci` tetap tidak menaikkan
+  versi; entrinya ikut rilis berikutnya yang memang naik.
+
+**Keberatan asli dijawab, bukan dilewati.** Squash ditolak pada 5 September 2026
+dengan alasan yang sah: footer `BREAKING CHANGE:` hidup di badan commit, dan
+badan commit squash diambil dari body PR — yang bisa disunting atau dikosongkan
+siapa pun sebelum merge. Kenaikan MAJOR yang hilang tidak menggagalkan apa pun;
+ia terbit sebagai patch, diam-diam.
+
+Jawabannya: penanda MAJOR dipindahkan ke **`!` di subjek** (`feat(setup)!: …`),
+yang selalu menjadi subjek commit dan karena itu tidak bisa hilang. Footer tetap
+boleh ditulis sebagai penjelasan, tetapi bukan lagi yang menentukan. Pagarnya
+sudah menerima bentuk itu dan kini diuji untuk kedua bentuknya.
+
+**Bukti.** `test-pr-title-guard.sh` 21/21. Ujinya **mengeksekusi blok `run:` dari
+workflow**, bukan salinan regexnya, jadi membalik workflow otomatis membalik apa
+yang diuji — yang saya balik dengan tangan hanya kolom ekspektasinya. Kasus yang
+LOLOS kini berlanjut ke `git push`, jadi ia dipindahkan ke kotak pasir; hanya
+kasus yang ditolak dijalankan di repo ini, karena ia berhenti sebelum menyentuh
+remote. Suite bash penuh 12/12.
+
+**Dampak.** Satu setelan di GitHub yang harus ditekan tangan: Settings → General
+→ Pull Requests → aktifkan *Allow squash merging*, *Default commit message* =
+**"Pull request title and description"**, dan matikan *Allow merge commits*
+supaya tombol yang salah tidak bisa ditekan. Tanpa setelan itu, PR berikutnya
+di-merge sebagai merge commit dengan judul conventional — tepat pola yang
+menggandakan entri. Urutannya karena itu mengikat: setelan dulu, merge PR ini
+kemudian, dan PR ini di-merge dengan **Squash**.
+
+**Rollback.** Revert commit ini DAN kembalikan setelan repo ke merge commit.
+Membalik salah satunya saja menghasilkan keadaan yang tidak pernah benar: pagar
+lama dengan squash membuat setiap perubahan terbit tanpa entri, pagar baru dengan
+merge commit menggandakan setiap entri.
+
 ### Fixed · 2026-09-12 — omp juga tidak tahu modelnya bisa melihat
 
 **Konteks.** Perbaikan pi di bawah sempat disertai klaim bahwa "Grok dan omp

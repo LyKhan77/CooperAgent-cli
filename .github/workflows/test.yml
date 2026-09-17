@@ -47,7 +47,7 @@ jobs:
       # Menguji skrip yang BENAR-BENAR dijalankan pr-title.yml, bukan salinan
       # polanya: dua kebenaran yang harus dijaga sinkron dengan tangan adalah
       # persis penyakit yang sedang dijaga pagar itu.
-      - name: Pagar judul PR menolak prefiks conventional-commit
+      - name: Pagar judul PR mewajibkan prefiks conventional-commit
         run: |
           python3 -m pip install --quiet pyyaml
           bash test/test-pr-title-guard.sh
