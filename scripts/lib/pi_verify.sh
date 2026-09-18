@@ -38,10 +38,22 @@ pi_verify() { # agent_dir models settings gateway token model who [pi_bin]
     case "$who" in
         dev-*) echo "  [x] identitas lama dev-... ditolak sebagai identitas pi." >&2; return 1 ;;
     esac
-    [ -f "$models" ] && [ -f "$settings" ] && [ -f "$agent_dir/AGENTS.md" ] || {
-        echo "  [x] config pi atau AGENTS.md tidak lengkap — verify() berhenti." >&2
+    [ -f "$models" ] && [ -f "$settings" ] || {
+        echo "  [x] config pi tidak lengkap — verify() berhenti." >&2
         return 1
     }
+    # AGENTS.md hanya WAJIB bila aturan memang dikelola CooperAgent. Dalam mode
+    # parameter (setup-pi.sh --params-only) aturan bukan urusannya, dan menuntut
+    # berkas itu berarti menolak menyegarkan jendela konteks hanya karena dev
+    # memakai aturannya sendiri.
+    if [ ! -f "$agent_dir/AGENTS.md" ]; then
+        if [ "${COOPER_PI_RULES_OPTIONAL:-0}" = 1 ]; then
+            echo "  [!] AGENTS.md global tidak ada — pemeriksaan aturan dilewati."
+        else
+            echo "  [x] config pi atau AGENTS.md tidak lengkap — verify() berhenti." >&2
+            return 1
+        fi
+    fi
     [ "$(pi_json_get settings "$settings" compactionEnabled 2>/dev/null || true)" = true ] || {
         echo "  [x] compaction pi tidak aktif." >&2
         return 1

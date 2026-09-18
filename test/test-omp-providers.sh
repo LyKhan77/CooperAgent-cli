@@ -69,9 +69,27 @@ grep -q "^  cooper-s2:" "$out" && ok "cooper-s2 masuk" || no "cooper-s2 masuk" "
 echo "milik dev tidak disentuh:"
 grep -q "sk-ant-rahasia-dev" "$out" && ok "kunci berbayar dev selamat" || no "kunci dev selamat" "HILANG"
 grep -q "^  anthropic:" "$out" && ok "provider dev selamat" || no "provider dev selamat" "hilang"
-grep -q "ca_punyadev" "$out" && ok "apiKey dev pada cooper-agent selamat" || no "apiKey dev selamat" "hilang"
-# Endpoint dev boleh berbeda dari template — ia yang tahu jaringannya.
-grep -q "198.51.100.10" "$out" && ok "baseUrl dev tidak ditimpa" || no "baseUrl dev tidak ditimpa" "berubah"
+# ── siapa yang memiliki baseUrl ───────────────────────────────────────────────
+#
+# Jaminan ini DIBALIK pada 18 September 2026, dan sengaja. Sebelumnya endpoint
+# suntingan dev pada provider KAMI tidak pernah ditimpa, dengan alasan "dev yang
+# tahu jaringannya". Akibatnya: mengganti gateway menyentuh Grok dan pi tetapi
+# meninggalkan omp di alamat lama, dan dev tidak diberi tahu apa pun. Itu yang
+# dilaporkan.
+#
+# Kepemilikannya kini pilihan PEMANGGIL, bukan kebijakan tunggal:
+#   setup.sh      -> milik kami, supaya ketiga harness konsisten
+#   setup-dev.sh  -> milik dev (OMP_KEEP_DEV_ENDPOINT=1), pendiriannya sejak awal
+echo "kepemilikan baseUrl mengikuti pemanggil:"
+grep -q "198.51.100.10" "$out" \
+    && no "baseUrl ikut gateway (baku)" "endpoint lama dipertahankan — omp akan tertinggal" \
+    || ok "baseUrl ikut gateway (baku, jalur setup.sh)"
+
+out_keep="$TMP/hasil-keep.yml"
+OMP_KEEP_DEV_ENDPOINT=1 merge_providers "$TMP/tpl.yml" "$TMP/dev.yml" > "$out_keep"
+grep -q "198.51.100.10" "$out_keep" \
+    && ok "baseUrl dev dihormati saat OMP_KEEP_DEV_ENDPOINT=1 (jalur setup-dev.sh)" \
+    || no "endpoint dev dihormati" "pembaru dev ikut menimpanya"
 
 echo "yang sudah ada TIDAK diduplikasi:"
 [ "$(grep -c '^  cooper-agent:' "$out")" = "1" ] \

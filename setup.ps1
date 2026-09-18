@@ -368,11 +368,27 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
         # ikut bermigrasi tidak bisa dipakai mundur.
         $source = $existing
         if (@($existing | Where-Object { $_ -match '^\[model\.internal-qwen(-s2)?\]\s*$' }).Count -gt 0) {
+            # Nama baru yang SUDAH ADA tidak diganti namanya lagi -- itu yang
+            # melahirkan seksi ganda.
+            #
+            # Config yang memuat `[model.internal-qwen]` DAN `[model.cooper-agent]`
+            # sekaligus (migrasi separuh jalan) berakhir dengan dua
+            # `[model.cooper-agent]`. Tabel ganda bukan TOML yang sah, dan
+            # akibatnya senyap: penulis menyentuh satu seksi, pembaca melihat yang
+            # lain. Dilaporkan dari Windows 18 September 2026 -- gateway tampak
+            # tidak berubah padahal setup melaporkan sukses.
+            $adaAgent = @($existing | Where-Object { $_ -match '^\[model\.cooper-agent\]\s*$' }).Count -gt 0
+            $adaS2    = @($existing | Where-Object { $_ -match '^\[model\.cooper-s2\]\s*$' }).Count -gt 0
             $source = @($existing | ForEach-Object {
-                if ($_ -match '^\[model\.internal-qwen\]\s*$')         { '[model.cooper-agent]' }
-                elseif ($_ -match '^\[model\.internal-qwen-s2\]\s*$')  { '[model.cooper-s2]' }
+                if ($_ -match '^\[model\.internal-qwen\]\s*$')         { if ($adaAgent) { $_ } else { '[model.cooper-agent]' } }
+                elseif ($_ -match '^\[model\.internal-qwen-s2\]\s*$')  { if ($adaS2)    { $_ } else { '[model.cooper-s2]' } }
                 else { $_ }
             })
+            if ($adaAgent -or $adaS2) {
+                Write-Host "  !  Profil lama DIBIARKAN: nama barunya sudah ada di config Anda." -ForegroundColor Yellow
+                Write-Host "     Mengganti namanya akan membuat dua seksi bernama sama, dan itu" -ForegroundColor Yellow
+                Write-Host "     bukan TOML yang sah. Hapus seksi internal-qwen bila tidak dipakai." -ForegroundColor Yellow
+            }
             Write-Host "  [v] profil lama diganti nama ke cooper-* (isinya dipertahankan)" -ForegroundColor Green
             # `internal-qwen-localhost` sengaja TIDAK diganti: tidak ada
             # padanannya sejak alamat menjadi pilihan -Endpoint. Menghapus
@@ -383,6 +399,14 @@ function Write-GrokConfig([string]$ServerUrl, [string]$Identity, [string]$Mode =
             }
         }
 
+        # Duplikat yang sudah ada dilaporkan. Ia tidak diperbaiki sendiri: tiap
+        # seksi bisa memuat kunci dev yang berbeda, dan memilih salah satunya
+        # tanpa diminta berarti membuang pekerjaan orang tanpa ia pernah tahu.
+        foreach ($d in (Test-TomlDuplicateSections $source)) {
+            Write-Host "  !  $d muncul lebih dari sekali di config.toml." -ForegroundColor Yellow
+            Write-Host "     TOML tidak mengizinkannya; yang dipakai CooperAgent adalah yang PERTAMA." -ForegroundColor Yellow
+            Write-Host "     Gabungkan atau hapus salinannya supaya tidak ada yang tertinggal basi." -ForegroundColor Yellow
+        }
         $merged = Merge-Toml $managed $source
         if ((($existing -join "`n")) -eq (($merged -join "`n"))) {
             Write-Host "[v] config.toml sudah sesuai - tidak ada perubahan." -ForegroundColor Green
@@ -480,6 +504,37 @@ function Get-CooperStoredToken {
     return $v
 }
 
+# Selaraskan models.yml omp dengan template, lalu laporkan APA ADANYA.
+#
+# Cermin dari omp_sync_ke_gateway di setup.sh. Pesan sukses hanya dicetak bila
+# berkasnya benar-benar berubah: melapor "diperbarui" atas berkas yang tidak
+# tersentuh adalah melapor sukses berdasarkan niat.
+function Sync-CooperOmp([string]$GatewayBase, [string]$Key) {
+    $tpl = Join-Path (Join-Path $SCRIPT_DIR 'templates') 'omp-models.yml'
+    if (-not (Test-Path $tpl)) {
+        Write-Host "  !  template omp tidak ditemukan - models.yml dilewati" -ForegroundColor Yellow
+        return $false
+    }
+    $rendered = (Expand-CooperTemplate (Get-Content -Raw $tpl)).Replace('__GATEWAY__', $GatewayBase).Replace('__API_KEY__', $Key)
+    if (-not (Assert-CooperRendered $rendered 'models.yml')) { return $false }
+    $tplLines = $rendered -split "`r?`n"
+    $curLines = if (Test-Path $OMP_YML_PATH) { @(Get-Content -LiteralPath $OMP_YML_PATH) } else { @() }
+    $merged = if ($curLines.Count -gt 0) { Merge-OmpProviders $tplLines $curLines $false } else { $tplLines }
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    if ($curLines.Count -gt 0 -and (($curLines -join "`n") -eq (($merged -join "`n")))) {
+        Write-Host "[v] models.yml omp sudah sesuai - tidak ada perubahan" -ForegroundColor Green
+        return $true
+    }
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    if (Test-Path $OMP_YML_PATH) {
+        Copy-Item $OMP_YML_PATH "$OMP_YML_PATH.bak.$stamp"
+        Invoke-CooperBakPrune $OMP_YML_PATH
+    }
+    [System.IO.File]::WriteAllLines($OMP_YML_PATH, [string[]]$merged, $utf8)
+    Write-Host "[v] models.yml omp diperbarui (cadangan: models.yml.bak.$stamp)" -ForegroundColor Green
+    return $true
+}
+
 # Menulis kredensial dan alamat ke SEMUA harness yang terpasang.
 #
 # Satu tempat, karena inilah yang selalu terlewat: sampai 3 September 2026
@@ -497,16 +552,11 @@ function Set-CooperAllHarness([string]$NewUrl, [string]$Tok, [string]$Ident) {
         Write-GrokConfig $NewUrl $Ident
     }
     if (Test-CooperOmpInstalled) {
-        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-        Copy-Item $OMP_YML_PATH "$OMP_YML_PATH.bak.$stamp"
-        Invoke-CooperBakPrune $OMP_YML_PATH
-        $newBase = Get-CooperGatewayBase $NewUrl
-        $oldBase = Get-OmpStoredGateway $OMP_YML_PATH
-        if ($oldBase -and $oldBase -ne $newBase) {
-            [void](Set-OmpBaseUrl $OMP_YML_PATH $oldBase $newBase)
-        }
-        [void](Set-OmpApiKey $OMP_YML_PATH $key $newBase)
-        Write-Host "[v] models.yml omp diperbarui (cadangan: models.yml.bak.$stamp)" -ForegroundColor Green
+        # omp di-MERGE dari template, sejajar dengan Grok dan pi. Sebelum
+        # 18 September 2026 blok ini hanya men-sed baseUrl dan apiKey di tempat,
+        # sehingga profil baru tidak pernah sampai dan dev berlokal tidak pernah
+        # bisa berpindah -- sementara pesan "diperbarui" tetap dicetak.
+        [void](Sync-CooperOmp (Get-CooperGatewayBase $NewUrl) $key)
     }
     if (Test-CooperPiInstalled) {
         $setupPi = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
@@ -815,39 +865,115 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
             # kami; aturan yang sudah disunting dev dibiarkan. models.json,
             # settings.json, server MCP, extension, dan skill milik dev tidak
             # disentuh jalur ini sama sekali.
+            # Aturan dipasang/dilepas PER HARNESS, bukan sekaligus. Cermin dari
+            # pemilih yang sama di setup.sh; aturan adalah PENDAPAT tentang cara
+            # bekerja, jadi memaksakannya serempak bertentangan dengan alasan ia
+            # dibuat opsional.
+            Write-Host ''
+            Write-Host '--- Aturan agent CooperxHarness ---' -ForegroundColor Cyan
+            if ($RULES_ON) { Write-Host '  Aturan sedang TERPASANG. Pilih yang ingin dilepas:' }
+            else           { Write-Host '  Aturan sedang TIDAK terpasang. Pilih yang ingin dipasang:' }
+            $pilihan = [ordered]@{}; $n = 0
+            if (Test-CooperGrokInstalled) { $n++; $pilihan["$n"] = 'grok'; Write-Host "  $n) Grok Build" }
+            if (Test-CooperOmpInstalled)  { $n++; $pilihan["$n"] = 'omp';  Write-Host "  $n) Oh My Pi (omp)" }
+            if (Test-CooperPiInstalled)   { $n++; $pilihan["$n"] = 'pi';   Write-Host "  $n) Pi Agent (pi)" }
+            Write-Host '  a) Semua harness terpasang'
+            $pick = Read-Host "Pilihan [1..$n/a, default: a]"
+            if ([string]::IsNullOrWhiteSpace($pick)) { $pick = 'a' }
+            $target = @()
+            if ($pick -match '^[aA]$' -or $pick -eq 'semua') { $target = @('grok','omp','pi') }
+            elseif ($pilihan.Contains($pick)) { $target = @($pilihan[$pick]) }
+            if ($target.Count -eq 0) {
+                Write-Host "[x] Pilihan '$pick' tidak dikenal - tidak ada yang diubah." -ForegroundColor Red
+                exit 1
+            }
+
             $piRulesRc = 0
-            if (Test-CooperPiInstalled) {
+            if ($target -contains 'pi' -and (Test-CooperPiInstalled)) {
                 $piSetup = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
                 if (-not (Test-Path $piSetup)) { throw 'scripts\setup-pi.ps1 tidak ditemukan.' }
                 Write-Host ''
-                if ($RULES_ON) {
-                    & $piSetup -RemoveRules
-                } elseif ($CUR_TOKEN) {
-                    & $piSetup -Rules -Token $CUR_TOKEN
-                } else {
-                    & $piSetup -Rules
-                }
+                if ($RULES_ON) { & $piSetup -RemoveRules }
+                elseif ($CUR_TOKEN) { & $piSetup -Rules -Token $CUR_TOKEN }
+                else { & $piSetup -Rules }
                 $piRulesRc = $LASTEXITCODE
                 if ($null -eq $piRulesRc) { $piRulesRc = 0 }
             }
-            if (-not (Test-CooperGrokInstalled) -and -not (Test-CooperOmpInstalled)) {
-                exit $piRulesRc
+
+            # Grok dan omp diurus setup-dev.ps1, yang kini menerima -RulesFor.
+            $devFor = ''
+            if ($target -contains 'grok' -and (Test-CooperGrokInstalled)) { $devFor = 'grok' }
+            if ($target -contains 'omp'  -and (Test-CooperOmpInstalled)) {
+                if ($devFor) { $devFor = 'both' } else { $devFor = 'omp' }
             }
-            $sd5 = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
-            if (-not (Test-Path $sd5)) {
-                Write-Host "[x] scripts\setup-dev.ps1 tidak ditemukan." -ForegroundColor Red
-                exit 1
-            }
-            Write-Host ""
-            if ($RULES_ON) {
-                & $sd5 -RemoveRules
-            } else {
-                if ($CUR_GATEWAY -and -not $env:COOPERAGENT_GATEWAY) {
-                    $env:COOPERAGENT_GATEWAY = $CUR_GATEWAY
+            if ($devFor) {
+                $sd5 = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-dev.ps1'
+                if (-not (Test-Path $sd5)) {
+                    Write-Host "[x] scripts\setup-dev.ps1 tidak ditemukan." -ForegroundColor Red
+                    exit 1
                 }
-                if ($CUR_TOKEN) { & $sd5 -Rules -Token $CUR_TOKEN } else { & $sd5 -Rules }
+                Write-Host ""
+                if ($RULES_ON) {
+                    & $sd5 -RemoveRules -RulesFor $devFor
+                } else {
+                    if ($CUR_GATEWAY -and -not $env:COOPERAGENT_GATEWAY) {
+                        $env:COOPERAGENT_GATEWAY = $CUR_GATEWAY
+                    }
+                    if ($CUR_TOKEN) { & $sd5 -Rules -RulesFor $devFor -Token $CUR_TOKEN }
+                    else { & $sd5 -Rules -RulesFor $devFor }
+                }
             }
             exit $piRulesRc
+        }
+        '1' {
+            # HANYA parameter model cooper-agent. Tidak ada pemasangan.
+            # Cermin dari handler yang sama di setup.sh.
+            #
+            # Yang disentuh: endpoint provider kami, id model, jendela konteks,
+            # maxTokens, ambang compaction, apiKey. Yang TIDAK: aturan agent,
+            # skill, server MCP, extension, [ui], [marketplace], dan model
+            # tambahan milik dev.
+            if (-not $CRED_OK) {
+                Write-Host ''
+                Write-Host '! Parameter tetap diperbarui, tapi kredensial di atas belum sah -' -ForegroundColor Yellow
+                Write-Host '  permintaan ke gateway akan tetap dijawab 401 sampai pilihan 3 dijalankan.' -ForegroundColor Yellow
+            }
+            if (-not $CUR_GATEWAY) {
+                Write-Host ''
+                Write-Host '[x] Alamat gateway tidak terbaca - tidak ada parameter yang bisa diturunkan.' -ForegroundColor Red
+                Write-Host '    Pakai pilihan 2 untuk menyetel alamatnya lebih dulu.' -ForegroundColor Yellow
+                exit 1
+            }
+            Write-Host ''
+            Write-Host '--- Perbarui parameter model (tanpa menyentuh aturan/skill) ---' -ForegroundColor Cyan
+            $paramGw = ConvertTo-CanonicalEndpoint $CUR_GATEWAY
+            # Identitas dibaca ulang dari config bila gateway tidak menjawab:
+            # menyegarkan parameter tidak boleh mengosongkan api_key yang masih
+            # bekerja hanya karena verifikasi tidak bisa dijalankan saat ini.
+            $paramIdent = $COOPER_WHO
+            if (-not $paramIdent) { $paramIdent = (Read-ExistingIdentity) -replace '^dev-', '' }
+            [void](Get-CooperContract (Get-CooperGatewayBase $paramGw))
+            $paramRc = 0
+            if (Test-CooperGrokInstalled) {
+                $script:Token = $CUR_TOKEN
+                Write-GrokConfig $paramGw $paramIdent
+            }
+            if (Test-CooperOmpInstalled) {
+                [void](Sync-CooperOmp (Get-CooperGatewayBase $paramGw) (Get-OmpApiKey $paramIdent $CUR_TOKEN))
+            }
+            if (Test-CooperPiInstalled) {
+                $piSetup1 = Join-Path (Join-Path $SCRIPT_DIR 'scripts') 'setup-pi.ps1'
+                if (Test-Path $piSetup1) {
+                    Write-Host '--- Parameter pi ---' -ForegroundColor Cyan
+                    $env:COOPERAGENT_GATEWAY = $paramGw
+                    if ($CUR_TOKEN) { & $piSetup1 -ParamsOnly -Token $CUR_TOKEN } else { & $piSetup1 -ParamsOnly }
+                    $paramRc = $LASTEXITCODE
+                    if ($null -eq $paramRc) { $paramRc = 0 }
+                }
+            }
+            Write-Host ''
+            Write-Host '[v] Parameter diperbarui di seluruh harness terpasang.' -ForegroundColor Green
+            exit $paramRc
         }
         '6' {
             Write-Host "Tidak ada yang diubah." -ForegroundColor Green

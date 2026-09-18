@@ -165,19 +165,24 @@ t "models.yml dibuat"      "$([ -f "$SB/omp/.omp/agent/models.yml" ] && echo ya)
 # menghitungnya dua kali.
 t "endpoint routing otomatis" "$(grep -cx '    baseUrl: http://198.51.100.10:8987/v1' "$SB/omp/.omp/agent/models.yml")" "1"
 t "entri s2 ikut dirender"    "$(grep -cx '    baseUrl: http://198.51.100.10:8987/v1/upstream/s2' "$SB/omp/.omp/agent/models.yml")" "1"
-t "tiga provider terpasang"   "$(grep -cE '^  [a-z0-9-]+:' "$SB/omp/.omp/agent/models.yml")" "3"
+NPROV="$(grep -cE '^  [a-z0-9-]+:' templates/omp-models.yml)"
+t "semua provider template terpasang" "$(grep -cE '^  [a-z0-9-]+:' "$SB/omp/.omp/agent/models.yml")" "$NPROV"
 
 # models.yml milik dev TIDAK boleh ditimpa -- ia bisa memuat provider lain.
 sed -i 's|baseUrl: .*|baseUrl: http://198.51.100.20:8987/v1|' "$SB/omp/.omp/agent/models.yml"
 out=$(HOME="$SB/omp" GROK_HOME="$SB/omp/.grok" $SETUP 2>&1)
 t "penyimpangan dilaporkan" "$(grep -c 'menunjuk http://198.51.100.20' <<<"$out")" "1"
-t "berkas dev tidak ditimpa" "$(grep -c '198.51.100.20' "$SB/omp/.omp/agent/models.yml")" "3"
+t "berkas dev tidak ditimpa" "$(grep -c '198.51.100.20' "$SB/omp/.omp/agent/models.yml")" "$NPROV"
 
 echo "═══ H: models.yml konsisten dengan entri Grok ═══"
 # Dev Grok mendapat tiga entri model; dev omp harus mendapat tiga provider yang
 # sepadan. Sebelum 30 Agustus 2026 ia hanya mendapat satu.
 t "template omp ada"        "$([ -f templates/omp-models.yml ] && echo ya)" "ya"
-t "tiga provider di template" "$(grep -cE '^  [a-z0-9-]+:' templates/omp-models.yml)" "3"
+t "provider template semuanya cooper-*" \
+  "$(grep -oE '^  [a-z0-9-]+:' templates/omp-models.yml | tr -d ' :' \
+     | grep -cvE '^cooper-(agent|s[0-9]+)$')" "0"
+t "profil langsung per node ada" \
+  "$(grep -cE '^  cooper-s[0-9]+:' templates/omp-models.yml)" "$((NPROV - 1))"
 t "entri s2 ada"            "$(grep -c 'upstream/s2' templates/omp-models.yml)" "1"
 # Tidak ada skrip yang boleh menulis YAML-nya sendiri -- empat salinan menyimpang.
 t "tidak ada YAML tertanam" "$(grep -lE '^\s+providers:' setup.sh setup.ps1 scripts/setup-dev.sh scripts/setup-dev.ps1 2>/dev/null | wc -l)" "0"

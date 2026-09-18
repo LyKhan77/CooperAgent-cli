@@ -646,6 +646,108 @@ menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
 bernomor di atas menyebut rilis mana yang membawanya.
 
 
+### Fixed · 2026-09-18 — ganti gateway tidak sampai ke semua harness
+
+**Konteks.** Dilaporkan dari Windows: ganti gateway lewat pilihan 2, jalankan
+setup lagi, alamatnya masih yang lama. Log-nya memuat satu baris yang menjelaskan
+segalanya sekaligus menyembunyikannya:
+
+```
+[v] config.toml sudah sesuai - tidak ada perubahan.
+...
+  gateway   : http://10.8.0.62:8987/api/v1      <- jalan kedua, alamat LAMA
+```
+
+Ditemukan **empat** cacat, dan omp ada di pusat tiga di antaranya.
+
+**1. `[model.cooper-agent]` ganda — penulis dan pembaca menunjuk seksi berbeda.**
+`Get-SectionMap` memetakan nama seksi ke kemunculan **terakhir**, sementara SETIAP
+pembaca melihat yang **pertama** (`Read-ExistingEndpoint`, dan `grep -m1 base_url`
+di bash). Seksi terakhir sudah sesuai template, jadi merge melaporkan "sudah
+sesuai"; seksi pertama tetap basi, dan itulah yang dibaca ke layar. Duplikatnya
+lahir dari migrasi `internal-qwen` → `cooper-agent` pada config yang **sudah**
+punya `cooper-agent`.
+
+Diperbaiki tiga lapis: peta seksi memakai kemunculan pertama (penulis dan pembaca
+sepakat), migrasi menolak mengganti nama bila nama barunya sudah ada, dan seksi
+ganda yang sudah ada **dilaporkan** — tabel ganda bukan TOML yang sah, dan
+menggabungkannya tanpa diminta berarti memilih salah satu salinan kunci dev tanpa
+ia pernah tahu ada pilihan.
+
+**2. omp satu-satunya harness yang tidak pernah di-merge dari template.** Grok
+dirender ulang penuh, pi di-merge per kunci, omp hanya di-`sed` bedah. Akibatnya
+dua-duanya senyap: profil baru tidak pernah sampai (`cooper-s3` tidak ada di omp
+mana pun), dan `sed`-nya **melewati setiap baris ber-`127.0.0.1`** sehingga dev
+berlokal tidak pernah bisa berpindah sama sekali. `merge_providers` kini
+menyelaraskan per kunci, dan `Merge-OmpProviders` ada di PowerShell — sebelumnya
+tidak ada padanannya **sama sekali**.
+
+**3. Pesan sukses yang tidak diperiksa.** `✔ models.yml omp diperbarui` dicetak
+tanpa syarat, termasuk saat tidak ada satu byte pun berubah. Sekarang ia
+membedakan "diperbarui" dari "sudah sesuai", dan cadangan hanya diambil bila ada
+yang berubah.
+
+**4. Pilihan 1 dan 5 menyentuh lebih dari yang diminta.** Pilihan 1 tidak punya
+handler sendiri — ia jatuh ke jalur onboarding penuh, jadi menyegarkan jendela
+konteks juga memasang ulang aturan agent dan skill; dev yang sudah melepas aturan
+mendapatkannya kembali tanpa diminta. Pilihan 5 menyentuh ketiga harness tanpa
+bertanya.
+
+**Perubahan.**
+
+- `scripts/lib/merge_providers.sh` — merge per kunci, bukan tambah-saja.
+  Kepemilikan `baseUrl` jadi pilihan pemanggil: `setup.sh` memilikinya (demi
+  konsistensi ketiga harness), `setup-dev.sh` menghormati endpoint dev
+  (`OMP_KEEP_DEV_ENDPOINT=1`, pendiriannya sejak awal).
+- `scripts/lib/OmpModels.ps1` — `Merge-OmpProviders`, padanan yang sebelumnya
+  tidak ada.
+- `scripts/lib/MergeToml.ps1` — peta seksi memakai kemunculan pertama,
+  `Test-TomlDuplicateSections`.
+- `setup.sh` / `setup.ps1` — handler pilihan 1 tersendiri (hanya parameter model),
+  pemilih harness pada pilihan 5, pencegah + pelapor seksi ganda.
+- `scripts/setup-pi.sh` / `.ps1` — `--params-only` / `-ParamsOnly`.
+- `scripts/setup-dev.sh` / `.ps1` — `--rules-for` / `-RulesFor`.
+- `templates/omp-models.yml` — penanda `# @keep-existing` pada kunci yang boleh
+  disunting dev (`name`, `api`, `supportsImages`).
+
+**Lingkup pilihan 1, tepat.** Yang disentuh: endpoint provider kami, id model,
+jendela konteks, maxTokens, ambang compaction, `apiKey`. Yang **tidak**: aturan
+agent, skill, server MCP, extension, `[ui]`, `[marketplace]`, dan model tambahan
+milik dev. Ketiga harness dikerjakan dari satu tempat supaya lingkupnya
+benar-benar sama untuk ketiganya.
+
+**Bukti — dan inilah yang berubah paling mendasar.** `pwsh` kini terpasang di
+mesin dev, jadi jalur Windows **dijalankan**, bukan ditebak:
+
+- `setup.ps1` dijalankan langsung dengan `USERPROFILE` terisolasi dan gateway
+  tiruan. Bug seksi ganda direproduksi (`sudah sesuai` + alamat basi), lalu
+  dibuktikan hilang: seksi pertama ikut diperbarui dan duplikatnya dilaporkan.
+- `test/test-paritas-windows.sh` (baru) menjalankan **kedua** implementasi merge
+  omp atas masukan yang sama dan membandingkan **byte per byte** — identik di
+  kedua mode. Paritas yang selama ini hanya bisa diklaim kini bisa dieksekusi.
+- `test/Test-OmpModels.ps1` — ditulis 17 September tanpa pernah dijalankan;
+  sekarang lulus 19/19 di mesin ini.
+- `test/test-opsi-parameter-aturan.sh` (baru) — lingkup pilihan 1 dan 5 diperiksa
+  dari **berkasnya**, bukan dari yang dicetak.
+
+**Batasnya jujur.** `pwsh` di Linux adalah PowerShell 7; target repo tetap Windows
+PowerShell 5.1. Yang dibuktikan di sini LOGIKA, bukan kecocokan sintaks 5.1 — itu
+masih milik job Windows di CI.
+
+**Satu jaminan lama dibalik, sengaja.** Dulu `baseUrl` suntingan dev pada provider
+KAMI tidak pernah ditimpa. Itu justru sebab omp tertinggal di alamat lama.
+Kepemilikannya kini pilihan pemanggil, dan kedua kebijakan diuji.
+
+**Ditemukan sambil jalan:** `test-setup-dev.sh` sudah merah di `main` sebelum
+perubahan ini — PR #40 menambah `cooper-s3` tanpa memperbarui hitungan "tiga
+provider", dan PR itu masuk tanpa melewati `pr.sh`. Hitungannya kini diturunkan
+dari template, jadi menambah profil tidak akan lagi memerahkan suite tanpa ada
+yang menduga sebabnya.
+
+**Dampak.** Dev menjalankan setup sekali. Sesudah itu ganti gateway menyentuh
+ketiga harness, `cooper-s3` sampai ke pemasangan yang sudah ada, dan dev berlokal
+akhirnya bisa berpindah alamat.
+
 ### Added · 2026-09-18 — verify menyebut provider yang sebenarnya dipakai pi
 
 **Konteks.** Titik buta yang menyembunyikan bug `defaultProvider` selama

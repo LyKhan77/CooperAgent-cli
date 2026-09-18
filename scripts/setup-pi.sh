@@ -11,6 +11,11 @@ TOKEN=""
 ENDPOINT=""
 RULES_MODE=""
 REMOVE_RULES=0
+# --params-only: HANYA parameter model cooper-agent (endpoint, id model,
+# jendela konteks, maxTokens, compaction). Aturan agent, skill, server MCP, dan
+# extension milik dev tidak disentuh sama sekali. Dipakai oleh pilihan
+# "Perbarui parameter" di setup.sh, yang sengaja bukan pemasangan.
+PARAMS_ONLY=0
 
 for _a in "$@"; do
     case "$_a" in
@@ -45,6 +50,7 @@ while [ $# -gt 0 ]; do
         --rules) RULES_MODE=yes; shift ;;
         --no-rules) RULES_MODE=no; shift ;;
         --remove-rules) REMOVE_RULES=1; shift ;;
+        --params-only) PARAMS_ONLY=1; RULES_MODE=no; shift ;;
         --no-color|--ascii) shift ;;
         *) echo "Opsi tidak dikenal: $1" >&2; exit 2 ;;
     esac
@@ -186,11 +192,18 @@ if [ "$REMOVE_RULES" = 1 ]; then
     exit 0
 fi
 
-if ! pi_rules_wanted; then
+# Mode parameter TIDAK mengurus aturan, jadi prasyarat ini tidak berlaku
+# padanya. Menerapkannya di sana berarti menolak menyegarkan jendela konteks
+# hanya karena dev memilih memakai aturannya sendiri -- dan pilihan itu memang
+# kita hormati di tempat lain.
+if [ "$PARAMS_ONLY" != 1 ] && ! pi_rules_wanted; then
     echo "${RED}${S_NO}${NC} Pemasangan pi dibatalkan: verify() mensyaratkan AGENTS.md global." >&2
     echo "    Jalankan lagi dengan --rules bila ingin memakai aturan CooperAgent." >&2
     exit 4
 fi
+# verify() memeriksa aturan; tanpa AGENTS.md ia berhenti. Dalam mode parameter
+# berkas itu boleh tidak ada, dan yang diperiksa hanya bagian konfigurasi.
+[ "$PARAMS_ONLY" = 1 ] && export COOPER_PI_RULES_OPTIONAL=1
 
 SERVER_URL=""
 if [ -n "$ENDPOINT" ]; then
@@ -255,8 +268,12 @@ pi_merge_json models "$PI_MODELS_JSON" "$TMP_DIR/models.template.json" "$TMP_DIR
 pi_merge_json settings "$PI_SETTINGS_JSON" "$TMP_DIR/settings.template.json" "$TMP_DIR/settings.merged.json"
 
 echo "${CYAN}--- Menulis konfigurasi pi ---${NC}"
-install_pi_rules
-install_pi_skills
+if [ "$PARAMS_ONLY" = 1 ]; then
+    echo "  ${YELLOW}hanya parameter${NC} — aturan agent, skill, MCP, dan extension tidak disentuh"
+else
+    install_pi_rules
+    install_pi_skills
+fi
 install_pi_json models "$PI_MODELS_JSON" "$TMP_DIR/models.merged.json"
 install_pi_json settings "$PI_SETTINGS_JSON" "$TMP_DIR/settings.merged.json"
 

@@ -69,6 +69,7 @@ TOKEN=""
 # dipasang pada ketiga jalur.
 RULES_MODE=""
 REMOVE_RULES=0
+RULES_FOR="both"
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
@@ -77,6 +78,10 @@ while [ $# -gt 0 ]; do
         --rules)        RULES_MODE="yes"; shift ;;
         --no-rules)     RULES_MODE="no";  shift ;;
         --remove-rules) REMOVE_RULES=1;   shift ;;
+        # Aturan bisa dipasang/dilepas per harness. Sampai 18 September 2026
+        # keduanya selalu sekaligus, sehingga dev yang ingin melepas aturan dari
+        # Grok saja harus menyuntingnya dengan tangan.
+        --rules-for)    RULES_FOR="${2:-both}"; shift 2 ;;
         *) echo "opsi tidak dikenal: $1" >&2
            echo "penggunaan: setup-dev.sh [--dry-run] [--token ca_...]" >&2
            echo "            [--rules|--no-rules|--remove-rules]" >&2
@@ -125,7 +130,12 @@ echo
 
 # Dua tujuan, satu sumber: Grok membaca ~/.grok/AGENTS.md, omp membaca
 # ~/.omp/agent/AGENTS.md.
-RULES_PATHS="$GROK_HOME/AGENTS.md $HOME/.omp/agent/AGENTS.md"
+case "$RULES_FOR" in
+    grok) RULES_PATHS="$GROK_HOME/AGENTS.md" ;;
+    omp)  RULES_PATHS="$HOME/.omp/agent/AGENTS.md" ;;
+    both) RULES_PATHS="$GROK_HOME/AGENTS.md $HOME/.omp/agent/AGENTS.md" ;;
+    *)    echo "--rules-for hanya menerima grok, omp, atau both." >&2; exit 2 ;;
+esac
 # Baris pertama template. Dipakai untuk mengenali berkas MILIK KAMI yang sudah
 # tertinggal versi -- `cmp` terhadap template saat ini akan menyebut aturan kami
 # sendiri dari rilis lalu sebagai "milik dev", lalu menolak melepasnya.
@@ -382,10 +392,15 @@ install_rules() {
 }
 
 if rules_wanted; then
-    install_rules "$GROK_HOME/AGENTS.md" "Aturan agent (Grok)"
-    # Dipasang tanpa syarat: dev bisa memasang omp kapan saja setelah ini, dan
-    # berkas 5 KB di direktori yang belum dipakai tidak merugikan siapa pun.
-    install_rules "$HOME/.omp/agent/AGENTS.md" "Aturan agent (Oh My Pi)"
+    # Yang dipasang mengikuti --rules-for. Bawaannya keduanya: dev bisa memasang
+    # omp kapan saja setelah ini, dan berkas 5 KB di direktori yang belum dipakai
+    # tidak merugikan siapa pun.
+    case "$RULES_FOR" in
+        grok|both) install_rules "$GROK_HOME/AGENTS.md" "Aturan agent (Grok)" ;;
+    esac
+    case "$RULES_FOR" in
+        omp|both)  install_rules "$HOME/.omp/agent/AGENTS.md" "Aturan agent (Oh My Pi)" ;;
+    esac
 else
     echo "${YELLOW}${S_WARN}${NC} Aturan agent DILEWATI — Anda memakai aturan sendiri."
     echo "   Pasang kapan saja: ./scripts/setup-dev.sh --rules"
@@ -579,7 +594,10 @@ if [ -z "${SKIP_OMP:-}" ]; then
                 cp "$MY" "$MY.bak.$STAMP"
                 bak_prune "$MY"
                 merged="$(mktemp)"
-                merge_providers "$tpl_prov" "$MY" > "$merged" && mv "$merged" "$MY"
+                # Endpoint suntingan dev DIHORMATI di sini -- pendirian pembaru dev
+                # sejak awal, dan `setup.sh` yang mengganti gateway memakai
+                # kebijakan sebaliknya. Lihat scripts/lib/merge_providers.sh.
+                OMP_KEEP_DEV_ENDPOINT=1 merge_providers "$tpl_prov" "$MY" > "$merged" && mv "$merged" "$MY"
                 echo "  ${GREEN}${S_OK}${NC} provider ditambahkan:${missing} (cadangan: models.yml.bak.$STAMP)"
             else
                 echo "  ${GREEN}${S_OK}${NC} provider akan ditambahkan:${missing} (dry-run)"

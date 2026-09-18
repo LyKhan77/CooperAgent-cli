@@ -26,7 +26,10 @@
 # memasangnya tanpa bertanya berarti menulis 6 KB pendapat ke direktori global
 # mereka atas nama "pemasangan". SKILL TIDAK IKUT -- ia perkakas, bukan pendapat.
 param([switch]$DryRun, [string]$Token = '',
-      [switch]$Rules, [switch]$NoRules, [switch]$RemoveRules)
+      [switch]$Rules, [switch]$NoRules, [switch]$RemoveRules,
+      # Aturan bisa dipasang/dilepas per harness. Sampai 18 September 2026
+      # keduanya selalu sekaligus. Cermin dari --rules-for di setup-dev.sh.
+      [ValidateSet('grok','omp','both')][string]$RulesFor = 'both')
 
 # Bentuk token diperiksa di sini, bukan diserahkan ke gateway. Salah tempel
 # adalah kesalahan paling umum saat onboarding, dan menemukannya sekarang jauh
@@ -234,10 +237,13 @@ function Install-Rules([string]$Dst, [string]$Label) {
     }
 }
 
-$RulesPaths = @(
-    (Join-Path $GrokHome 'AGENTS.md'),
-    (Join-Path $env:USERPROFILE '.omp\agent\AGENTS.md')
-)
+$RulesPathGrok = Join-Path $GrokHome 'AGENTS.md'
+$RulesPathOmp  = Join-Path $env:USERPROFILE '.omp\agent\AGENTS.md'
+$RulesPaths = switch ($RulesFor) {
+    'grok' { @($RulesPathGrok) }
+    'omp'  { @($RulesPathOmp) }
+    default { @($RulesPathGrok, $RulesPathOmp) }
+}
 # Baris pertama template. Dipakai mengenali berkas MILIK KAMI yang tertinggal
 # versi -- perbandingan isi penuh akan menyebut aturan kami sendiri dari rilis
 # lalu sebagai "milik dev", lalu menolak melepasnya.
@@ -302,9 +308,11 @@ function Test-RulesWanted {
 }
 
 if (Test-RulesWanted) {
-    Install-Rules $RulesPaths[0] 'Aturan agent (Grok)'
-    # Dipasang tanpa syarat: dev bisa memasang omp kapan saja setelah ini.
-    Install-Rules $RulesPaths[1] 'Aturan agent (Oh My Pi)'
+    # Yang dipasang mengikuti -RulesFor. Bawaannya keduanya: dev bisa memasang
+    # omp kapan saja setelah ini, dan berkas 5 KB di direktori yang belum dipakai
+    # tidak merugikan siapa pun.
+    if ($RulesFor -eq 'grok' -or $RulesFor -eq 'both') { Install-Rules $RulesPathGrok 'Aturan agent (Grok)' }
+    if ($RulesFor -eq 'omp'  -or $RulesFor -eq 'both') { Install-Rules $RulesPathOmp  'Aturan agent (Oh My Pi)' }
 } else {
     Write-Host '!   Aturan agent DILEWATI - Anda memakai aturan sendiri.' -ForegroundColor Yellow
     Write-Host '    Pasang kapan saja: .\scripts\setup-dev.ps1 -Rules'

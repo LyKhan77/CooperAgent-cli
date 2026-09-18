@@ -25,17 +25,46 @@ function Get-ManagedKeys([string]$Path) {
 }
 
 # --- peta rentang baris tiap seksi ------------------------------------------
+# Seksi yang muncul DUA KALI: yang dipakai adalah kemunculan PERTAMA.
+#
+# KENAPA. Sebelum 18 September 2026 kemunculan terakhir menimpa yang pertama di
+# peta ini, sementara SETIAP pembaca melihat yang pertama (Read-ExistingEndpoint
+# di setup.ps1, `grep -m1 base_url` di setup.sh). Penulis dan pembaca karena itu
+# menunjuk seksi yang berbeda, dan akibatnya persis seperti yang dilaporkan dari
+# Windows pada 18 September 2026: `base_url` seksi kedua diperbarui, seksi
+# pertama tetap basi, merge melaporkan "sudah sesuai", dan layar membaca alamat
+# lama. Tidak ada satu pun yang salah di layar.
+#
+# Duplikat itu sendiri tetap SALAH -- tabel ganda bukan TOML yang sah -- dan
+# Test-TomlDuplicateSections di bawah melaporkannya. Yang diperbaiki di sini
+# hanyalah supaya penulis dan pembaca sepakat sementara duplikatnya ada.
 function Get-SectionMap([string[]]$Lines) {
     $map = [ordered]@{}
     $cur = ''; $start = 0
     for ($i = 0; $i -lt $Lines.Count; $i++) {
         if ($Lines[$i] -match '^\[.*\]\s*$') {
-            if ($cur -ne '') { $map[$cur] = @{ Start = $start; End = $i } }
+            if ($cur -ne '' -and -not $map.Contains($cur)) { $map[$cur] = @{ Start = $start; End = $i } }
             $cur = $Lines[$i].Trim(); $start = $i + 1
         }
     }
-    if ($cur -ne '') { $map[$cur] = @{ Start = $start; End = $Lines.Count } }
+    if ($cur -ne '' -and -not $map.Contains($cur)) { $map[$cur] = @{ Start = $start; End = $Lines.Count } }
     return $map
+}
+
+# Nama seksi yang muncul lebih dari sekali. Dipakai untuk MEMBERI TAHU, bukan
+# untuk memperbaiki sendiri: seksi ganda bisa memuat kunci dev yang berbeda di
+# masing-masingnya, dan menggabungkannya tanpa diminta berarti memilih salah satu
+# tanpa dev pernah tahu ada pilihan.
+function Test-TomlDuplicateSections([string[]]$Lines) {
+    $seen = @{}; $dup = New-Object System.Collections.Generic.List[string]
+    foreach ($l in $Lines) {
+        if ($l -match '^\[.*\]\s*$') {
+            $n = $l.Trim()
+            if ($seen.ContainsKey($n)) { if (-not $dup.Contains($n)) { [void]$dup.Add($n) } }
+            else { $seen[$n] = $true }
+        }
+    }
+    return $dup
 }
 
 function Merge-Toml([object]$Managed, [string[]]$Lines) {

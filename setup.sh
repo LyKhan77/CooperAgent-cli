@@ -127,6 +127,10 @@ OS_TYPE="$(uname -s)"
 # shellcheck source=scripts/lib/omp_models.sh
 . "${SCRIPT_DIR}/scripts/lib/omp_models.sh"
 
+# Merge provider omp -- dipakai opsi "perbarui parameter" dan "ganti gateway".
+# shellcheck source=scripts/lib/merge_providers.sh
+. "${SCRIPT_DIR}/scripts/lib/merge_providers.sh"
+
 # Helper pi hanya dipakai bila pi dipilih atau memang sudah terpasang. Ia tidak
 # mengubah provider maupun jalur aturan Grok/omp.
 . "${SCRIPT_DIR}/scripts/lib/pi_models.sh"
@@ -502,12 +506,27 @@ EOF
     if [ -f "$cfg" ] && [ "$mode" != "overwrite" ] &&
        grep -qE '^\[model\.internal-qwen(\]|-s2\])' "$cfg" 2>/dev/null; then
         src="$(mktemp)"
-        awk '
-            /^\[model\.internal-qwen\][[:space:]]*$/    { print "[model.cooper-agent]"; next }
-            /^\[model\.internal-qwen-s2\][[:space:]]*$/ { print "[model.cooper-s2]";    next }
+        # Nama baru yang SUDAH ADA tidak diganti namanya lagi -- itu yang
+        # melahirkan seksi ganda. Config yang memuat `[model.internal-qwen]` DAN
+        # `[model.cooper-agent]` sekaligus berakhir dengan dua seksi bernama sama;
+        # tabel ganda bukan TOML yang sah, dan akibatnya senyap. Dilaporkan dari
+        # Windows 18 September 2026, dan dicerminkan di sini karena bentuk
+        # migrasinya sama.
+        ada_agent=0; ada_s2=0
+        grep -qE '^\[model\.cooper-agent\][[:space:]]*$' "$cfg" 2>/dev/null && ada_agent=1
+        grep -qE '^\[model\.cooper-s2\][[:space:]]*$' "$cfg" 2>/dev/null && ada_s2=1
+        awk -v ada_agent="$ada_agent" -v ada_s2="$ada_s2" '
+            /^\[model\.internal-qwen\][[:space:]]*$/    { print (ada_agent ? $0 : "[model.cooper-agent]"); next }
+            /^\[model\.internal-qwen-s2\][[:space:]]*$/ { print (ada_s2    ? $0 : "[model.cooper-s2]");    next }
             { print }
         ' "$cfg" > "$src"
-        echo -e "  ${GREEN}${S_OK}${NC} profil lama diganti nama ke cooper-* (isinya dipertahankan)"
+        if [ "$ada_agent" = 1 ] || [ "$ada_s2" = 1 ]; then
+            echo -e "  ${YELLOW}!${NC} Profil lama DIBIARKAN: nama barunya sudah ada di config Anda."
+            echo -e "    Mengganti namanya akan membuat dua seksi bernama sama, dan itu bukan"
+            echo -e "    TOML yang sah. Hapus seksi internal-qwen bila tidak dipakai."
+        else
+            echo -e "  ${GREEN}${S_OK}${NC} profil lama diganti nama ke cooper-* (isinya dipertahankan)"
+        fi
         # `internal-qwen-localhost` sengaja TIDAK diganti: tidak ada padanannya
         # sejak alamat menjadi pilihan `--endpoint`. Menghapus config yang masih
         # bekerja bukan tugas pemasang.
@@ -518,6 +537,15 @@ EOF
     fi
 
     if [ -f "$cfg" ] && [ "$mode" != "overwrite" ]; then
+        # Seksi ganda dilaporkan, bukan diperbaiki sendiri: tiap salinan bisa
+        # memuat kunci dev yang berbeda, dan memilih satu tanpa diminta berarti
+        # membuang pekerjaan orang tanpa ia pernah tahu.
+        grep -oE '^\[[^]]+\][[:space:]]*$' "$src" 2>/dev/null | tr -d ' ' | sort | uniq -d \
+        | while IFS= read -r dup; do
+            [ -n "$dup" ] || continue
+            echo -e "  ${YELLOW}!${NC} $dup muncul lebih dari sekali di config.toml."
+            echo -e "    TOML tidak mengizinkannya; yang dipakai CooperAgent adalah yang PERTAMA."
+        done
         merged="$(merge_toml "$tpl" "$src")"
         # `if`, bukan `[ ... ] && rm` -- `set -e` aktif, dan uji yang gagal
         # sebagai perintah terakhir akan menghentikan pemasang di tengah jalan.
@@ -613,6 +641,32 @@ stored_token() {
     printf '%s' "$v"
 }
 
+# Selaraskan models.yml omp dengan template, lalu laporkan APA ADANYA.
+#
+# Pesan sukses hanya dicetak bila berkasnya benar-benar berubah, dan cadangan
+# hanya diambil bila ada yang perlu dicadangkan. Melapor "diperbarui" atas
+# berkas yang tidak tersentuh adalah bentuk melapor sukses berdasarkan niat.
+omp_sync_ke_gateway() { # $1 = gateway base  $2 = api key
+    local gw="$1" key="$2" rtpl merged stamp tpl="${SCRIPT_DIR}/templates/omp-models.yml"
+    [ -f "$tpl" ] || { echo -e "${YELLOW}!${NC} template omp tidak ditemukan — models.yml dilewati"; return 1; }
+    rtpl="$(mktemp)"; merged="$(mktemp)"
+    if ! contract_render "$tpl" | sed -e "s|__GATEWAY__|${gw}|g" -e "s|__API_KEY__|${key}|g" > "$rtpl" \
+       || ! contract_assert_rendered "$rtpl"; then
+        echo -e "${YELLOW}!${NC} template omp tidak terender penuh — models.yml dibiarkan"
+        rm -f "$rtpl" "$merged"; return 1
+    fi
+    omp_merge_into "$rtpl" "$OMP_YML_PATH" "$merged"
+    case $? in
+        0) stamp="$(date +%Y%m%d-%H%M%S)"
+           [ -f "$OMP_YML_PATH" ] && { cp "$OMP_YML_PATH" "$OMP_YML_PATH.bak.$stamp"; bak_prune "$OMP_YML_PATH"; }
+           mv "$merged" "$OMP_YML_PATH"
+           echo -e "${GREEN}${S_OK}${NC} models.yml omp diperbarui (cadangan: models.yml.bak.$stamp)" ;;
+        1) echo -e "${GREEN}${S_OK}${NC} models.yml omp sudah sesuai — tidak ada perubahan" ;;
+        *) echo -e "${YELLOW}!${NC} models.yml omp tidak dapat di-merge — dibiarkan apa adanya" ;;
+    esac
+    rm -f "$rtpl" "$merged"
+}
+
 # Menulis kredensial dan alamat ke SEMUA harness yang terpasang.
 #
 # Satu tempat, karena inilah yang selalu terlewat: sampai 3 September 2026
@@ -630,15 +684,14 @@ apply_to_all_harness() { # $1 = gateway baru  $2 = kredensial  $3 = identitas
         DEV_TOKEN="$tok" write_grok_config "$new_url" "$ident"
     fi
     if installed_omp; then
-        stamp="$(date +%Y%m%d-%H%M%S)"
-        cp "$OMP_YML_PATH" "$OMP_YML_PATH.bak.$stamp"
-        bak_prune "$OMP_YML_PATH"
-        old_gw="$(omp_gateway_of "$OMP_YML_PATH" || true)"
-        if [ -n "$old_gw" ] && [ "$old_gw" != "$(cooper_gateway_base "$new_url")" ]; then
-            omp_set_base_url "$OMP_YML_PATH" "$old_gw" "$(cooper_gateway_base "$new_url")" || true
-        fi
-        omp_set_api_key "$OMP_YML_PATH" "$key" "$(cooper_gateway_base "$new_url")" || true
-        echo -e "${GREEN}${S_OK}${NC} models.yml omp diperbarui (cadangan: models.yml.bak.$stamp)"
+        # omp di-MERGE dari template, sejajar dengan Grok dan pi.
+        #
+        # Sampai 18 September 2026 blok ini hanya men-`sed` baseUrl dan apiKey di
+        # tempat. Dua akibatnya sama-sama senyap: profil baru tidak pernah sampai
+        # ke pemasangan yang ada, dan `sed`-nya melewati setiap baris ber-127.0.0.1
+        # sehingga dev berlokal tidak pernah bisa berpindah. Pesan "diperbarui"
+        # tetap dicetak dalam kedua keadaan itu.
+        omp_sync_ke_gateway "$(cooper_gateway_base "$new_url")" "$key"
     fi
     if installed_pi; then
         echo -e "${CYAN}--- Memperbarui konfigurasi pi yang sudah terpasang ---${NC}"
@@ -912,35 +965,131 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp || installed_pi; }
             # kami (`cmp -s` di pi_rules_are_ours); aturan yang sudah disunting
             # dev dibiarkan. models.json, settings.json, server MCP, extension,
             # dan skill milik dev tidak disentuh jalur ini sama sekali.
-            PI_RULES_RC=0
-            if installed_pi; then
-                echo -e "\n${CYAN}--- Aturan agent pi ---${NC}"
-                if [ "$RULES_ON" = 1 ]; then
-                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --remove-rules || PI_RULES_RC=$?
-                elif [ -n "$CUR_TOKEN" ]; then
-                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules --token "$CUR_TOKEN" || PI_RULES_RC=$?
-                else
-                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules || PI_RULES_RC=$?
-                fi
+            # Aturan dipasang/dilepas PER HARNESS, bukan sekaligus.
+            #
+            # Sampai 18 September 2026 pilihan ini menyentuh ketiganya tanpa
+            # bertanya. Dev yang ingin memakai aturan sendiri di Grok tetapi
+            # aturan kami di pi tidak punya jalan sama sekali -- dan aturan adalah
+            # PENDAPAT tentang cara bekerja, jadi memaksakannya serempak justru
+            # bertentangan dengan alasan ia dibuat opsional.
+            echo -e "\n${CYAN}--- Aturan agent CooperxHarness ---${NC}"
+            if [ "$RULES_ON" = 1 ]; then
+                echo -e "  Aturan sedang TERPASANG. Pilih yang ingin ${YELLOW}dilepas${NC}:"
+            else
+                echo -e "  Aturan sedang TIDAK terpasang. Pilih yang ingin ${YELLOW}dipasang${NC}:"
             fi
-
-            if ! installed_grok && ! installed_omp; then
-                exit $PI_RULES_RC
-            fi
-
-            if [ ! -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
-                echo -e "${RED}${S_NO} scripts/setup-dev.sh tidak ditemukan.${NC}"
+            RULES_MENU=""; RULES_N=0
+            installed_grok && { RULES_N=$((RULES_N+1)); RULES_MENU="$RULES_MENU $RULES_N:grok"; echo -e "  $RULES_N) Grok Build"; }
+            installed_omp  && { RULES_N=$((RULES_N+1)); RULES_MENU="$RULES_MENU $RULES_N:omp";  echo -e "  $RULES_N) Oh My Pi (omp)"; }
+            installed_pi   && { RULES_N=$((RULES_N+1)); RULES_MENU="$RULES_MENU $RULES_N:pi";   echo -e "  $RULES_N) Pi Agent (pi)"; }
+            echo -e "  a) Semua harness terpasang"
+            read -rp "Pilihan [1..$RULES_N/a, default: a]: " RULES_PICK || RULES_PICK=""
+            RULES_PICK="${RULES_PICK:-a}"
+            RULES_TARGET=""
+            case "$RULES_PICK" in
+                a|A|semua) RULES_TARGET="grok omp pi" ;;
+                *) for pair in $RULES_MENU; do
+                       [ "${pair%%:*}" = "$RULES_PICK" ] && RULES_TARGET="${pair#*:}"
+                   done ;;
+            esac
+            if [ -z "$RULES_TARGET" ]; then
+                echo -e "${RED}${S_NO} Pilihan '$RULES_PICK' tidak dikenal — tidak ada yang diubah.${NC}"
                 exit 1
             fi
-            echo ""
-            if [ "$RULES_ON" = 1 ]; then
-                bash "$SCRIPT_DIR/scripts/setup-dev.sh" --remove-rules
-            else
-                COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" \
-                    bash "$SCRIPT_DIR/scripts/setup-dev.sh" --rules \
-                    ${CUR_TOKEN:+--token "$CUR_TOKEN"}
+
+            PI_RULES_RC=0
+            case " $RULES_TARGET " in *" pi "*)
+                if installed_pi; then
+                    echo -e "\n${CYAN}--- Aturan agent pi ---${NC}"
+                    if [ "$RULES_ON" = 1 ]; then
+                        bash "$SCRIPT_DIR/scripts/setup-pi.sh" --remove-rules || PI_RULES_RC=$?
+                    elif [ -n "$CUR_TOKEN" ]; then
+                        bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules --token "$CUR_TOKEN" || PI_RULES_RC=$?
+                    else
+                        bash "$SCRIPT_DIR/scripts/setup-pi.sh" --rules || PI_RULES_RC=$?
+                    fi
+                fi ;;
+            esac
+
+            # Grok dan omp diurus setup-dev.sh, yang kini menerima --rules-for.
+            DEV_FOR=""
+            case " $RULES_TARGET " in *" grok "*) installed_grok && DEV_FOR="grok" ;; esac
+            case " $RULES_TARGET " in *" omp "*)
+                if installed_omp; then
+                    if [ -n "$DEV_FOR" ]; then DEV_FOR="both"; else DEV_FOR="omp"; fi
+                fi ;;
+            esac
+            if [ -n "$DEV_FOR" ]; then
+                if [ ! -f "$SCRIPT_DIR/scripts/setup-dev.sh" ]; then
+                    echo -e "${RED}${S_NO} scripts/setup-dev.sh tidak ditemukan.${NC}"
+                    exit 1
+                fi
+                echo ""
+                if [ "$RULES_ON" = 1 ]; then
+                    bash "$SCRIPT_DIR/scripts/setup-dev.sh" --remove-rules --rules-for "$DEV_FOR"
+                else
+                    COOPERAGENT_GATEWAY="${CUR_GATEWAY:-${COOPERAGENT_GATEWAY:-}}" \
+                        bash "$SCRIPT_DIR/scripts/setup-dev.sh" --rules --rules-for "$DEV_FOR" \
+                        ${CUR_TOKEN:+--token "$CUR_TOKEN"}
+                fi
             fi
             exit $PI_RULES_RC ;;
+        1)
+            # HANYA parameter model cooper-agent. Tidak ada pemasangan.
+            #
+            # Sampai 18 September 2026 pilihan ini jatuh ke jalur onboarding
+            # penuh: ia memanggil setup-dev.sh dan setup-pi.sh apa adanya,
+            # sehingga aturan agent dan skill ikut dipasang ulang. Dev yang cuma
+            # ingin menyegarkan jendela konteks mendapat lebih banyak daripada
+            # yang ia minta -- dan yang sudah melepas aturan mendapatkannya
+            # kembali tanpa diminta.
+            #
+            # Yang disentuh: endpoint provider kami, id model, jendela konteks,
+            # maxTokens, ambang compaction, dan apiKey. Yang TIDAK disentuh:
+            # aturan agent, skill, server MCP, extension, [ui], [marketplace],
+            # dan model tambahan milik dev.
+            #
+            # Ketiga harness dikerjakan dari SINI, bukan didelegasikan, supaya
+            # lingkupnya benar-benar sama untuk ketiganya.
+            if [ "$CRED_OK" != 1 ]; then
+                echo -e "\n${YELLOW}! Parameter tetap diperbarui, tapi kredensial di atas belum sah —${NC}"
+                echo -e "${YELLOW}  permintaan ke gateway akan tetap dijawab 401 sampai pilihan 3 dijalankan.${NC}"
+            fi
+            if [ -z "$CUR_GATEWAY" ]; then
+                echo -e "\n${RED}${S_NO} Alamat gateway tidak terbaca — tidak ada parameter yang bisa diturunkan.${NC}"
+                echo -e "${YELLOW}    Pakai pilihan 2 untuk menyetel alamatnya lebih dulu.${NC}"
+                exit 1
+            fi
+            echo -e "\n${CYAN}--- Perbarui parameter model (tanpa menyentuh aturan/skill) ---${NC}"
+            PARAM_GW="$(normalize_endpoint "$CUR_GATEWAY")"
+            # Identitas dibaca ulang dari config bila gateway tidak menjawab:
+            # menyegarkan parameter tidak boleh mengosongkan api_key yang masih
+            # bekerja hanya karena verifikasi tidak bisa dijalankan saat ini.
+            # Pola yang sama dipakai jalur --endpoint.
+            PARAM_IDENT="${COOPER_WHO:-}"
+            if [ -z "$PARAM_IDENT" ]; then
+                PARAM_IDENT="$(grep -m1 -E '^[[:space:]]*api_key' "$GROK_CFG" 2>/dev/null \
+                    | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/' || true)"
+                PARAM_IDENT="${PARAM_IDENT#dev-}"
+            fi
+            fetch_contract "$(cooper_gateway_base "$PARAM_GW")" || true
+            echo -e "  sumber angka: $(contract_note)"
+            PARAM_RC=0
+            if installed_grok; then
+                DEV_TOKEN="$CUR_TOKEN" write_grok_config "$PARAM_GW" "$PARAM_IDENT"
+            fi
+            if installed_omp; then
+                omp_sync_ke_gateway "$(cooper_gateway_base "$PARAM_GW")" \
+                    "$(omp_api_key "$PARAM_IDENT" "$CUR_TOKEN")"
+            fi
+            if installed_pi; then
+                echo -e "${CYAN}--- Parameter pi ---${NC}"
+                COOPERAGENT_GATEWAY="$PARAM_GW" \
+                    bash "$SCRIPT_DIR/scripts/setup-pi.sh" --params-only \
+                    ${CUR_TOKEN:+--token "$CUR_TOKEN"} || PARAM_RC=$?
+            fi
+            echo -e "\n${GREEN}${S_OK} Parameter diperbarui di seluruh harness terpasang.${NC}"
+            exit $PARAM_RC ;;
         6)
             echo -e "${GREEN}Tidak ada yang diubah.${NC}"
             exit 0 ;;
