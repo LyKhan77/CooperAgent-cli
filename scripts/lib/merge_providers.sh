@@ -257,3 +257,37 @@ omp_merge_into() {
     cmp -s "$out" "$cur" && return 1
     return 0
 }
+
+# omp_hasil_wajar <berkas> -> rc 0 wajar, rc 1 tidak
+#
+# Diperiksa SEBELUM ditulis, dan pada HASILNYA — bukan pada masukan.
+#
+# KENAPA ADA. Pada 18 September 2026 sebuah models.yml di mesin Windows tumbuh
+# 2,226x SETIAP KALI ditulis, lima kali berturut, sampai 1,47 GB dengan hanya 51
+# baris — satu baris membengkak ratusan megabyte. Penyebabnya belum diketahui:
+# ketiga penulis omp di repo ini sudah diuji berulang dan tidak ada yang tumbuh.
+#
+# Karena sebabnya belum diketahui, yang dijaga adalah INVARIANNYA, bukan
+# penyebabnya: config omp adalah berkas kecil dengan baris-baris pendek. Apa pun
+# yang melanggar itu tidak ditulis, dan berkas yang ada dibiarkan utuh. Penjaga
+# semacam ini menangkap penggandaan siapa pun — termasuk yang belum kita kenali.
+OMP_BATAS_BYTE="${OMP_BATAS_BYTE:-1048576}"   # 1 MB; template ~4 KB
+OMP_BATAS_BARIS="${OMP_BATAS_BARIS:-4096}"    # karakter per baris
+
+omp_hasil_wajar() {
+    local f="$1" ukuran panjang
+    [ -f "$f" ] || return 1
+    ukuran="$(wc -c < "$f" 2>/dev/null || echo 0)"
+    if [ "$ukuran" -gt "$OMP_BATAS_BYTE" ]; then
+        printf 'models.yml hasil merge %s byte (batas %s) — tidak ditulis.\n' \
+            "$ukuran" "$OMP_BATAS_BYTE" >&2
+        return 1
+    fi
+    panjang="$(awk '{ if (length($0) > m) m = length($0) } END { print m+0 }' "$f")"
+    if [ "$panjang" -gt "$OMP_BATAS_BARIS" ]; then
+        printf 'models.yml hasil merge punya baris %s karakter (batas %s) — tidak ditulis.\n' \
+            "$panjang" "$OMP_BATAS_BARIS" >&2
+        return 1
+    fi
+    return 0
+}

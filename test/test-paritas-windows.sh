@@ -118,6 +118,56 @@ grep -q "PERTAMA=base_url = \"http://baru" "$T/dup.out" \
     && ok "seksi PERTAMA yang diperbarui — yang dilihat semua pembaca" \
     || no "seksi pertama diperbarui" "$(grep PERTAMA= "$T/dup.out")"
 
+# ── 3. encoding: mojibake yang menggandakan berkas ───────────────────────────
+#
+# Windows PowerShell 5.1 membaca ANSI secara BAWAAN, pwsh 7 membaca UTF-8, dan
+# semua penulis di repo ini menulis UTF-8. Pada 5.1 setiap siklus baca-tulis
+# karena itu mengurai salah setiap karakter non-ASCII lalu menuliskannya kembali
+# lebih panjang: `—` menjadi `â€”`, lalu masing-masingnya menjadi tiga lagi.
+#
+# Terukur di mesin Windows: models.yml tumbuh TEPAT 2,226x setiap kali setup
+# jalan -- 57 MB, 127, 283, 631, 1404 -- sampai 1,47 GB dengan 51 baris, lalu
+# setup mati dengan OutOfMemoryException.
+#
+# Uji ini MENYABOTASE bawaan encoding menjadi ANSI, lalu menjalankan setup.ps1
+# sungguhan. Skrip yang memaksa UTF-8 sendiri akan selamat; yang tidak, tidak.
+# Tanpa sabotase ini pwsh 7 akan lolos meski perbaikannya dicabut.
+echo "encoding tidak menggandakan berkas:"
+GW_PORT=9061
+python3 - "$GW_PORT" <<'PYGW' > "$T/gw.py"
+import sys
+print(open("test/test-credential-gate.sh").read().split('cat > "$T/gw.py" <<\'PY\'\n')[1].split("\nPY\n")[0])
+PYGW
+python3 "$T/gw.py" "$GW_PORT" & GWPID=$!
+for _ in $(seq 60); do curl -sf -o /dev/null "http://127.0.0.1:$GW_PORT/v1/models" && break; sleep 0.1; done
+VALID="ca_$(printf 'a%.0s' $(seq 48))"
+HW="$T/winhome"; mkdir -p "$HW/.grok" "$HW/.omp/agent"
+printf '[cli]\nauto_update = false\n\n[model.cooper-agent]\nmodel = "model-uji"\nbase_url = "http://127.0.0.1:%s/api/v1"\napi_key = "%s"\ncontext_window = 262144\n' "$GW_PORT" "$VALID" > "$HW/.grok/config.toml"
+# Nama model memuat em dash -- persis bentuk yang menggandakan diri.
+printf 'providers:\n  cooper-agent:\n    name: CooperAgent — routing otomatis\n    baseUrl: http://127.0.0.1:%s/v1\n    apiKey: %s\n    models:\n      - id: model-uji\n' "$GW_PORT" "$VALID" > "$HW/.omp/agent/models.yml"
+
+for putaran in 1 2 3; do
+    printf '1\n' | USERPROFILE="$HW" HOME="$HW" COOPERAGENT_PI_BIN=/bin/true \
+        pwsh -NoProfile -Command "
+            \$PSDefaultParameterValues['Get-Content:Encoding'] = [System.Text.Encoding]::GetEncoding(1252).WebName
+            & '$ROOT/setup.ps1'" >/dev/null 2>&1
+    eval "ukuran$putaran=\$(wc -c < '$HW/.omp/agent/models.yml')"
+done
+kill $GWPID 2>/dev/null
+
+if [ "$ukuran2" = "$ukuran3" ]; then
+    ok "ukuran models.yml stabil saat dijalankan ulang ($ukuran3 byte)"
+else
+    no "ukuran stabil" "tumbuh $ukuran2 -> $ukuran3 byte — berkas menggandakan diri"
+fi
+if grep -q 'â€' "$HW/.omp/agent/models.yml"; then
+    no "tidak ada mojibake" "karakter non-ASCII terurai salah lalu ditulis ulang"
+else
+    ok "tidak ada mojibake — non-ASCII bertahan utuh"
+fi
+grep -q '—' "$HW/.omp/agent/models.yml" \
+    && ok "em dash asli masih ada" || no "em dash bertahan" "hilang atau berubah"
+
 # ── 3. uji runtime PowerShell yang sebelumnya hanya jalan di CI ──────────────
 echo "uji runtime PowerShell:"
 for t in test/Test-PiModels.ps1 test/Test-OmpModels.ps1; do

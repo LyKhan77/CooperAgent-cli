@@ -202,5 +202,31 @@ else
 fi
 rm -rf "$SBX"
 
+echo "penjaga kewajaran hasil:"
+# Pada 18 September 2026 sebuah models.yml tumbuh 2,226x SETIAP KALI ditulis --
+# lima kali berturut, sampai 1,47 GB dengan hanya 51 baris. Penyebabnya belum
+# diketahui: ketiga penulis omp sudah diuji berulang dan tidak ada yang tumbuh.
+#
+# Karena sebabnya belum diketahui, yang dijaga INVARIANNYA: config omp adalah
+# berkas kecil dengan baris pendek. Penjaga semacam ini menangkap penggandaan
+# siapa pun, termasuk yang belum kita kenali.
+G="$TMP/wajar"; mkdir -p "$G"
+printf 'providers:\n  cooper-agent:\n    baseUrl: http://x/v1\n' > "$G/kecil.yml"
+omp_hasil_wajar "$G/kecil.yml" 2>/dev/null \
+    && ok "berkas wajar diterima" || no "berkas wajar diterima" "justru ditolak"
+
+# Satu baris raksasa: bentuk kerusakan yang benar-benar terjadi.
+printf 'providers:\n  cooper-agent:\n    baseUrl: http://x/v1 ' > "$G/panjang.yml"
+head -c 5000 /dev/zero | tr '\0' 'x' >> "$G/panjang.yml"; echo >> "$G/panjang.yml"
+omp_hasil_wajar "$G/panjang.yml" 2>/dev/null \
+    && no "baris raksasa ditolak" "diterima — kerusakan akan ditulis ke disk" \
+    || ok "baris raksasa ditolak"
+
+# Dan total yang membengkak, sekalipun tiap barisnya pendek.
+{ echo 'providers:'; for i in $(seq 150000); do echo "  provider-$i:"; done; } > "$G/besar.yml"
+omp_hasil_wajar "$G/besar.yml" 2>/dev/null \
+    && no "total membengkak ditolak" "diterima" || ok "total membengkak ditolak"
+
+echo
 echo "lulus $pass, gagal $fail"
 [[ $fail -eq 0 ]]

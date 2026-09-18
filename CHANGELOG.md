@@ -646,6 +646,104 @@ menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
 bernomor di atas menyebut rilis mana yang membawanya.
 
 
+### Fixed · 2026-09-18 — models.yml 1,47 GB: penjaga, lalu obatnya
+
+**Konteks.** Sesudah perbaikan ganti-gateway masuk, `setup.ps1` di mesin Windows
+mati dengan `OutOfMemoryException` tepat sesudah `config.toml` ditulis. Diagnosis:
+
+```
+baris models.yml : 51
+ukuran           : 1472749046 byte    (1,47 GB)
+```
+
+51 baris, 1,47 GB — satu baris membengkak ratusan megabyte. Daftar cadangannya
+menunjukkan polanya:
+
+```
+57,2 MB  →  127,3  →  283,4  →  630,9  →  1404,5
+```
+
+**Tepat 2,226x setiap kali ditulis**, lima kali berturut. Itu mekanis, jadi ada
+bug — bukan kerusakan acak.
+
+**Penyebabnya BELUM DIKETAHUI, dan itu dikatakan apa adanya.** Ketiga penulis omp
+di repo ini dijalankan berulang di PowerShell dan tidak ada yang tumbuh:
+`Set-OmpApiKey` 6x (227 byte, tetap), `Set-OmpBaseUrl` 10x (114 byte, tetap),
+`scripts/setup-dev.ps1` 4x (242 byte, tetap). Contoh baris raksasanya belum
+berhasil diambil dari mesin itu, jadi pola penggandaannya belum terlihat.
+
+**Perubahan — menjaga invarian, bukan menambal penyebab.**
+
+- `omp_hasil_wajar` / pemeriksaan sepadan di `Sync-CooperOmp`: hasil merge
+  diperiksa **sebelum** menggantikan berkas yang ada. Config omp adalah berkas
+  kecil dengan baris pendek; batasnya 1 MB total dan 4096 karakter per baris
+  (template ~4 KB). Pelanggaran berarti **tidak ditulis** dan berkas dev
+  dibiarkan utuh.
+- Penjaga masukan: `models.yml` di atas 2 MB tidak di-merge sama sekali. Ia
+  menyebut ukurannya, mendaftar cadangan terakhir, dan menyarankan pemulihan --
+  bukan mati kehabisan memori, yang tidak memberi tahu dev apa pun tentang apa
+  yang harus ia lakukan.
+
+Penjaga arah-hasil itu yang menjawab pertanyaan sebenarnya: ia menangkap
+penggandaan **siapa pun**, termasuk yang belum kita kenali. Penjaga masukan hanya
+mencegah crash pada berkas yang sudah rusak.
+
+**PENYEBABNYA KEMUDIAN DITEMUKAN — dan ini obatnya.** 1 KB pertama berkas itu
+menunjukkannya langsung:
+
+```
+# ulang ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢...
+```
+
+Itu **mojibake berlapis**. Sebuah em dash (`—`) diurai sebagai Windows-1252 lalu
+ditulis kembali sebagai UTF-8, berulang kali. `—` (3 byte) dibaca sebagai tiga
+karakter `â€"`, ditulis kembali menjadi 8 byte; putaran berikutnya 8 byte itu
+menjadi ~19; dan seterusnya. Rasio keseluruhan berkas memusat ke 2,226x — persis
+angka yang terukur.
+
+**Sebabnya satu baris yang tidak pernah ditulis siapa pun:** `Get-Content` di
+**Windows PowerShell 5.1** membaca **ANSI** secara bawaan, sementara pwsh 7
+membaca UTF-8 dan SEMUA penulis di repo ini menulis UTF-8 tanpa BOM. Jadi setiap
+siklus baca-ubah-tulis di 5.1 merusak setiap karakter non-ASCII dan
+memperpanjangnya. Template kami memuat em dash di komentar dan nama model, jadi
+tidak ada berkas yang kebal.
+
+Inilah juga sebabnya bug itu tidak bisa direproduksi di mesin dev, dan kenapa
+ketiga penulis omp tampak bersih saat diuji: **pwsh 7 membaca UTF-8 dengan
+benar.** Uji yang dijalankan di platform yang salah membuktikan hal yang salah.
+
+**Obatnya:** `$PSDefaultParameterValues['Get-Content:Encoding'] = 'UTF8'` di
+setiap skrip PowerShell utama (`setup.ps1`, `setup-dev.ps1`, `setup-pi.ps1`, dan
+kedua uji `.ps1`). Satu baris per skrip memperbaiki **seluruh** 43 pemanggilan
+`Get-Content` di sana dan di setiap library yang ia muat — termasuk pemanggilan
+yang ditulis besok.
+
+**Bukti obatnya, dan ini bagian yang penting.** Ujinya **menyabotase** bawaan
+encoding menjadi ANSI, lalu menjalankan `setup.ps1` yang sungguhan tiga kali:
+
+| | dengan perbaikan | tanpa perbaikan |
+| :-- | :-- | :-- |
+| ukuran | stabil 2629 byte | 2669 byte |
+| mojibake | **0** | **8** |
+| em dash utuh | ya | tidak |
+
+Tanpa sabotase itu, pwsh 7 akan lolos meski perbaikannya dicabut — ujinya akan
+hijau atas kode yang rusak. Itu persis kelas kegagalan yang menyembunyikan bug ini
+selama lima hari.
+
+**Yang masih belum dijanjikan.** Penjaga kewajaran hasil tetap ada dan tetap
+berguna: ia menangkap penggandaan dari sebab yang belum kita kenali. Penjaga itu
+hanya membungkus jalur tulis omp; `config.toml` dan JSON pi belum punya
+padanannya. Dan kecocokan sintaks 5.1 tetap hanya dibuktikan job Windows di CI —
+pwsh 7 membuktikan logika, bukan itu.
+
+**Bukti.** `test-omp-providers.sh` 16 → 19: berkas wajar diterima, baris raksasa
+ditolak, total membengkak ditolak. Ketiganya menjalankan penjaga yang sebenarnya
+dipakai, dan keduanya (bash dan PowerShell) diuji pada fixture yang sama bentuknya.
+
+**Dampak.** Dev yang berkasnya sudah rusak diberi tahu dan diarahkan ke cadangan.
+Yang belum rusak tidak melihat perubahan apa pun.
+
 ### Fixed · 2026-09-18 — ganti gateway tidak sampai ke semua harness
 
 **Konteks.** Dilaporkan dari Windows: ganti gateway lewat pilihan 2, jalankan
