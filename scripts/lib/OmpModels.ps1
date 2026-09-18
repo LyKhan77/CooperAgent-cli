@@ -122,3 +122,144 @@ function Set-OmpBaseUrl([string]$Path, [string]$OldGateway, [string]$NewGateway)
         (New-Object System.Text.UTF8Encoding($false)))
     return $true
 }
+
+# ── merge provider omp ───────────────────────────────────────────────────────
+#
+# Cermin dari scripts/lib/merge_providers.sh. Sampai 18 September 2026 sisi
+# PowerShell tidak punya padanannya SAMA SEKALI: omp hanya di-sed di tempat,
+# sehingga profil baru tidak pernah sampai ke pemasangan yang ada.
+#
+# Doktrinnya sama dengan MergeToml.ps1: yang ditimpa hanya kunci yang muncul di
+# template, dan kunci bertanda `# @keep-existing` hanya ditulis bila dev belum
+# punya. Provider di luar template tidak disentuh.
+function Get-OmpManagedKeys([string[]]$TplLines) {
+    $out = [ordered]@{}
+    $prov = ''; $lvl = 'p'; $keep = $false
+    foreach ($b in $TplLines) {
+        if ($b -match '^\s*#\s*@keep-existing\s*$') { $keep = $true; continue }
+        if ($b -match '^\s*#' -or $b -match '^\s*$') { continue }
+        if ($b -match '^  ([A-Za-z0-9_-]+):\s*$') {
+            $prov = $Matches[1]
+            if (-not $out.Contains($prov)) { $out[$prov] = [ordered]@{ p = [ordered]@{}; m = [ordered]@{} } }
+            $lvl = 'p'; $keep = $false; continue
+        }
+        if ($prov -eq '') { $keep = $false; continue }
+        if ($b -match '^    models:\s*$') { $lvl = 'm'; $keep = $false; continue }
+        $k = $null
+        if ($b -match '^      - ([A-Za-z0-9_]+):')      { $k = $Matches[1]; $lvl = 'm' }
+        elseif ($b -match '^        ([A-Za-z0-9_]+):')  { $k = $Matches[1]; $lvl = 'm' }
+        elseif ($b -match '^    ([A-Za-z0-9_]+):')      { $k = $Matches[1]; $lvl = 'p' }
+        if ($k) { $out[$prov][$lvl][$k] = @{ Line = $b; Keep = $keep } }
+        $keep = $false
+    }
+    return $out
+}
+
+# Satu blok provider dari template, komentar pembukanya ikut. Penanda
+# @keep-existing dibuang -- ia instruksi merge, bukan keterangan untuk pembaca.
+function Get-OmpProviderBlock([string[]]$TplLines, [string]$Want) {
+    $out = New-Object System.Collections.Generic.List[string]
+    $hold = New-Object System.Collections.Generic.List[string]
+    $collecting = $false
+    foreach ($b in $TplLines) {
+        if ($b -match '^\s*#\s*@keep-existing\s*$') { continue }
+        if ($b -match '^\s*#' -or $b -match '^\s*$') { [void]$hold.Add($b); continue }
+        if ($b -match '^  ([A-Za-z0-9_-]+):\s*$') {
+            if ($Matches[1] -eq $Want) {
+                foreach ($h in $hold) { [void]$out.Add($h) }
+                $hold.Clear(); $collecting = $true; [void]$out.Add($b); continue
+            }
+            if ($collecting) { break }
+            $hold.Clear(); continue
+        }
+        if (-not $collecting) { $hold.Clear(); continue }
+        foreach ($h in $hold) { [void]$out.Add($h) }
+        $hold.Clear(); [void]$out.Add($b)
+    }
+    return $out.ToArray()
+}
+
+function Merge-OmpProviders([string[]]$TplLines, [string[]]$CurLines, [bool]$KeepDevEndpoint = $false) {
+    $managed = Get-OmpManagedKeys $TplLines
+    if ($KeepDevEndpoint) {
+        foreach ($p in @($managed.Keys)) {
+            if ($managed[$p]['p'].Contains('baseUrl')) { $managed[$p]['p']['baseUrl'].Keep = $true }
+        }
+    }
+    # Berkas yang tidak memuat `providers:` tidak kita kenali bentuknya.
+    if (-not (@($CurLines | Where-Object { $_ -match '^providers:\s*$' }).Count -gt 0)) { return $CurLines }
+
+    $out = New-Object System.Collections.Generic.List[string]
+    $adaDiDev = @{}
+    $prov = ''; $kelola = $false; $lvl = 'p'; $modelKe = 0
+    $seen = @{}
+
+    function SisipkanHilang($out, $managed, $prov, $lvl, $seen) {
+        foreach ($k in $managed[$prov][$lvl].Keys) {
+            if ($seen.ContainsKey("$prov|$lvl|$k")) { continue }
+            $line = $managed[$prov][$lvl][$k].Line
+            if ($lvl -eq 'm' -and $line -match '^      - ' -and $k -ne 'id') {
+                $line = $line -replace '^      - ', '        '
+            }
+            [void]$out.Add($line)
+        }
+    }
+
+    foreach ($b in $CurLines) {
+        if ($b -match '^  ([A-Za-z0-9_-]+):\s*$' -and $prov -ne '' -and $kelola) {
+            if ($lvl -eq 'm' -and $modelKe -ge 1) { SisipkanHilang $out $managed $prov 'm' $seen }
+            elseif ($lvl -eq 'p') { SisipkanHilang $out $managed $prov 'p' $seen }
+        }
+        if ($b -match '^  ([A-Za-z0-9_-]+):\s*$') {
+            $prov = $Matches[1]; $adaDiDev[$prov] = $true
+            $kelola = $managed.Contains($prov); $lvl = 'p'; $modelKe = 0
+            [void]$out.Add($b); continue
+        }
+        if (-not $kelola) { [void]$out.Add($b); continue }
+        if ($b -match '^    models:\s*$') {
+            SisipkanHilang $out $managed $prov 'p' $seen
+            $lvl = 'm'; [void]$out.Add($b); continue
+        }
+        if ($b -match '^      - ([A-Za-z0-9_]+):') {
+            $modelKe++
+            if ($modelKe -eq 2) { SisipkanHilang $out $managed $prov 'm' $seen }
+            if ($modelKe -eq 1) {
+                $k = $Matches[1]
+                if ($managed[$prov]['m'].Contains($k)) {
+                    $seen["$prov|m|$k"] = $true
+                    if (-not $managed[$prov]['m'][$k].Keep) { [void]$out.Add($managed[$prov]['m'][$k].Line); continue }
+                }
+            }
+            [void]$out.Add($b); continue
+        }
+        if ($modelKe -eq 1 -and $b -match '^        ([A-Za-z0-9_]+):') {
+            $k = $Matches[1]
+            if ($managed[$prov]['m'].Contains($k)) {
+                $seen["$prov|m|$k"] = $true
+                if (-not $managed[$prov]['m'][$k].Keep) {
+                    [void]$out.Add(($managed[$prov]['m'][$k].Line -replace '^      - ', '        ')); continue
+                }
+            }
+            [void]$out.Add($b); continue
+        }
+        if ($lvl -eq 'p' -and $b -match '^    ([A-Za-z0-9_]+):') {
+            $k = $Matches[1]
+            if ($managed[$prov]['p'].Contains($k)) {
+                $seen["$prov|p|$k"] = $true
+                if (-not $managed[$prov]['p'][$k].Keep) { [void]$out.Add($managed[$prov]['p'][$k].Line); continue }
+            }
+            [void]$out.Add($b); continue
+        }
+        [void]$out.Add($b)
+    }
+    if ($prov -ne '' -and $kelola) {
+        if ($lvl -eq 'm' -and $modelKe -ge 1) { SisipkanHilang $out $managed $prov 'm' $seen }
+        elseif ($lvl -eq 'p') { SisipkanHilang $out $managed $prov 'p' $seen }
+    }
+    foreach ($p in $managed.Keys) {
+        if ($adaDiDev.ContainsKey($p)) { continue }
+        [void]$out.Add('')
+        foreach ($l in (Get-OmpProviderBlock $TplLines $p)) { [void]$out.Add($l) }
+    }
+    return $out.ToArray()
+}

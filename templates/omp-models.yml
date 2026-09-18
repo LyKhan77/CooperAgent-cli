@@ -33,17 +33,21 @@ providers:
   # Sehari-hari. Gateway yang memilih server; failover otomatis bila satu node
   # penuh atau mati.
   cooper-agent:
+    # @keep-existing
     name: CooperAgent (routing otomatis)
     baseUrl: __GATEWAY__/v1
     apiKey: __API_KEY__
+    # @keep-existing
     api: openai-completions
     models:
       - id: __MODEL_ID__
+        # @keep-existing
         name: CooperAgent — routing otomatis
         contextWindow: __CONTEXT_WINDOW__
         maxTokens: __MAX_TOKENS__
         # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini
         # sebagai teks saja (`supportsImages === true`, dan tidak ada bawaan).
+        # @keep-existing
         supportsImages: true
 
   # ALAT PEMBANDING, bukan jalur harian. Menembus routing langsung ke server 1.
@@ -51,17 +55,21 @@ providers:
   # Sesi yang memakainya KEHILANGAN failover: bila server 1 penuh ia mengantre,
   # bila mati request-nya gagal — tidak berpindah ke node lain.
   cooper-s1:
+    # @keep-existing
     name: CooperAgent server 1 (langsung)
     baseUrl: __GATEWAY__/v1/upstream/s1
     apiKey: __API_KEY__
+    # @keep-existing
     api: openai-completions
     models:
       - id: __MODEL_ID__
+        # @keep-existing
         name: CooperAgent @ s1 — tanpa failover
         contextWindow: __CONTEXT_WINDOW__
         maxTokens: __MAX_TOKENS__
         # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini
         # sebagai teks saja (`supportsImages === true`, dan tidak ada bawaan).
+        # @keep-existing
         supportsImages: true
 
   # Pasangan cooper-s1. Gunanya membandingkan jawaban kedua node pada prompt
@@ -69,17 +77,21 @@ providers:
   #
   # Sesi yang memakainya KEHILANGAN failover, sama seperti cooper-s1.
   cooper-s2:
+    # @keep-existing
     name: CooperAgent server 2 (langsung)
     baseUrl: __GATEWAY__/v1/upstream/s2
     apiKey: __API_KEY__
+    # @keep-existing
     api: openai-completions
     models:
       - id: __MODEL_ID__
+        # @keep-existing
         name: CooperAgent @ s2 — tanpa failover
         contextWindow: __CONTEXT_WINDOW__
         maxTokens: __MAX_TOKENS__
         # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini
         # sebagai teks saja (`supportsImages === true`, dan tidak ada bawaan).
+        # @keep-existing
         supportsImages: true
 
   # Pasangan cooper-s1/cooper-s2. Gunanya membandingkan jawaban antar node pada
@@ -87,15 +99,19 @@ providers:
   #
   # Sesi yang memakainya KEHILANGAN failover, sama seperti cooper-s1/cooper-s2.
   cooper-s3:
+    # @keep-existing
     name: CooperAgent server 3 (langsung)
     baseUrl: __GATEWAY__/v1/upstream/s3
     apiKey: __API_KEY__
+    # @keep-existing
     api: openai-completions
     models:
       - id: __MODEL_ID__
+        # @keep-existing
         name: CooperAgent @ s3 — tanpa failover
         contextWindow: __CONTEXT_WINDOW__
         maxTokens: __MAX_TOKENS__
         # Kedua node memuat mmproj; tanpa baris ini omp memperlakukan model ini
         # sebagai teks saja (`supportsImages === true`, dan tidak ada bawaan).
+        # @keep-existing
         supportsImages: true

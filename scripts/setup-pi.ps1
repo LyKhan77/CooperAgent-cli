@@ -15,7 +15,11 @@ param(
     [string]$Endpoint = '',
     [switch]$Rules,
     [switch]$NoRules,
-    [switch]$RemoveRules
+    [switch]$RemoveRules,
+    # -ParamsOnly: HANYA parameter model cooper-agent. Aturan agent, skill,
+    # server MCP, dan extension milik dev tidak disentuh. Cermin dari
+    # --params-only di scripts/setup-pi.sh.
+    [switch]$ParamsOnly
 )
 $ErrorActionPreference = 'Stop'
 
@@ -153,10 +157,14 @@ if ($RemoveRules) {
     exit 0
 }
 
-if ($NoRules -and -not (Test-Path -LiteralPath $RulesPath)) {
+# Mode parameter TIDAK mengurus aturan, jadi prasyarat ini tidak berlaku
+# padanya. Menerapkannya di sana berarti menolak menyegarkan jendela konteks
+# hanya karena dev memilih memakai aturannya sendiri. Cermin dari setup-pi.sh.
+if (-not $ParamsOnly -and $NoRules -and -not (Test-Path -LiteralPath $RulesPath)) {
     Write-Error 'Pemasangan pi dibatalkan: verify() mensyaratkan ~/.pi/agent/AGENTS.md. Pakai -Rules.'
     exit 4
 }
+if ($ParamsOnly) { $env:COOPER_PI_RULES_OPTIONAL = '1' }
 
 $storedGateway = Get-PiStoredGateway $ModelsPath
 $rawBase = if ($Endpoint) { $Endpoint } elseif ($env:COOPERAGENT_GATEWAY) { $env:COOPERAGENT_GATEWAY } else { $storedGateway }
@@ -240,8 +248,12 @@ if ($DryRun) {
     exit 0
 }
 
-Install-PiRules
-Install-PiSkills
+if ($ParamsOnly) {
+    Write-Host '  hanya parameter - aturan agent, skill, MCP, dan extension tidak disentuh' -ForegroundColor Yellow
+} else {
+    Install-PiRules
+    Install-PiSkills
+}
 Write-PiJsonAtomic $modelsMerged $ModelsPath
 Write-PiJsonAtomic $settingsMerged $SettingsPath
 
