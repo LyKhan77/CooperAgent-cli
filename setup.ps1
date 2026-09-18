@@ -515,6 +515,23 @@ function Sync-CooperOmp([string]$GatewayBase, [string]$Key) {
         Write-Host "  !  template omp tidak ditemukan - models.yml dilewati" -ForegroundColor Yellow
         return $false
     }
+    # models.yml yang tidak masuk akal besarnya TIDAK di-merge. Ditemukan
+    # 18 September 2026: 51 baris, 1,47 GB -- satu baris membengkak ratusan
+    # megabyte, dan merge-nya mati dengan OutOfMemoryException. Galat kehabisan
+    # memori tidak memberi tahu dev apa pun tentang apa yang harus ia lakukan.
+    if (Test-Path $OMP_YML_PATH) {
+        $ukuran = (Get-Item $OMP_YML_PATH).Length
+        if ($ukuran -gt 2097152) {
+            Write-Host "[x] models.yml omp berukuran $ukuran byte - tidak wajar, tidak di-merge." -ForegroundColor Red
+            Write-Host "    Config omp yang sehat beberapa kilobyte. Berkas ini kemungkinan rusak." -ForegroundColor Yellow
+            Write-Host "    Cadangan terakhir ada di sebelahnya:" -ForegroundColor Yellow
+            Get-ChildItem "$OMP_YML_PATH.bak.*" -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 3 |
+                ForEach-Object { Write-Host ("      " + $_.Name + "  " + $_.Length + " byte") }
+            Write-Host "    Pulihkan salah satunya, atau hapus models.yml lalu jalankan setup lagi." -ForegroundColor Yellow
+            return $false
+        }
+    }
     $rendered = (Expand-CooperTemplate (Get-Content -Raw $tpl)).Replace('__GATEWAY__', $GatewayBase).Replace('__API_KEY__', $Key)
     if (-not (Assert-CooperRendered $rendered 'models.yml')) { return $false }
     $tplLines = $rendered -split "`r?`n"
@@ -524,6 +541,25 @@ function Sync-CooperOmp([string]$GatewayBase, [string]$Key) {
     if ($curLines.Count -gt 0 -and (($curLines -join "`n") -eq (($merged -join "`n")))) {
         Write-Host "[v] models.yml omp sudah sesuai - tidak ada perubahan" -ForegroundColor Green
         return $true
+    }
+    # Hasilnya diperiksa kewajarannya SEBELUM menggantikan berkas yang ada.
+    #
+    # Config omp adalah berkas kecil dengan baris pendek. Pada 18 September 2026
+    # sebuah models.yml tumbuh 2,226x setiap kali ditulis sampai 1,47 GB dengan 51
+    # baris; penyebabnya belum diketahui, jadi yang dijaga adalah INVARIANnya.
+    # Penjaga semacam ini menangkap penggandaan siapa pun, termasuk yang belum
+    # kita kenali.
+    $batasByte = 1048576
+    $batasBaris = 4096
+    $totalByte = ($merged | Measure-Object -Property Length -Sum).Sum + $merged.Count * 2
+    $maxBaris = 0
+    foreach ($l in $merged) { if ($l.Length -gt $maxBaris) { $maxBaris = $l.Length } }
+    if ($totalByte -gt $batasByte -or $maxBaris -gt $batasBaris) {
+        Write-Host "[x] Hasil merge models.yml tidak wajar - berkas Anda TIDAK diubah." -ForegroundColor Red
+        Write-Host "    total $totalByte byte, baris terpanjang $maxBaris karakter." -ForegroundColor Yellow
+        Write-Host "    Config omp seharusnya beberapa kilobyte dengan baris pendek." -ForegroundColor Yellow
+        Write-Host "    Laporkan ini - ada yang menggandakan isi berkas." -ForegroundColor Yellow
+        return $false
     }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     if (Test-Path $OMP_YML_PATH) {

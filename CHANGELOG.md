@@ -646,6 +646,61 @@ menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
 bernomor di atas menyebut rilis mana yang membawanya.
 
 
+### Fixed · 2026-09-18 — models.yml 1,47 GB: penjaga, bukan obat
+
+**Konteks.** Sesudah perbaikan ganti-gateway masuk, `setup.ps1` di mesin Windows
+mati dengan `OutOfMemoryException` tepat sesudah `config.toml` ditulis. Diagnosis:
+
+```
+baris models.yml : 51
+ukuran           : 1472749046 byte    (1,47 GB)
+```
+
+51 baris, 1,47 GB — satu baris membengkak ratusan megabyte. Daftar cadangannya
+menunjukkan polanya:
+
+```
+57,2 MB  →  127,3  →  283,4  →  630,9  →  1404,5
+```
+
+**Tepat 2,226x setiap kali ditulis**, lima kali berturut. Itu mekanis, jadi ada
+bug — bukan kerusakan acak.
+
+**Penyebabnya BELUM DIKETAHUI, dan itu dikatakan apa adanya.** Ketiga penulis omp
+di repo ini dijalankan berulang di PowerShell dan tidak ada yang tumbuh:
+`Set-OmpApiKey` 6x (227 byte, tetap), `Set-OmpBaseUrl` 10x (114 byte, tetap),
+`scripts/setup-dev.ps1` 4x (242 byte, tetap). Contoh baris raksasanya belum
+berhasil diambil dari mesin itu, jadi pola penggandaannya belum terlihat.
+
+**Perubahan — menjaga invarian, bukan menambal penyebab.**
+
+- `omp_hasil_wajar` / pemeriksaan sepadan di `Sync-CooperOmp`: hasil merge
+  diperiksa **sebelum** menggantikan berkas yang ada. Config omp adalah berkas
+  kecil dengan baris pendek; batasnya 1 MB total dan 4096 karakter per baris
+  (template ~4 KB). Pelanggaran berarti **tidak ditulis** dan berkas dev
+  dibiarkan utuh.
+- Penjaga masukan: `models.yml` di atas 2 MB tidak di-merge sama sekali. Ia
+  menyebut ukurannya, mendaftar cadangan terakhir, dan menyarankan pemulihan --
+  bukan mati kehabisan memori, yang tidak memberi tahu dev apa pun tentang apa
+  yang harus ia lakukan.
+
+Penjaga arah-hasil itu yang menjawab pertanyaan sebenarnya: ia menangkap
+penggandaan **siapa pun**, termasuk yang belum kita kenali. Penjaga masukan hanya
+mencegah crash pada berkas yang sudah rusak.
+
+**Yang TIDAK dijanjikan.** Ini bukan obat. Selama penyebabnya belum diketahui,
+tidak ada yang bisa menjamin berkas itu tidak membengkak lagi — yang dijamin
+hanyalah ia tidak akan ditulis dalam keadaan tidak wajar, dan setupnya tidak akan
+mati tanpa penjelasan. Penjaga ini juga hanya membungkus jalur tulis omp; jalur
+lain (`config.toml`, JSON pi) belum punya padanannya.
+
+**Bukti.** `test-omp-providers.sh` 16 → 19: berkas wajar diterima, baris raksasa
+ditolak, total membengkak ditolak. Ketiganya menjalankan penjaga yang sebenarnya
+dipakai, dan keduanya (bash dan PowerShell) diuji pada fixture yang sama bentuknya.
+
+**Dampak.** Dev yang berkasnya sudah rusak diberi tahu dan diarahkan ke cadangan.
+Yang belum rusak tidak melihat perubahan apa pun.
+
 ### Fixed · 2026-09-18 — ganti gateway tidak sampai ke semua harness
 
 **Konteks.** Dilaporkan dari Windows: ganti gateway lewat pilihan 2, jalankan

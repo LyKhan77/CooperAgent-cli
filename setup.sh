@@ -649,6 +649,24 @@ stored_token() {
 omp_sync_ke_gateway() { # $1 = gateway base  $2 = api key
     local gw="$1" key="$2" rtpl merged stamp tpl="${SCRIPT_DIR}/templates/omp-models.yml"
     [ -f "$tpl" ] || { echo -e "${YELLOW}!${NC} template omp tidak ditemukan — models.yml dilewati"; return 1; }
+    # models.yml yang tidak masuk akal besarnya TIDAK di-merge.
+    #
+    # Ditemukan 18 September 2026 di mesin Windows: 51 baris, 1,47 GB -- satu
+    # baris membengkak ratusan megabyte. Merge atas berkas seperti itu mati
+    # dengan OutOfMemoryException, dan galat kehabisan memori tidak memberi tahu
+    # dev apa pun tentang apa yang harus ia lakukan. Config omp yang sehat
+    # berukuran beberapa kilobyte; batas 2 MB sudah sangat longgar.
+    if [ -f "$OMP_YML_PATH" ]; then
+        local ukuran; ukuran="$(wc -c < "$OMP_YML_PATH" 2>/dev/null || echo 0)"
+        if [ "$ukuran" -gt 2097152 ]; then
+            echo -e "${RED}${S_NO} models.yml omp berukuran $ukuran byte — tidak wajar, tidak di-merge.${NC}"
+            echo -e "${YELLOW}    Config omp yang sehat beberapa kilobyte. Berkas ini kemungkinan rusak.${NC}"
+            echo -e "${YELLOW}    Cadangan terakhir ada di sebelahnya:${NC}"
+            ls -1t "$OMP_YML_PATH".bak.* 2>/dev/null | head -3 | sed 's/^/      /'
+            echo -e "${YELLOW}    Pulihkan salah satunya, atau hapus models.yml lalu jalankan setup lagi.${NC}"
+            return 1
+        fi
+    fi
     rtpl="$(mktemp)"; merged="$(mktemp)"
     if ! contract_render "$tpl" | sed -e "s|__GATEWAY__|${gw}|g" -e "s|__API_KEY__|${key}|g" > "$rtpl" \
        || ! contract_assert_rendered "$rtpl"; then
@@ -656,7 +674,15 @@ omp_sync_ke_gateway() { # $1 = gateway base  $2 = api key
         rm -f "$rtpl" "$merged"; return 1
     fi
     omp_merge_into "$rtpl" "$OMP_YML_PATH" "$merged"
-    case $? in
+    rc_merge=$?
+    # Hasilnya diperiksa kewajarannya SEBELUM menggantikan berkas yang ada.
+    if [ "$rc_merge" = 0 ] && ! omp_hasil_wajar "$merged"; then
+        echo -e "${RED}${S_NO} Hasil merge models.yml tidak wajar — berkas Anda TIDAK diubah.${NC}"
+        echo -e "${YELLOW}    Ini penjaga: config omp seharusnya beberapa kilobyte dengan baris pendek.${NC}"
+        echo -e "${YELLOW}    Laporkan ini — ada yang menggandakan isi berkas.${NC}"
+        rm -f "$rtpl" "$merged"; return 1
+    fi
+    case $rc_merge in
         0) stamp="$(date +%Y%m%d-%H%M%S)"
            [ -f "$OMP_YML_PATH" ] && { cp "$OMP_YML_PATH" "$OMP_YML_PATH.bak.$stamp"; bak_prune "$OMP_YML_PATH"; }
            mv "$merged" "$OMP_YML_PATH"
