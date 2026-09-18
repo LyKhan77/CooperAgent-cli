@@ -555,7 +555,10 @@ function Sync-CooperOmp([string]$GatewayBase, [string]$Key) {
     if (-not (Assert-CooperRendered $rendered 'models.yml')) { return $false }
     $tplLines = $rendered -split "`r?`n"
     $curLines = if (Test-Path $OMP_YML_PATH) { @(Get-Content -LiteralPath $OMP_YML_PATH) } else { @() }
-    $merged = if ($curLines.Count -gt 0) { Merge-OmpProviders $tplLines $curLines $false } else { $tplLines }
+    # Pemasangan baru menuliskan template APA ADANYA, jadi penandanya harus
+    # dibuang di sini. Jalur merge tidak perlu: blok yang ditambahkan sudah
+    # dibersihkan Get-OmpProviderBlock.
+    $merged = if ($curLines.Count -gt 0) { Merge-OmpProviders $tplLines $curLines $false } else { Remove-OmpMarkers $tplLines }
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     if ($curLines.Count -gt 0 -and (($curLines -join "`n") -eq (($merged -join "`n")))) {
         Write-Host "[v] models.yml omp sudah sesuai - tidak ada perubahan" -ForegroundColor Green
@@ -1497,7 +1500,7 @@ if ($AGENT_CHOICE -eq "2") {
     } elseif (-not (Test-Path $MODELS_YML)) {
         $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', $ompApiKey)
         if (-not (Assert-CooperRendered $yml 'models.yml')) { exit 1 }
-        [System.IO.File]::WriteAllText($MODELS_YML, $yml, $utf8NoBomOmp)
+        [System.IO.File]::WriteAllLines($MODELS_YML, [string[]](Remove-OmpMarkers ($yml -split "`r?`n")), $utf8NoBomOmp)
         Write-Host "[v] models.yml dibuat (3 provider: otomatis, server 1, server 2)" -ForegroundColor Green
     } else {
         $lines = Get-Content $MODELS_YML
@@ -1542,7 +1545,7 @@ if ($AGENT_CHOICE -eq "2") {
                 Invoke-CooperBakPrune $MODELS_YML
                 $yml = (Expand-CooperTemplate (Get-Content -Raw $ompTpl)).Replace('__GATEWAY__', $ompGw).Replace('__API_KEY__', $ompApiKey)
                 if (-not (Assert-CooperRendered $yml 'models.yml')) { exit 1 }
-                [System.IO.File]::WriteAllText($MODELS_YML, $yml, $utf8NoBomOmp)
+                [System.IO.File]::WriteAllLines($MODELS_YML, [string[]](Remove-OmpMarkers ($yml -split "`r?`n")), $utf8NoBomOmp)
                 Write-Host "[v] models.yml ditulis ulang dari template (cadangan dibuat)" -ForegroundColor Green
             }
             default { Write-Host "[v] models.yml dipertahankan - tidak ada yang disentuh." -ForegroundColor Green }

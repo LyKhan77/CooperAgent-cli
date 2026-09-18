@@ -179,6 +179,17 @@ function Get-OmpProviderBlock([string[]]$TplLines, [string]$Want) {
     return $out.ToArray()
 }
 
+# Buang baris `# @keep-existing`. Ia INSTRUKSI untuk merge, bukan isi config, dan
+# harus tetap ada di template yang dibaca Get-OmpManagedKeys -- jadi ia tidak
+# boleh dibuang saat render. Yang perlu membersihkannya hanyalah jalur yang
+# menjadikan template sebagai BERKASNYA: pemasangan baru dan tulis-ulang penuh.
+#
+# Ditemukan 18 September 2026: pemasangan baru di Windows menghasilkan models.yml
+# 5081 byte alih-alih 4697 -- 16 penanda ikut tertulis ke config dev.
+function Remove-OmpMarkers([string[]]$Lines) {
+    return @($Lines | Where-Object { $_ -notmatch '^\s*#\s*@keep-existing\s*$' })
+}
+
 function Merge-OmpProviders([string[]]$TplLines, [string[]]$CurLines, [bool]$KeepDevEndpoint = $false) {
     $managed = Get-OmpManagedKeys $TplLines
     if ($KeepDevEndpoint) {

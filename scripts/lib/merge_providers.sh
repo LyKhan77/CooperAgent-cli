@@ -252,7 +252,7 @@ merge_providers() {
 omp_merge_into() {
     local rtpl="$1" cur="$2" out="$3"
     [ -f "$rtpl" ] || return 2
-    if [ ! -f "$cur" ]; then cp "$rtpl" "$out" && return 0 || return 2; fi
+    if [ ! -f "$cur" ]; then omp_tanpa_penanda "$rtpl" "$out" && return 0 || return 2; fi
     merge_providers "$rtpl" "$cur" > "$out" || return 2
     cmp -s "$out" "$cur" && return 1
     return 0
@@ -290,4 +290,17 @@ omp_hasil_wajar() {
         return 1
     fi
     return 0
+}
+
+# omp_tanpa_penanda <masuk> <keluar>
+#
+# Buang baris `# @keep-existing`. Ia INSTRUKSI untuk merge, bukan isi config —
+# dan ia harus tetap ada di template yang dibaca merge_providers, sehingga tidak
+# boleh dibuang saat render. Yang perlu membersihkannya hanyalah jalur yang
+# menjadikan template sebagai BERKASNYA: pemasangan baru dan tulis-ulang penuh.
+#
+# Ditemukan 18 September 2026: pemasangan baru di Windows menghasilkan models.yml
+# 5081 byte alih-alih 4697 — 16 penanda ikut tertulis ke config dev.
+omp_tanpa_penanda() {
+    grep -vE '^[[:space:]]*#[[:space:]]*@keep-existing[[:space:]]*$' "$1" > "$2"
 }
