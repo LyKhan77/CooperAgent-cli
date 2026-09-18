@@ -892,7 +892,7 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp || installed_pi; }
     else
         echo -e "  1) Perbarui parameter dari kontrak gateway"
     fi
-    echo -e "     aturan agent, skill, ambang compaction, context_window"
+    echo -e "     endpoint model, ambang compaction, context_window — aturan & skill tidak disentuh"
     echo -e "  2) Ganti alamat gateway (pindah LAN <-> VPN)"
     if [ "$CRED_OK" = 1 ]; then
         echo -e "  3) Pasang / ganti token kredensial"
@@ -901,9 +901,9 @@ if [ -z "$SWITCH_ONLY" ] && { installed_grok || installed_omp || installed_pi; }
     fi
     echo -e "  4) Pasang harness tambahan (Grok / omp / pi yang belum ada)"
     if [ "$RULES_ON" = 1 ]; then
-        echo -e "  5) Lepas aturan agent CooperxHarness (skill tetap terpasang)"
+        echo -e "  5) Lepas aturan agent CooperxHarness — pilih harness (skill tetap terpasang)"
     else
-        echo -e "  5) Pasang aturan agent CooperxHarness"
+        echo -e "  5) Pasang aturan agent CooperxHarness — pilih harness"
     fi
     echo -e "  6) Keluar"
     read -rp "Pilihan [1/2/3/4/5/6, default: 1]: " HOME_CHOICE || HOME_CHOICE=""

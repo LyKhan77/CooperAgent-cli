@@ -97,6 +97,19 @@ besar. Ambang 80% yang membuat bentuk ini aman, bukan penyebutnya.
 
 ## Memperbarui
 
+Lingkup diatur lewat bendera, dan bawaannya sengaja luas:
+
+```bash
+./scripts/setup-dev.sh                      # parameter + aturan + skill
+./scripts/setup-dev.sh --rules-for grok     # aturan HANYA untuk Grok (atau: omp, both)
+./scripts/setup-pi.sh --params-only         # HANYA parameter model cooper-agent
+```
+
+`--params-only` tidak menyentuh aturan agent, skill, server MCP, maupun extension
+milik Anda — itu yang dipakai pilihan "Perbarui parameter" di `setup.sh`.
+Padanannya di Windows: `-ParamsOnly` dan `-RulesFor`.
+
+
 Jangan menyunting `~/.grok/` langsung — suntingannya hilang pada pembaruan
 berikutnya. Sunting sumbernya di `templates/`, commit, lalu tiap dev
 `git pull` dan menjalankan ulang skrip setup. Skrip bersifat idempoten: bila

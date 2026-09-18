@@ -224,11 +224,11 @@ keadaannya, memeriksa ulang kredensial ke gateway, lalu menawarkan enam pilihan:
 
 Apa yang ingin Anda lakukan?
   1) Perbarui parameter dari kontrak gateway [disarankan]
-     aturan agent, skill, ambang compaction, context_window
+     endpoint model, ambang compaction, context_window — aturan & skill tidak disentuh
   2) Ganti alamat gateway (pindah LAN <-> VPN)
   3) Pasang / ganti token kredensial
   4) Pasang harness tambahan (Grok / omp yang belum ada)
-  5) Lepas aturan agent CooperxHarness (skill tetap terpasang)
+  5) Lepas aturan agent CooperxHarness — pilih harness (skill tetap terpasang)
   6) Keluar
 ```
 
@@ -343,9 +343,9 @@ Token hilang tidak bisa dibaca ulang: admin mencabut lalu menerbitkan ulang.
 | Berkas | Dikelola |
 | :-- | :-- |
 | `~/.grok/config.toml` | hanya seksi CooperAgent; sisanya milik Anda |
-| `~/.omp/agent/models.yml` | `apiKey` dan `baseUrl` gateway; provider lain tidak disentuh |
+| `~/.omp/agent/models.yml` | provider `cooper-*` di-merge per kunci dari template; provider lain tidak disentuh |
 | `~/.pi/agent/AGENTS.md` | salinan penuh aturan, hanya pada pilihan pi atau `--rules` |
-| `~/.pi/agent/models.json` | provider `cooperagent` dan model kontrak; JSON lain dipertahankan |
+| `~/.pi/agent/models.json` | provider `cooper-agent`/`s1`/`s2`/`s3` dan model kontrak; JSON lain dipertahankan |
 | `~/.pi/agent/settings.json` | compaction kontrak dan sumber skill; setting dev lain dipertahankan |
 | `~/.cooper/skills/` | skill CooperAgent |
 | `AGENTS.md` di proyek | hanya bila Anda memintanya |

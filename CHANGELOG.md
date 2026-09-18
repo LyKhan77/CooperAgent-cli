@@ -10,6 +10,73 @@ Aturan lengkap — termasuk apa yang membuat sebuah perubahan MAJOR pada sebuah
 
 ---
 
+## [3.2.0](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.2...v3.2.0) (2026-09-18)
+
+Berawal dari satu laporan — *"ganti gateway, jalankan setup lagi, alamatnya tidak
+berubah"* — dan berakhir dengan enam cacat. Dua di antaranya ditemukan dari angka
+yang dikirim dev dari mesinnya, bukan dari pembacaan kode.
+
+### Fitur
+
+* profil `cooper-s3` — node ketiga ikut alat pembanding langsung di keempat harness ([8c4ceed](https://github.com/LyKhan77/CooperAgent-cli/commit/8c4ceed))
+* **setup:** pilihan "Aturan agent" menanyakan harness mana; bendera `--rules-for` dan `--params-only` (`-RulesFor`, `-ParamsOnly` di Windows) ([f138482](https://github.com/LyKhan77/CooperAgent-cli/commit/f138482))
+
+### Perbaikan
+
+* **setup:** ganti gateway dan perbarui parameter kini menyentuh ketiga harness ([f138482](https://github.com/LyKhan77/CooperAgent-cli/commit/f138482))
+
+  omp adalah satu-satunya harness yang tidak pernah di-merge dari template — ia
+  hanya di-`sed` di tempat, sehingga profil baru tidak pernah sampai ke pemasangan
+  yang ada, dan `sed`-nya melewati setiap baris ber-`127.0.0.1` sehingga dev
+  berlokal tidak pernah bisa berpindah. `merge_providers` kini menyelaraskan per
+  kunci, dan `Merge-OmpProviders` ada di PowerShell — sebelumnya tidak ada
+  padanannya sama sekali.
+
+* **setup:** seksi `[model.*]` ganda tidak lagi membuat penulis dan pembaca menunjuk seksi berbeda ([f138482](https://github.com/LyKhan77/CooperAgent-cli/commit/f138482))
+
+  Inilah gejala yang dilaporkan. Peta seksi menunjuk kemunculan **terakhir**,
+  setiap pembaca melihat yang **pertama** — merge melaporkan "sudah sesuai"
+  sementara layar membaca alamat basi.
+
+* **setup:** `Get-Content` dipaksa UTF-8 — config dev berhenti menggandakan diri ([b03da3e](https://github.com/LyKhan77/CooperAgent-cli/commit/b03da3e))
+
+  Windows PowerShell 5.1 membaca ANSI secara bawaan, pwsh 7 membaca UTF-8, dan
+  semua penulis menulis UTF-8. Setiap siklus baca-tulis di 5.1 karena itu merusak
+  karakter non-ASCII dan memperpanjangnya: sebuah `models.yml` tumbuh **tepat
+  2,226x setiap kali setup jalan** sampai **1,47 GB** dengan 51 baris, lalu setup
+  mati dengan `OutOfMemoryException`.
+
+* **setup:** tolak `models.yml` yang tidak wajar alih-alih mati kehabisan memori ([1cad676](https://github.com/LyKhan77/CooperAgent-cli/commit/1cad676))
+* **setup:** penanda `@keep-existing` tidak lagi ikut tertulis ke config dev ([cdf95de](https://github.com/LyKhan77/CooperAgent-cli/commit/cdf95de))
+* **pi:** `verify()` menyebut provider yang sebenarnya dipakai pi ([16c4e15](https://github.com/LyKhan77/CooperAgent-cli/commit/16c4e15))
+
+### Perkakas & CI
+
+* hook `pre-push` melewati suite saat mendorong tag atas commit yang sudah di remote ([418ed46](https://github.com/LyKhan77/CooperAgent-cli/commit/418ed46))
+
+### ⚠ Yang perlu tindakan manual pada sebagian dev
+
+`models.yml` yang sudah rusak **tidak bisa dipulihkan otomatis** — penjaga baru
+akan menolaknya, dan itu memang perilaku yang benar. Bila `omp` Anda tidak muncul
+di daftar harness atau ukurannya di atas 1 MB:
+
+```
+rm ~/.omp/agent/models.yml*          # Windows: Remove-Item ...\models.yml* -Force
+./setup.sh                            # pilihan 4 -> omp
+```
+
+Cadangan yang ikut rusak tidak berguna untuk mundur; provider pihak ketiga yang
+pernah Anda tambahkan di sana hilang bersamanya. Config yang sehat tidak
+terpengaruh sama sekali.
+
+### Catatan
+
+`pwsh` kini terpasang di mesin dev, jadi jalur Windows **dijalankan**, bukan
+ditebak: `test/test-paritas-windows.sh` menjalankan kedua implementasi atas
+masukan yang sama dan membandingkan hasilnya byte per byte. Kecocokan sintaks
+Windows PowerShell 5.1 tetap hanya dibuktikan job Windows di CI — dan
+perbedaannya bukan akademis: bug 1,47 GB itu justru lahir dari perbedaan 5.1 vs 7.
+
 ## [3.1.2](https://github.com/LyKhan77/CooperAgent-cli/compare/v3.1.1...v3.1.2) (2026-09-17)
 
 Rilis pertama yang diberi tag dengan tangan. Seksi ini tidak lagi ditulis

@@ -813,7 +813,7 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
     } else {
         Write-Host "  1) Perbarui parameter dari kontrak gateway"
     }
-    Write-Host "     aturan agent, skill, ambang compaction, context_window"
+    Write-Host "     endpoint model, ambang compaction, context_window - aturan & skill tidak disentuh"
     Write-Host "  2) Ganti alamat gateway (pindah LAN <-> VPN)"
     if ($CRED_OK) {
         Write-Host "  3) Pasang / ganti token kredensial"
@@ -822,9 +822,9 @@ if ((-not $Endpoint) -and ((Test-CooperGrokInstalled) -or (Test-CooperOmpInstall
     }
     Write-Host "  4) Pasang harness tambahan (Grok / omp / pi yang belum ada)"
     if ($RULES_ON) {
-        Write-Host "  5) Lepas aturan agent CooperxHarness (skill tetap terpasang)"
+        Write-Host "  5) Lepas aturan agent CooperxHarness - pilih harness (skill tetap terpasang)"
     } else {
-        Write-Host "  5) Pasang aturan agent CooperxHarness"
+        Write-Host "  5) Pasang aturan agent CooperxHarness - pilih harness"
     }
     Write-Host "  6) Keluar"
     $HOME_CHOICE = Read-Host "Pilihan [1/2/3/4/5/6, default: 1]"
