@@ -95,9 +95,12 @@ selisihnya, dan tidak ada uji yang melihat lebih dari satu berkas sampai
 tiga profil, dan tidak ada harness yang bisa menembus langsung ke s1 — sehingga
 perbandingan antar node berat sebelah.
 
-Menambah profil ke template **tidak cukup**. `models.yml` omp hanya ditulis bila
-belum ada, dan merger pi hanya mengenal satu provider; keduanya diam-diam tidak
-mengantarkan apa pun ke dev yang sudah terpasang.
+Menambah profil ke template **tidak cukup** — dan itu bertahan lebih lama dari
+yang diduga. Merger pi diperbaiki 12 September, tetapi `models.yml` omp tetap
+hanya di-`sed` di tempat sampai **18 September 2026**: profil baru tidak pernah
+sampai ke dev yang sudah terpasang, dan `cooper-s3` membuktikannya. Sejak itu omp
+di-merge per kunci seperti Grok dan pi, dan `test/test-paritas-windows.sh`
+membandingkan kedua implementasinya byte per byte.
 
 Begitu pula **keempat** jalur pemasangan: dua pemasang dan dua pembaru.
 Mengganti nama profil di sebagian saja meninggalkan dev di jalur lain ditanyai

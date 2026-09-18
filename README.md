@@ -54,7 +54,7 @@ Grok Build seperti sebelum pi ditambahkan.
 
 Pi dipasang hanya bila Anda memilih **5**. Jalurnya menulis hanya:
 
-- `~/.pi/agent/models.json`, dengan provider `cooperagent` di-merge;
+- `~/.pi/agent/models.json`, dengan provider `cooper-agent`/`s1`/`s2`/`s3` di-merge;
 - `~/.pi/agent/settings.json`, dengan compaction kontrak;
 - `~/.pi/agent/AGENTS.md`, salinan penuh `templates/agent-rules.md`;
 - `~/.cooper/skills/`, sumber skill bersama tanpa menghapus tambahan dev.

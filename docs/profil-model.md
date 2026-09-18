@@ -151,10 +151,15 @@ perbaikan.
 
 ### Yang belum terjaga
 
-Jalur PowerShell tidak dapat dijalankan pada runner Linux — `pwsh` tidak
-terpasang. `scripts/lib/PiModels.ps1` dan `setup.ps1` diubah mengikuti cerminan
-jalur Node, dan `test/Test-PiModels.ps1` sudah menuntut ketiga profil, tetapi
-keduanya menunggu verifikasi di Windows.
+Sejak 18 September 2026 `pwsh` terpasang di mesin dev, jadi jalur PowerShell
+**dijalankan**, bukan ditebak: `test/test-paritas-windows.sh` menjalankan kedua
+implementasi atas masukan yang sama dan membandingkan hasilnya byte per byte.
+Profilnya kini **empat** (`cooper-agent`, `s1`, `s2`, `s3`).
+
+Yang tetap hanya bisa dibuktikan runner Windows adalah kecocokan sintaks Windows
+PowerShell 5.1 — `pwsh` di Linux versi 7, dan perbedaannya bukan akademis: bug
+yang menggandakan config dev sampai 1,47 GB justru lahir dari `Get-Content` yang
+membaca ANSI di 5.1 dan UTF-8 di 7.
 
 ### Penjagaan statis untuk jalur PowerShell
 
