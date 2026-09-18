@@ -202,6 +202,29 @@ else
 fi
 rm -rf "$SBX"
 
+echo "penanda @keep-existing tidak bocor ke config dev:"
+# Penanda itu INSTRUKSI untuk merge, bukan isi config. Ia harus TETAP ADA di
+# template (merge membacanya untuk tahu kunci mana milik dev), tetapi TIDAK boleh
+# ikut tertulis ke berkas dev.
+#
+# Ditemukan 18 September 2026 dari aritmetika sederhana: pemasangan baru di
+# Windows menghasilkan 5081 byte, padahal template terender 4697 -- selisih 384
+# byte, tepat 16 penanda. Cacat ini lahir di hari yang sama dengan penandanya.
+grep -qE '^[[:space:]]*#[[:space:]]*@keep-existing' "$ROOT/templates/omp-models.yml" \
+    && ok "penanda ada di template (merge membutuhkannya)" \
+    || no "penanda ada di template" "hilang — kunci milik dev akan ditimpa"
+
+M="$TMP/penanda"; mkdir -p "$M"
+omp_merge_into "$TMP/tpl.yml" "$M/tidak-ada.yml" "$M/baru.yml" >/dev/null 2>&1
+grep -qE '@keep-existing' "$M/baru.yml" \
+    && no "pemasangan baru bersih dari penanda" "penanda ikut tertulis ke config dev" \
+    || ok "pemasangan baru bersih dari penanda"
+
+# Dan merge atas berkas yang sudah ada juga tidak boleh menyisipkannya.
+grep -qE '@keep-existing' "$out" \
+    && no "hasil merge bersih dari penanda" "penanda ikut tertulis" \
+    || ok "hasil merge bersih dari penanda"
+
 echo "penjaga kewajaran hasil:"
 # Pada 18 September 2026 sebuah models.yml tumbuh 2,226x SETIAP KALI ditulis --
 # lima kali berturut, sampai 1,47 GB dengan hanya 51 baris. Penyebabnya belum

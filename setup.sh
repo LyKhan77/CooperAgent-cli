@@ -1564,8 +1564,10 @@ if [ "$AGENT_CHOICE" == "2" ]; then
         # isi. Tanpa ini models.yml lahir dengan placeholder yang belum terganti.
         local tmp
         tmp="$(mktemp)" || return 1
+        # Penanda @keep-existing dibuang: ia instruksi merge, bukan isi config.
         contract_render "$OMP_TPL" \
-            | sed -e "s|__GATEWAY__|${OMP_GW}|g" -e "s|__API_KEY__|${OMP_API_KEY}|g" > "$tmp"
+            | sed -e "s|__GATEWAY__|${OMP_GW}|g" -e "s|__API_KEY__|${OMP_API_KEY}|g" \
+            | grep -vE '^[[:space:]]*#[[:space:]]*@keep-existing[[:space:]]*$' > "$tmp"
         contract_assert_rendered "$tmp" || { rm -f "$tmp"; return 1; }
         mv "$tmp" "$OMP_YML"
     }

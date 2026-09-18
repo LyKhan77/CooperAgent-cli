@@ -646,6 +646,44 @@ menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
 bernomor di atas menyebut rilis mana yang membawanya.
 
 
+### Fixed · 2026-09-18 — penanda @keep-existing bocor ke config dev
+
+**Konteks.** Sesudah pemulihan, `models.yml` baru di mesin Windows berukuran
+**5081 byte**, padahal template terender hanya **4697**. Selisihnya 384 byte —
+tepat 16 baris `# @keep-existing`.
+
+Penanda itu ditambahkan ke `templates/omp-models.yml` pada hari yang sama untuk
+menandai kunci yang boleh disunting dev (`name`, `api`, `supportsImages`). Ia
+**instruksi untuk merge**, bukan isi config. `provider_block` dan
+`Get-OmpProviderBlock` sudah membuangnya saat menyalin blok — tetapi jalur yang
+menjadikan template sebagai **berkasnya sendiri** (pemasangan baru, tulis-ulang
+penuh) menuliskannya apa adanya.
+
+Tidak berbahaya bagi omp — ia komentar YAML yang sah — tetapi ia membocorkan
+istilah internal kami ke berkas milik dev, dan membingungkan siapa pun yang
+membacanya.
+
+**Kenapa tidak dibuang saja saat render.** Karena `merge_providers` membaca
+penanda itu DARI template yang sudah dirender, untuk tahu kunci mana yang harus
+dipertahankan. Membuangnya di sana akan mematikan semantik keep-existing tanpa
+suara — dan `name` serta `supportsImages: false` pilihan dev akan ikut ditimpa.
+Jadi yang dibersihkan hanya jalur tulis-penuh.
+
+**Perubahan.** `omp_tanpa_penanda` (bash) dan `Remove-OmpMarkers` (PowerShell),
+dipakai di setiap jalur yang menuliskan template sebagai berkasnya: pemasangan
+baru pada `omp_merge_into` dan `Sync-CooperOmp`, `render_omp_models` di
+`setup.sh`, serta kedua jalur tulis-penuh di `setup.ps1`.
+
+**Bukti.** Pemasangan baru: bash 0 penanda, PowerShell 4317 byte dengan 0 penanda
+dan `cooper-s3` hadir. Template tetap memuat 16 penanda — diuji eksplisit, karena
+membuangnya dari sana adalah cara paling mudah mematikan keep-existing tanpa ada
+yang sadar. `test-omp-providers.sh` 19 → 22.
+
+**Dampak.** Config yang sudah lahir dengan penanda tetap bekerja; ia hanya memuat
+16 baris komentar berlebih. Menjalankan setup lagi tidak membuangnya (merge tidak
+menyentuh komentar). Yang ingin bersih: hapus `models.yml` lalu pasang ulang lewat
+pilihan 4.
+
 ### Fixed · 2026-09-18 — models.yml 1,47 GB: penjaga, lalu obatnya
 
 **Konteks.** Sesudah perbaikan ganti-gateway masuk, `setup.ps1` di mesin Windows
