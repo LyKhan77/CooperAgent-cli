@@ -11,6 +11,10 @@
 # luar direktori sementaranya.
 
 $ErrorActionPreference = 'Stop'
+# Get-Content dipaksa UTF-8 -- lihat catatan panjang di setup.ps1. Tanpa ini,
+# 5.1 membaca ANSI, dan siklus baca-tulis menggandakan setiap karakter non-ASCII.
+$PSDefaultParameterValues['Get-Content:Encoding'] = 'UTF8'
+
 $repo = Split-Path -Parent $PSScriptRoot
 . (Join-Path $repo 'scripts\lib\PiModels.ps1')
 

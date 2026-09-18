@@ -646,7 +646,7 @@ menunggu rilis; tanggal pada tiap judul menyebut kapan ia masuk, dan seksi
 bernomor di atas menyebut rilis mana yang membawanya.
 
 
-### Fixed · 2026-09-18 — models.yml 1,47 GB: penjaga, bukan obat
+### Fixed · 2026-09-18 — models.yml 1,47 GB: penjaga, lalu obatnya
 
 **Konteks.** Sesudah perbaikan ganti-gateway masuk, `setup.ps1` di mesin Windows
 mati dengan `OutOfMemoryException` tepat sesudah `config.toml` ditulis. Diagnosis:
@@ -688,11 +688,54 @@ Penjaga arah-hasil itu yang menjawab pertanyaan sebenarnya: ia menangkap
 penggandaan **siapa pun**, termasuk yang belum kita kenali. Penjaga masukan hanya
 mencegah crash pada berkas yang sudah rusak.
 
-**Yang TIDAK dijanjikan.** Ini bukan obat. Selama penyebabnya belum diketahui,
-tidak ada yang bisa menjamin berkas itu tidak membengkak lagi — yang dijamin
-hanyalah ia tidak akan ditulis dalam keadaan tidak wajar, dan setupnya tidak akan
-mati tanpa penjelasan. Penjaga ini juga hanya membungkus jalur tulis omp; jalur
-lain (`config.toml`, JSON pi) belum punya padanannya.
+**PENYEBABNYA KEMUDIAN DITEMUKAN — dan ini obatnya.** 1 KB pertama berkas itu
+menunjukkannya langsung:
+
+```
+# ulang ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢...
+```
+
+Itu **mojibake berlapis**. Sebuah em dash (`—`) diurai sebagai Windows-1252 lalu
+ditulis kembali sebagai UTF-8, berulang kali. `—` (3 byte) dibaca sebagai tiga
+karakter `â€"`, ditulis kembali menjadi 8 byte; putaran berikutnya 8 byte itu
+menjadi ~19; dan seterusnya. Rasio keseluruhan berkas memusat ke 2,226x — persis
+angka yang terukur.
+
+**Sebabnya satu baris yang tidak pernah ditulis siapa pun:** `Get-Content` di
+**Windows PowerShell 5.1** membaca **ANSI** secara bawaan, sementara pwsh 7
+membaca UTF-8 dan SEMUA penulis di repo ini menulis UTF-8 tanpa BOM. Jadi setiap
+siklus baca-ubah-tulis di 5.1 merusak setiap karakter non-ASCII dan
+memperpanjangnya. Template kami memuat em dash di komentar dan nama model, jadi
+tidak ada berkas yang kebal.
+
+Inilah juga sebabnya bug itu tidak bisa direproduksi di mesin dev, dan kenapa
+ketiga penulis omp tampak bersih saat diuji: **pwsh 7 membaca UTF-8 dengan
+benar.** Uji yang dijalankan di platform yang salah membuktikan hal yang salah.
+
+**Obatnya:** `$PSDefaultParameterValues['Get-Content:Encoding'] = 'UTF8'` di
+setiap skrip PowerShell utama (`setup.ps1`, `setup-dev.ps1`, `setup-pi.ps1`, dan
+kedua uji `.ps1`). Satu baris per skrip memperbaiki **seluruh** 43 pemanggilan
+`Get-Content` di sana dan di setiap library yang ia muat — termasuk pemanggilan
+yang ditulis besok.
+
+**Bukti obatnya, dan ini bagian yang penting.** Ujinya **menyabotase** bawaan
+encoding menjadi ANSI, lalu menjalankan `setup.ps1` yang sungguhan tiga kali:
+
+| | dengan perbaikan | tanpa perbaikan |
+| :-- | :-- | :-- |
+| ukuran | stabil 2629 byte | 2669 byte |
+| mojibake | **0** | **8** |
+| em dash utuh | ya | tidak |
+
+Tanpa sabotase itu, pwsh 7 akan lolos meski perbaikannya dicabut — ujinya akan
+hijau atas kode yang rusak. Itu persis kelas kegagalan yang menyembunyikan bug ini
+selama lima hari.
+
+**Yang masih belum dijanjikan.** Penjaga kewajaran hasil tetap ada dan tetap
+berguna: ia menangkap penggandaan dari sebab yang belum kita kenali. Penjaga itu
+hanya membungkus jalur tulis omp; `config.toml` dan JSON pi belum punya
+padanannya. Dan kecocokan sintaks 5.1 tetap hanya dibuktikan job Windows di CI —
+pwsh 7 membuktikan logika, bukan itu.
 
 **Bukti.** `test-omp-providers.sh` 16 → 19: berkas wajar diterima, baris raksasa
 ditolak, total membengkak ditolak. Ketiganya menjalankan penjaga yang sebenarnya
